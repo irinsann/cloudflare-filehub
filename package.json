@@ -17,7 +17,9 @@
     "db:local": "wrangler d1 migrations apply DB --local --env local",
     "db:remote": "wrangler d1 migrations apply DB --remote",
     "deploy": "node scripts/preflight.mjs && pnpm build && wrangler deploy",
-    "cleanup:local": "wrangler dev --env local --test-scheduled"
+    "cleanup:local": "wrangler dev --env local --test-scheduled",
+    "db:production": "wrangler d1 migrations apply DB --remote --config wrangler.production.jsonc",
+    "deploy:production": "node scripts/preflight.mjs wrangler.production.jsonc && pnpm build && wrangler deploy --config wrangler.production.jsonc"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.3.0",

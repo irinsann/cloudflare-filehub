@@ -4,7 +4,7 @@ MIT 开源的 Serverless 个人云盘与 Markdown 发布平台。
 
 运行在 Cloudflare Workers + 私有 R2 + D1 上的个人云盘和 Markdown 发布平台。React / TypeScript / Vite / Tailwind 4，shadcn 风格 Radix 组件，Lucide 图标；Hono API；Drizzle Schema 与参数化 D1 查询；CodeMirror 6 编辑器；unified / remark GFM / rehype-sanitize 安全渲染。
 
-域名规划：`ps.irin.im` 管理后台、`md.irin.im` 公开文章、`s.irin.im` 文件分享。域名为配置参数；未配置时文章使用 `/p/:slug`，分享使用 `/s/:token`。一个 Worker 承载三者，不依赖 VPS、Pages 或常驻 Node 服务。
+域名规划：`ps-filehub.080280.xyz` 管理后台、`md-filehub.080280.xyz` 公开文章、`s-filehub.080280.xyz` 文件分享。域名为配置参数；未配置时文章使用 `/p/:slug`，分享使用 `/s/:token`。一个 Worker 承载三者，不依赖 VPS、Pages 或常驻 Node 服务。
 
 ## 本地开始
 

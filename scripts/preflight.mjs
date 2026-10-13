@@ -1,8 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { parse, printParseErrorCode } from 'jsonc-parser';
-const parseErrors=[];
-const config = parse(readFileSync('wrangler.jsonc', 'utf8'),parseErrors,{allowTrailingComma:true});
-if(parseErrors.length){console.error('wrangler.jsonc 格式错误：'+parseErrors.map(e=>printParseErrorCode(e.error)+' at '+e.offset).join(', '));process.exit(1);}
+const configPath = process.argv[2] ?? 'wrangler.jsonc';
+const parseErrors = [];
+const config = parse(readFileSync(configPath, 'utf8'), parseErrors, { allowTrailingComma: true });
+if (parseErrors.length) {
+  console.error(
+    configPath +
+      ' 格式错误：' +
+      parseErrors.map((e) => printParseErrorCode(e.error) + ' at ' + e.offset).join(', '),
+  );
+  process.exit(1);
+}
 const vars = config.vars ?? {};
 const missing = [];
 if (vars.ENVIRONMENT !== 'production' || vars.LOCAL_AUTH !== 'false')

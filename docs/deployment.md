@@ -1,3 +1,5 @@
+> 当前推荐将真实生产参数保存在被 Git 忽略的 `wrangler.production.jsonc`（由根目录模板复制），使用 `pnpm db:production` 和 `pnpm run deploy:production`。下文默认模板方式仍可使用，但不要把真实密钥或个人配置提交到公开仓库。
+
 # Cloudflare 部署指南
 
 本地验证不等于云端部署。真实生产必须自行提供 Cloudflare 账号、D1 ID、私有 Bucket、Access 应用、管理员邮箱和 DNS 权限。所有示例 ID 均为占位符。
@@ -17,7 +19,7 @@ pnpm exec wrangler d1 create irin-drive
 
 ## 2. Cloudflare Access
 
-Cloudflare Zero Trust 控制台：建立 Self-hosted 应用，保护管理域名 `ps.irin.im` 的所有路径。登录方式可使用邮箱 OTP 或现有身份提供商。建立 Allow Policy，仅允许你自己的邮箱，不使用 Everyone 或宽泛的 Bypass。
+Cloudflare Zero Trust 控制台：建立 Self-hosted 应用，保护管理域名 `ps-filehub.080280.xyz` 的所有路径。登录方式可使用邮箱 OTP 或现有身份提供商。建立 Allow Policy，仅允许你自己的邮箱，不使用 Everyone 或宽泛的 Bypass。
 
 记录团队域名（例如 `your-team.cloudflareaccess.com`，无 `https://` 和末尾 `/`）与应用 AUD，填写：
 
@@ -31,30 +33,30 @@ Cloudflare Zero Trust 控制台：建立 Self-hosted 应用，保护管理域名
 }
 ```
 
-多个管理员允许邮箱用逗号分隔（第一版无注册和用户管理）。Worker 验证 RS256 签名、issuer、audience、exp、iat、sub、email，并检查邮箱白名单；不能只依赖 Access 的前置拦截。`md.irin.im` 和 `s.irin.im` 不应被同一个管理 Access 应用拦截，否则访客无法匿名阅读。
+多个管理员允许邮箱用逗号分隔（第一版无注册和用户管理）。Worker 验证 RS256 签名、issuer、audience、exp、iat、sub、email，并检查邮箱白名单；不能只依赖 Access 的前置拦截。`md-filehub.080280.xyz` 和 `s-filehub.080280.xyz` 不应被同一个管理 Access 应用拦截，否则访客无法匿名阅读。
 
 默认 workers.dev 开发：保持三个 Origin 为空；在 Zero Trust 中另外为完整 Worker 默认主机配置 Access，并保护后台与 `/api/admin/*`，给 `/p/*`、`/s/*`、`/api/public/*` 建立明确的 Bypass 应用/路径例外。Worker 自身仍验证私人路由。建议生产使用三个自定义域名，更容易隔离策略。Origin 为空不会跳过鉴权。
 
 ## 3. 三个自定义域名
 
-确保 `irin.im` 所在 zone 已加入当前 Cloudflare 账号，确认没有要保留的冲突 DNS。把 `docs/wrangler.production.example.jsonc` 中的 `routes` 和三个 Origin 复制到顶层 `wrangler.jsonc`（其中 main/assets/migrations 路径以根配置为准，不复制示例的 `../` 路径）：
+确保 `080280.xyz` 所在 zone 已加入当前 Cloudflare 账号，确认没有要保留的冲突 DNS。把 `docs/wrangler.production.example.jsonc` 中的 `routes` 和三个 Origin 复制到顶层 `wrangler.jsonc`（其中 main/assets/migrations 路径以根配置为准，不复制示例的 `../` 路径）：
 
 ```json
 {
   "routes": [
-    { "pattern": "ps.irin.im", "custom_domain": true },
-    { "pattern": "md.irin.im", "custom_domain": true },
-    { "pattern": "s.irin.im", "custom_domain": true }
+    { "pattern": "ps-filehub.080280.xyz", "custom_domain": true },
+    { "pattern": "md-filehub.080280.xyz", "custom_domain": true },
+    { "pattern": "s-filehub.080280.xyz", "custom_domain": true }
   ],
   "vars": {
-    "ADMIN_ORIGIN": "https://ps.irin.im",
-    "MARKDOWN_ORIGIN": "https://md.irin.im",
-    "FILES_ORIGIN": "https://s.irin.im"
+    "ADMIN_ORIGIN": "https://ps-filehub.080280.xyz",
+    "MARKDOWN_ORIGIN": "https://md-filehub.080280.xyz",
+    "FILES_ORIGIN": "https://s-filehub.080280.xyz"
   }
 }
 ```
 
-保留其他 vars，不要整体覆盖。填写 Origin 时不加尾随斜线。Worker 拒绝公共主机上的管理员 API；后台仅在 ADMIN_ORIGIN 服务。文章主机根路径 `/my-note` 直接返回文章，分享地址为 `https://s.irin.im/s/<token>`。三个域名可以改成你自己的域名。部署时 Custom Domains 会由 Cloudflare 配置 Worker 路由和证书。
+保留其他 vars，不要整体覆盖。填写 Origin 时不加尾随斜线。Worker 拒绝公共主机上的管理员 API；后台仅在 ADMIN_ORIGIN 服务。文章主机根路径 `/my-note` 直接返回文章，分享地址为 `https://s-filehub.080280.xyz/s/<token>`。三个域名可以改成你自己的域名。部署时 Custom Domains 会由 Cloudflare 配置 Worker 路由和证书。
 
 ## 4. 分享密钥
 
