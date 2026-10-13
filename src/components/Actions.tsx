@@ -4,7 +4,16 @@ import { Modal } from './ui/dialog';
 import { Button } from './ui/button';
 import { api, copy, send } from '../lib/api';
 export type Action = {
-  type: 'folder' | 'markdown' | 'rename' | 'move' | 'share' | 'delete' | 'purge';
+  type:
+    | 'folder'
+    | 'markdown'
+    | 'rename'
+    | 'move'
+    | 'share'
+    | 'delete'
+    | 'purge'
+    | 'emptyTrash'
+    | 'direct';
   file?: FileRecord;
   folder?: FolderRecord;
 };
@@ -49,6 +58,8 @@ export function Actions({
     share: '创建公开分享',
     delete: '移入回收站',
     purge: '永久删除',
+    emptyTrash: '清空回收站',
+    direct: '生成文件直链',
   };
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -80,15 +91,16 @@ export function Actions({
           `${file ? '/files/' + file.id : '/folders/' + folder!.id}${action.type === 'purge' ? '/permanent' : ''}`,
           'DELETE',
         );
-      if (action.type === 'share') {
-        const result = await send<{ url: string }>('/shares', 'POST', {
+      if (action.type === 'emptyTrash') await send('/trash', 'DELETE');
+      if (action.type === 'share' || action.type === 'direct') {
+        const result = await send<{ url: string; directUrl: string }>('/shares', 'POST', {
           file_id: file!.id,
-          password: password || undefined,
+          password: action.type === 'direct' ? undefined : password || undefined,
           expires_at: expires ? new Date(expires).getTime() : null,
-          allow_download: download,
+          allow_download: action.type === 'direct' || download,
         });
-        setLink(result.url);
-        notify('分享已创建，请保存链接；服务端只保存令牌哈希');
+        setLink(action.type === 'direct' ? result.directUrl : result.url);
+        notify(action.type === 'direct' ? '文件直链已创建，请保存链接' : '分享已创建，请保存链接');
         return;
       }
       onDone(id);
@@ -167,18 +179,20 @@ export function Actions({
             <p className="muted">目标：{path.at(-1)?.name ?? '根目录'}</p>
           </>
         )}
-        {action.type === 'share' && !link && (
+        {(action.type === 'share' || action.type === 'direct') && !link && (
           <>
-            <label>
-              访问密码（可选）
-              <input
-                type="password"
-                value={password}
-                maxLength={128}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
-              />
-            </label>
+            {action.type === 'share' && (
+              <label>
+                访问密码（可选）
+                <input
+                  type="password"
+                  value={password}
+                  maxLength={128}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                />
+              </label>
+            )}
             <label>
               过期时间（留空永久有效）
               <input
@@ -187,17 +201,21 @@ export function Actions({
                 onChange={(e) => setExpires(e.target.value)}
               />
             </label>
-            <label className="check-label">
-              <input
-                type="checkbox"
-                checked={download}
-                onChange={(e) => setDownload(e.target.checked)}
-              />
-              允许下载
-            </label>
-            <p className="hint">
-              关闭下载仅隐藏和拒绝下载入口。浏览器预览仍会接收内容，无法防止截图或另存。
-            </p>
+            {action.type === 'share' && (
+              <label className="check-label">
+                <input
+                  type="checkbox"
+                  checked={download}
+                  onChange={(e) => setDownload(e.target.checked)}
+                />
+                允许下载
+              </label>
+            )}
+            {action.type === 'share' && (
+              <p className="hint">
+                关闭下载仅隐藏和拒绝下载入口。浏览器预览仍会接收内容，无法防止截图或另存。
+              </p>
+            )}
             {action.file?.mime === 'text/markdown' && (
               <p className="hint">
                 文件分享提供当前 Markdown
@@ -206,10 +224,18 @@ export function Actions({
             )}
           </>
         )}
+        {action.type === 'direct' && !link && (
+          <p className="hint">
+            直链会公开此文件，持有链接的人可直接下载，无需登录。可设置有效期，并在「文件分享」中撤销。文件移入回收站后立即失效。
+          </p>
+        )}
+        {action.type === 'emptyTrash' && (
+          <p>永久删除回收站中的全部文件和文件夹？此操作无法恢复，所有关联链接会失效。</p>
+        )}
         {link && (
           <>
             <label>
-              公开链接
+              {action.type === 'direct' ? '文件直链' : '公开链接'}
               <input readOnly value={link} onFocus={(e) => e.target.select()} />
             </label>
             <div className="dialog-footer">
@@ -225,7 +251,7 @@ export function Actions({
               </Button>
               <Button asChild variant="outline">
                 <a href={link} target="_blank" rel="noreferrer">
-                  打开分享
+                  {action.type === 'direct' ? '下载文件' : '打开分享'}
                 </a>
               </Button>
             </div>
@@ -253,8 +279,17 @@ export function Actions({
             <Button variant="outline" type="button" onClick={onClose} disabled={busy}>
               取消
             </Button>
-            <Button variant={action.type === 'purge' ? 'danger' : 'default'} disabled={busy}>
-              {busy ? '处理中…' : action.type === 'share' ? '生成链接' : '确认'}
+            <Button
+              variant={
+                action.type === 'purge' || action.type === 'emptyTrash' ? 'danger' : 'default'
+              }
+              disabled={busy}
+            >
+              {busy
+                ? '处理中…'
+                : action.type === 'share' || action.type === 'direct'
+                  ? '生成链接'
+                  : '确认'}
             </Button>
           </div>
         )}

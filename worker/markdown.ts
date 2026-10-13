@@ -188,7 +188,7 @@ markdownRoutes.post('/markdown/:id/unpublish', async (c) => {
   return c.json({ data: { id: file.id } });
 });
 export const articleUrl = (c: AppContext, slug: string) =>
-  `${c.env.MARKDOWN_ORIGIN || new URL(c.req.url).origin}${c.env.MARKDOWN_ORIGIN && c.env.MARKDOWN_ORIGIN !== (c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) ? '' : '/p'}/${slug}`;
+  `${c.env.ADMIN_ORIGIN || new URL(c.req.url).origin}/p/${slug}`;
 export async function publishedPage(c: AppContext, slug: string) {
   const page = await c.env.DB.prepare(
     "SELECT p.* FROM markdown_pages p JOIN files f ON f.id=p.file_id WHERE p.slug=? AND p.published=1 AND f.deleted_at IS NULL AND f.status='ready'",

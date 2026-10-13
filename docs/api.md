@@ -61,3 +61,5 @@
 正文图片示例 `![示例](attachment:UUID)`。远程图片仅接受 HTTPS，直接由读者浏览器请求。其他本地路径、私人 API URL、data URL 不会作为图片渲染；不提供任意 URL 代理。
 
 响应常用状态：201 新建，400 无效参数，401 未登录/密码，403 权限或来源失败，404 不存在，409 名称/Slug/版本冲突，410 分享失效，413 超限，415 不支持预览，416 Range 不可满足，429 请求限流，503 缺少必要认证或会话配置。
+
+RCloud 新接口：POST `/api/admin/uploads` 初始化 1GB 内分片上传；PUT `/api/admin/uploads/:id/parts/:part` 上传固定 16MiB 分片（最后一片按剩余长度）；POST `.../:id/complete` 由服务端保存的分片列表完成上传；DELETE `.../:id` 取消任务。DELETE `/api/admin/trash` 清空全部回收站。分享创建响应包含 directUrl，GET/HEAD `/d/:token` 直接下载并遵守分享有效期、密码、下载许可及撤销。

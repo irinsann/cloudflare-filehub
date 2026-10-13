@@ -4,7 +4,7 @@ export const readerScript = `document.querySelectorAll('pre').forEach(pre=>{cons
 export function htmlPage(title: string, body: string, script = readerScript, meta = '') {
   const nonce = crypto.randomUUID().replaceAll('-', '');
   return {
-    html: `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} · 栖云</title>${meta}<style nonce="${nonce}">${publicCss}</style></head><body><header class="top"><span class="brand">栖云 / 阅读与分享</span><button id="theme">切换主题</button></header>${body}<footer>栖云 · 让文件与想法有处安放</footer><script nonce="${nonce}">${script}</script></body></html>`,
+    html: `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} · RCloud</title>${meta}<style nonce="${nonce}">${publicCss}</style></head><body><header class="top"><span class="brand">RCloud / 阅读与分享</span><button id="theme">切换主题</button></header>${body}<footer>RCloud · 让文件与想法有处安放</footer><script nonce="${nonce}">${script}</script></body></html>`,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'private, no-store',

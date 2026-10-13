@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 const workerOrigin = 'http://127.0.0.1:8787';
 export default defineConfig({
+  base: '/drive/',
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {

@@ -78,7 +78,8 @@ export async function uploadStream(env: Env, request: Request, key: string, name
   const size = Number(rawSize);
   if (rawSize === null || !Number.isSafeInteger(size) || size < 0)
     fail(400, '必须提供有效文件大小');
-  if (size > limit(env.MAX_UPLOAD_BYTES, 20 * 1024 * 1024)) fail(413, '超过单文件上传限制');
+  if (size > Math.min(limit(env.MAX_UPLOAD_BYTES, 1024 * 1024 * 1024), 32 * 1024 * 1024))
+    fail(413, '超过单文件上传限制');
   if (!request.body && size > 0) fail(400, '上传内容为空');
   const fixed = new FixedLengthStream(size);
   const pump = request.body
@@ -191,9 +192,22 @@ export async function serveObject(
   return new Response(object.body, { status: range ? 206 : 200, headers });
 }
 export async function cleanup(env: Env) {
+  const expired = await env.DB.prepare(
+    'SELECT id,file_id,object_key,upload_id FROM upload_sessions WHERE expires_at<? LIMIT 2',
+  )
+    .bind(now())
+    .all<{ id: string; file_id: string; object_key: string; upload_id: string }>();
+  for (const s of expired.results) {
+    try {
+      await env.BUCKET.resumeMultipartUpload(s.object_key, s.upload_id).abort();
+    } catch {
+      /* R2 also expires abandoned multipart uploads. */
+    }
+    await env.DB.prepare("DELETE FROM files WHERE id=? AND status='pending'").bind(s.file_id).run();
+  }
   const cutoff = now() - 3600000;
   const tasks = await env.DB.prepare(
-    'SELECT object_key FROM cleanup_tasks WHERE created_at<? ORDER BY created_at LIMIT 10',
+    'SELECT object_key FROM cleanup_tasks WHERE created_at<? AND NOT EXISTS(SELECT 1 FROM upload_sessions s WHERE s.object_key=cleanup_tasks.object_key) ORDER BY created_at LIMIT 8',
   )
     .bind(cutoff)
     .all<{ object_key: string }>();

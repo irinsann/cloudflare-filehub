@@ -52,7 +52,13 @@ shareRoutes.post('/shares', async (c) => {
     logStatement(c.env, 'share.create', id),
   ]);
   return c.json(
-    { data: { id, url: `${c.env.FILES_ORIGIN || new URL(c.req.url).origin}/s/${token}` } },
+    {
+      data: {
+        id,
+        url: `${c.env.FILES_ORIGIN || new URL(c.req.url).origin}/s/${token}`,
+        directUrl: `${c.env.FILES_ORIGIN || new URL(c.req.url).origin}/d/${token}`,
+      },
+    },
     201,
   );
 });
@@ -202,3 +208,25 @@ export async function sharePage(c: AppContext) {
   }
   return new Response(page.html, { headers: page.headers });
 }
+
+export const directRoutes = new Hono<AppEnv>();
+directRoutes.on(['GET', 'HEAD'], '/:token', async (c) => {
+  const share = await lookup(c);
+  if (!share.allow_download) fail(403, '该分享已关闭下载');
+  const file = await getFile(c.env, share.file_id);
+  const response = await serveObject(
+    c.env,
+    c.req.raw,
+    file.object_key,
+    file.name,
+    file.mime,
+    false,
+  );
+  if (c.req.method === 'GET' && response.status === 200)
+    await c.env.DB.prepare(
+      'UPDATE file_shares SET downloads=downloads+1,last_access_at=? WHERE id=?',
+    )
+      .bind(now(), share.id)
+      .run();
+  return response;
+});

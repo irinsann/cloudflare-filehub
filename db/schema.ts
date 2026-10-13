@@ -135,3 +135,31 @@ export const rateLimits = sqliteTable(
   },
   (t) => [index('rate_reset').on(t.resetAt)],
 );
+
+export const uploadSessions = sqliteTable(
+  'upload_sessions',
+  {
+    id: text().primaryKey(),
+    fileId: text('file_id')
+      .notNull()
+      .unique()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    uploadId: text('upload_id').notNull(),
+    objectKey: text('object_key').notNull(),
+    size: integer().notNull(),
+    expiresAt: integer('expires_at').notNull(),
+  },
+  (t) => [index('uploads_expiry').on(t.expiresAt)],
+);
+export const uploadParts = sqliteTable(
+  'upload_parts',
+  {
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => uploadSessions.id, { onDelete: 'cascade' }),
+    partNumber: integer('part_number').notNull(),
+    etag: text().notNull(),
+    size: integer().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.partNumber] })],
+);

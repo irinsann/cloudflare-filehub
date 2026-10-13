@@ -15,6 +15,8 @@ beforeEach(async () => {
       'markdown_attachments',
       'markdown_pages',
       'file_shares',
+      'upload_parts',
+      'upload_sessions',
       'files',
       'folders',
       'operations',

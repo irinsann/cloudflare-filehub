@@ -21,7 +21,7 @@
   "vars": {
     "ENVIRONMENT": "production",
     "LOCAL_AUTH": "false",
-    "MAX_UPLOAD_BYTES": "20971520",
+    "MAX_UPLOAD_BYTES": "1073741824",
     "MAX_TEXT_BYTES": "1048576",
     "ADMIN_ORIGIN": "",
     "FILES_ORIGIN": "",
@@ -36,7 +36,7 @@
       "vars": {
         "ENVIRONMENT": "local",
         "LOCAL_AUTH": "true",
-        "MAX_UPLOAD_BYTES": "20971520",
+        "MAX_UPLOAD_BYTES": "1073741824",
         "MAX_TEXT_BYTES": "1048576",
         "ADMIN_ORIGIN": "",
         "FILES_ORIGIN": "",

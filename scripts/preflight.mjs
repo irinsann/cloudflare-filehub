@@ -32,6 +32,16 @@ for (const key of ['ADMIN_ORIGIN', 'FILES_ORIGIN', 'MARKDOWN_ORIGIN'])
       missing.push(`${key} 格式不正确`);
     }
   }
+if (
+  vars.ADMIN_ORIGIN &&
+  (vars.FILES_ORIGIN !== vars.ADMIN_ORIGIN || vars.MARKDOWN_ORIGIN !== vars.ADMIN_ORIGIN)
+)
+  missing.push('三个 Origin 必须统一为同一站点');
+if (
+  config.routes?.length !== 1 ||
+  config.routes[0].pattern !== new URL(vars.ADMIN_ORIGIN || 'https://invalid.local').host
+)
+  missing.push('生产必须只绑定一个与 ADMIN_ORIGIN 对应的自定义域名');
 if (missing.length) {
   console.error(
     '部署配置尚未完成：\n' +

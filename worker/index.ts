@@ -4,8 +4,9 @@ import { ZodError } from 'zod';
 import type { AppEnv, Env } from './env';
 import { adminAuth, isLocalAuth, rateLimit } from './security';
 import { fileRoutes } from './files';
+import { uploadRoutes } from './uploads';
 import { markdownRoutes, publicPageRoutes, readPage, enforceJsonLimit } from './markdown';
-import { shareRoutes, publicShareRoutes, sharePage } from './shares';
+import { shareRoutes, publicShareRoutes, sharePage, directRoutes } from './shares';
 import { cleanup } from './storage';
 import { fail } from './errors';
 import { htmlPage } from './html';
@@ -13,6 +14,12 @@ import { escapeHtml } from '../shared/markdown';
 const app = new Hono<AppEnv>();
 app.use('*', async (c, next) => {
   c.set('requestId', crypto.randomUUID());
+  if (
+    c.env.ADMIN_ORIGIN &&
+    !isLocalAuth(c.env, new URL(c.req.url)) &&
+    new URL(c.req.url).origin !== c.env.ADMIN_ORIGIN
+  )
+    fail(404, '站点已迁移');
   await next();
   c.header('X-Request-Id', c.get('requestId'));
   c.header('X-Content-Type-Options', 'nosniff');
@@ -39,9 +46,15 @@ app.use('/api/public/*', async (c, next) => {
   await next();
 });
 app.route('/api/admin', fileRoutes);
+app.route('/api/admin', uploadRoutes);
 app.route('/api/admin', shareRoutes);
 app.route('/api/admin', markdownRoutes);
 app.route('/api/public/share', publicShareRoutes);
+app.use('/d/*', async (c, next) => {
+  await rateLimit(c.env, 'sharing', c.req.header('CF-Connecting-IP') || 'local', 120);
+  await next();
+});
+app.route('/d', directRoutes);
 app.route('/api/public/pages', publicPageRoutes);
 app.use('/p/*', async (c, next) => {
   await rateLimit(c.env, 'reading', c.req.header('CF-Connecting-IP') || 'local', 120);
@@ -53,29 +66,12 @@ app.use('/s/*', async (c, next) => {
 });
 app.on(['GET', 'HEAD'], '/p/:slug', (c) => readPage(c));
 app.get('/s/:token', sharePage);
-app.get('/robots.txt', (c) => {
-  const publicHost = c.env.MARKDOWN_ORIGIN && new URL(c.req.url).origin === c.env.MARKDOWN_ORIGIN;
-  return c.text(
-    publicHost
-      ? 'User-agent: *\nDisallow: /api/\nDisallow: /s/\n'
-      : 'User-agent: *\nAllow: /p/\nDisallow: /\n',
-  );
-});
-app.all('/api/*', () => fail(404, 'API 不存在'));
+app.get('/robots.txt', (c) =>
+  c.text('User-agent: *\nAllow: /p/\nDisallow: /api/\nDisallow: /s/\nDisallow: /d/\nDisallow: /\n'),
+);
 app.get('*', async (c) => {
-  const origin = new URL(c.req.url).origin;
-  if (
-    c.env.MARKDOWN_ORIGIN &&
-    origin === c.env.MARKDOWN_ORIGIN &&
-    origin !== (c.env.ADMIN_ORIGIN || '')
-  ) {
-    await rateLimit(c.env, 'reading', c.req.header('CF-Connecting-IP') || 'local', 120);
-    const slug = c.req.path.slice(1);
-    if (!slug || slug.includes('/')) fail(404, '文章不存在');
-    return readPage(c, slug);
-  }
-  if (c.env.FILES_ORIGIN && origin === c.env.FILES_ORIGIN && origin !== (c.env.ADMIN_ORIGIN || ''))
-    fail(404, '请使用完整分享链接');
+  if (c.req.path === '/' && !isLocalAuth(c.env, new URL(c.req.url)))
+    return c.redirect('/drive/', 302);
   // Frontend shell is harmless, but on production protect it with the same JWT verification as API.
   if (!isLocalAuth(c.env, new URL(c.req.url))) {
     let allowed = false;
@@ -84,7 +80,10 @@ app.get('*', async (c) => {
     });
     if (!allowed) fail(401, '请登录');
   }
-  const asset = await c.env.ASSETS.fetch(c.req.raw);
+  const assetUrl = new URL(c.req.url);
+  if (assetUrl.pathname.startsWith('/drive/'))
+    assetUrl.pathname = assetUrl.pathname.slice(6) || '/';
+  const asset = await c.env.ASSETS.fetch(new Request(assetUrl, c.req.raw));
   const response = new Response(asset.body, asset);
   response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   response.headers.set(

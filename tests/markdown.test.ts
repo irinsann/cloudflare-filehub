@@ -137,18 +137,21 @@ describe('Markdown 发布与快照隔离', () => {
       404,
     );
   });
-  it('配置 md 独立域名的根路径可直接阅读，公开域名禁止管理员 API', async () => {
+  it('同一域名按路径公开阅读，后台鉴权，旧域名停止服务', async () => {
     const file = await createMarkdown();
     await publish(file.id);
     const env = {
       ...testEnv,
-      ADMIN_ORIGIN: 'https://ps.irin.im',
-      MARKDOWN_ORIGIN: 'https://md.irin.im',
-      FILES_ORIGIN: 'https://s.irin.im',
+      ADMIN_ORIGIN: 'https://233334.xyz',
+      MARKDOWN_ORIGIN: 'https://233334.xyz',
+      FILES_ORIGIN: 'https://233334.xyz',
     };
-    const response = await app.request('https://md.irin.im/my-note', {}, env);
+    const response = await app.request('https://233334.xyz/p/my-note', {}, env);
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain('https://md.irin.im/my-note');
-    expect((await app.request('https://md.irin.im/api/admin/files', {}, env)).status).toBe(403);
+    expect(await response.text()).toContain('https://233334.xyz/p/my-note');
+    expect((await app.request('https://233334.xyz/api/admin/files', {}, env)).status).toBe(401);
+    expect((await app.request('https://ps-filehub.080280.xyz/p/my-note', {}, env)).status).toBe(
+      404,
+    );
   });
 });

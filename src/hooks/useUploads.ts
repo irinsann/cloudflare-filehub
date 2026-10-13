@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import type { Settings } from '../../shared/types';
-import { sizeLabel } from '../lib/api';
+import { send, sizeLabel } from '../lib/api';
 export interface UploadItem {
   id: string;
   file: File;
@@ -26,36 +26,81 @@ export function useUploads(
       const item = queue.current.shift()!;
       update(item.id, { state: 'uploading' });
       try {
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          const params = new URLSearchParams({ name: item.file.name });
-          if (item.folderId) params.set('folder_id', item.folderId);
-          xhr.open('POST', `/api/admin/files/upload?${params}`);
-          xhr.setRequestHeader('X-Drive-Request', '1');
-          xhr.setRequestHeader('X-File-Size', String(item.file.size));
-          xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable)
-              update(item.id, { progress: Math.round((e.loaded / e.total) * 100) });
-          };
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) resolve();
-            else {
-              let message = '上传失败';
-              try {
-                message = JSON.parse(xhr.responseText).error.message;
-              } catch {
-                /* Network or HTML authentication response. */
+        const session =
+          item.file.size > 0
+            ? await send<{ id: string; partSize: number }>('/uploads', 'POST', {
+                name: item.file.name,
+                size: item.file.size,
+                folder_id: item.folderId,
+              })
+            : null;
+        async function uploadPart(path: string, blob: Blob, offset: number) {
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open(session ? 'PUT' : 'POST', '/api/admin' + path);
+            xhr.setRequestHeader('X-Drive-Request', '1');
+            xhr.setRequestHeader('X-File-Size', String(blob.size));
+            xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable)
+                update(item.id, {
+                  progress: Math.min(
+                    99,
+                    Math.round(((offset + e.loaded) / Math.max(1, item.file.size)) * 100),
+                  ),
+                });
+            };
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) resolve();
+              else {
+                let message = '上传失败，请重新登录后重试';
+                try {
+                  message = JSON.parse(xhr.responseText).error.message;
+                } catch {
+                  /* Access may return HTML. */
+                }
+                reject(new Error(message));
               }
-              reject(new Error(message));
+            };
+            xhr.onerror = () => reject(new Error('网络连接失败'));
+            xhr.timeout = 300000;
+            xhr.ontimeout = () => reject(new Error('分片上传超时'));
+            xhr.onabort = () => reject(new Error('上传已中断'));
+            xhr.send(blob);
+          });
+        }
+        try {
+          if (session) {
+            for (
+              let offset = 0, part = 1;
+              offset < item.file.size;
+              offset += session.partSize, part++
+            ) {
+              const blob = item.file.slice(offset, offset + session.partSize);
+              for (let attempt = 0; ; attempt++) {
+                try {
+                  await uploadPart('/uploads/' + session.id + '/parts/' + part, blob, offset);
+                  break;
+                } catch (e) {
+                  if (attempt >= 2) throw e;
+                }
+              }
             }
-          };
-          xhr.onerror = () => reject(new Error('网络连接失败'));
-          xhr.onabort = () => reject(new Error('上传已中断'));
-          xhr.timeout = 120000;
-          xhr.ontimeout = () => reject(new Error('上传超时'));
-          xhr.send(item.file);
-        });
+            await send('/uploads/' + session.id + '/complete', 'POST');
+          } else {
+            const params = new URLSearchParams({ name: item.file.name });
+            if (item.folderId) params.set('folder_id', item.folderId);
+            await uploadPart('/files/upload?' + params, item.file, 0);
+          }
+        } catch (e) {
+          if (session)
+            try {
+              await send('/uploads/' + session.id, 'DELETE');
+            } catch {
+              /* Stale sessions expire automatically. */
+            }
+          throw e;
+        }
         update(item.id, { state: 'success', progress: 100 });
         onComplete();
       } catch (e) {

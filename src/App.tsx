@@ -265,7 +265,7 @@ export default function App() {
             <Cloud size={23} />
           </span>
           <strong>
-            栖云<span>IRIN DRIVE</span>
+            RCloud<span>RCLOUD</span>
           </strong>
           <Button
             className="mobile-close"
@@ -390,6 +390,12 @@ export default function App() {
               </p>
             </div>
             <div className="heading-actions">
+              {view === 'trash' && (
+                <Button variant="danger" onClick={() => setAction({ type: 'emptyTrash' })}>
+                  <Trash2 size={16} />
+                  清空回收站
+                </Button>
+              )}
               {!management && view !== 'trash' && (
                 <>
                   <Button variant="outline" onClick={() => setAction({ type: 'markdown' })}>
@@ -734,7 +740,7 @@ export default function App() {
             </section>
           )}
           <div className="content-footer">
-            <span>栖云 · PERSONAL CLOUD</span>
+            <span>RCloud · PERSONAL CLOUD</span>
             <span>文件属于你，分享由你决定。</span>
           </div>
         </div>
@@ -863,6 +869,15 @@ export default function App() {
                     >
                       <Link2 size={17} />
                       创建分享
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAction({ type: 'direct', ...menu });
+                        setMenu(null);
+                      }}
+                    >
+                      <Link2 size={17} />
+                      生成文件直链
                     </button>
                   </>
                 )}

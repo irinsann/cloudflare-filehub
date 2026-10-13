@@ -46,7 +46,7 @@ export const fileRoutes = new Hono<AppEnv>();
 fileRoutes.get('/settings', (c) =>
   c.json({
     data: {
-      maxUploadBytes: limit(c.env.MAX_UPLOAD_BYTES, 20971520),
+      maxUploadBytes: limit(c.env.MAX_UPLOAD_BYTES, 1073741824),
       maxTextBytes: limit(c.env.MAX_TEXT_BYTES, 1048576),
       environment: c.env.ENVIRONMENT,
       email: c.get('email'),
@@ -320,4 +320,25 @@ fileRoutes.delete('/files/:id/permanent', async (c) => {
     /* Scheduled cleanup retries durable tasks; attachments/snapshots are deferred. */
   }
   return c.json({ data: { id: file.id } });
+});
+
+fileRoutes.delete('/trash', async (c) => {
+  const timestamp = now();
+  const results = await c.env.DB.batch([
+    c.env.DB.prepare(
+      'INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at) SELECT object_key,? FROM files WHERE deleted_at IS NOT NULL',
+    ).bind(timestamp),
+    c.env.DB.prepare(
+      'INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at) SELECT a.object_key,? FROM markdown_attachments a JOIN files f ON f.id=a.file_id WHERE f.deleted_at IS NOT NULL',
+    ).bind(timestamp),
+    c.env.DB.prepare(
+      'INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at) SELECT p.snapshot_key,? FROM markdown_pages p JOIN files f ON f.id=p.file_id WHERE f.deleted_at IS NOT NULL AND p.snapshot_key IS NOT NULL',
+    ).bind(timestamp),
+    c.env.DB.prepare('DELETE FROM files WHERE deleted_at IS NOT NULL'),
+    c.env.DB.prepare(
+      'DELETE FROM folders WHERE deleted_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM files WHERE folder_id=folders.id) AND NOT EXISTS(SELECT 1 FROM folders child WHERE child.parent_id=folders.id)',
+    ),
+    logStatement(c.env, 'trash.empty', 'trash'),
+  ]);
+  return c.json({ data: { files: results[3].meta.changes, folders: results[4].meta.changes } });
 });
