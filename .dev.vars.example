@@ -1,0 +1,3 @@
+# Production: pnpm exec wrangler secret put SHARE_SESSION_SECRET
+# Generate at least 32 random bytes. Never use this placeholder in production.
+SHARE_SESSION_SECRET=replace-with-a-random-secret-at-least-32-characters

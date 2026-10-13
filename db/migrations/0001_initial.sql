@@ -1,0 +1,18 @@
+PRAGMA foreign_keys = ON;
+CREATE TABLE folders (id TEXT PRIMARY KEY, name TEXT NOT NULL, parent_id TEXT REFERENCES folders(id), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER);
+CREATE UNIQUE INDEX folder_names ON folders(COALESCE(parent_id, ''), name) WHERE deleted_at IS NULL;
+CREATE INDEX folder_parent ON folders(parent_id, deleted_at);
+CREATE TABLE files (id TEXT PRIMARY KEY, name TEXT NOT NULL, object_key TEXT NOT NULL UNIQUE, folder_id TEXT REFERENCES folders(id), mime TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0 CHECK(size >= 0), etag TEXT, version INTEGER NOT NULL DEFAULT 1, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','ready','deleting')), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER);
+CREATE INDEX files_folder ON files(folder_id, deleted_at, status, updated_at);
+CREATE INDEX files_recent ON files(deleted_at, status, updated_at);
+CREATE TABLE file_shares (id TEXT PRIMARY KEY, file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE, token_hash TEXT NOT NULL UNIQUE, password_hash TEXT, created_at INTEGER NOT NULL, expires_at INTEGER, enabled INTEGER NOT NULL DEFAULT 1, allow_download INTEGER NOT NULL DEFAULT 1, views INTEGER NOT NULL DEFAULT 0, downloads INTEGER NOT NULL DEFAULT 0, last_access_at INTEGER);
+CREATE INDEX shares_file ON file_shares(file_id);
+CREATE TABLE markdown_pages (id TEXT PRIMARY KEY, file_id TEXT NOT NULL UNIQUE REFERENCES files(id) ON DELETE CASCADE, title TEXT NOT NULL, slug TEXT NOT NULL UNIQUE, description TEXT NOT NULL DEFAULT '', published INTEGER NOT NULL DEFAULT 0, published_at INTEGER, updated_at INTEGER NOT NULL, snapshot_key TEXT, published_version INTEGER, allow_source INTEGER NOT NULL DEFAULT 0, allow_index INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE markdown_attachments (id TEXT PRIMARY KEY, file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE, object_key TEXT NOT NULL UNIQUE, mime TEXT NOT NULL, size INTEGER NOT NULL, created_at INTEGER NOT NULL);
+CREATE INDEX attachments_file ON markdown_attachments(file_id);
+CREATE TABLE page_attachments (page_id TEXT NOT NULL REFERENCES markdown_pages(id) ON DELETE CASCADE, attachment_id TEXT NOT NULL REFERENCES markdown_attachments(id) ON DELETE CASCADE, PRIMARY KEY(page_id, attachment_id));
+CREATE TABLE operations (id TEXT PRIMARY KEY, action TEXT NOT NULL, target_id TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE INDEX operations_time ON operations(created_at);
+CREATE TABLE cleanup_tasks (object_key TEXT PRIMARY KEY, created_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 1, reset_at INTEGER NOT NULL);
+CREATE INDEX rate_reset ON rate_limits(reset_at);
