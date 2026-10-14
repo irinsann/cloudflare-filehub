@@ -226,7 +226,7 @@ export async function readPage(c: AppContext, requestedSlug?: string) {
   const meta = `<meta name="description" content="${e(page.description)}"><meta property="og:title" content="${e(page.title)}"><meta property="og:description" content="${e(page.description)}"><meta property="og:type" content="article"><link rel="canonical" href="${e(url)}"><meta name="robots" content="${page.allow_index ? 'index,follow' : 'noindex,nofollow'}">`;
   const output = htmlPage(
     page.title,
-    `<main class="layout"><article class="reader"><div class="eyebrow">PUBLISHED NOTE</div><h1 class="title">${e(page.title)}</h1><p class="description">${e(page.description)}</p><div class="meta">更新于 ${e(new Date(page.updated_at).toISOString().slice(0, 10))}${page.allow_source ? ` · <a href="/api/public/pages/${slug}/source">下载 Markdown</a>` : ''}</div><div class="prose">${html}</div></article><aside class="toc"><b>本文目录</b>${headings.map((h) => `<a href="#${encodeURIComponent(h.id)}">${e(h.text)}</a>`).join('')}</aside></main>`,
+    `<main class="layout"><article class="reader"><h1 class="title">${e(page.title)}</h1><p class="description">${e(page.description)}</p><div class="meta">更新于 ${e(new Date(page.updated_at).toISOString().slice(0, 10))}${page.allow_source ? ` · <a href="/api/public/pages/${slug}/source">下载 Markdown</a>` : ''}</div><div class="prose">${html}</div></article><aside class="toc"><details open><summary>本文目录</summary><nav aria-label="文章目录">${headings.map((h) => `<a href="#${encodeURIComponent(h.id)}">${e(h.text)}</a>`).join('')}</nav></details></aside></main>`,
     undefined,
     meta,
   );

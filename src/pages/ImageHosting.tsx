@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Upload, Copy, Link2, ImagePlus } from 'lucide-react';
 import { api, send, copy, fileUrl, sizeLabel } from '../lib/api';
+import { uploadFile } from '../lib/upload';
+import { Empty } from './Management';
 import { Button } from '../components/ui/button';
 import type { FileRecord, Settings } from '../../shared/types';
 interface Row {
@@ -13,11 +15,14 @@ interface Row {
 export function ImageHosting({
   settings,
   notify,
+  onComplete,
 }: {
   settings: Settings | null;
   notify: (s: string) => void;
+  onComplete: () => void;
 }) {
   const [rows, setRows] = useState<Row[]>([]),
+    [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [status, setStatus] = useState(''),
     [error, setError] = useState(''),
@@ -25,9 +30,18 @@ export function ImageHosting({
     [revision, setRevision] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    void api<Row[]>('/images?page=' + page)
+    const controller = new AbortController();
+    setLoading(true);
+    setError('');
+    void api<Row[]>('/images?page=' + page, { signal: controller.signal })
       .then(setRows)
-      .catch((e) => setError(e.message));
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(e.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [page, revision]);
   async function upload(files: File[]) {
     if (!settings || busy) return;
@@ -44,33 +58,11 @@ export function ImageHosting({
           setError(file.name + ' 是空文件');
           continue;
         }
-        let session: string | undefined, uploaded: FileRecord | undefined;
+        let uploaded: FileRecord | undefined;
         try {
-          const s = await send<{ id: string; partSize: number }>('/uploads', 'POST', {
-            name: file.name,
-            size: file.size,
-            folder_id: folder.id,
-          });
-          session = s.id;
-          for (let offset = 0, n = 1; offset < file.size; offset += s.partSize, n++) {
-            setStatus(file.name + ' · ' + Math.round((offset / file.size) * 100) + '%');
-            for (let attempt = 0; ; attempt++) {
-              try {
-                await api('/uploads/' + s.id + '/parts/' + n, {
-                  method: 'PUT',
-                  headers: {
-                    'Content-Type': 'application/octet-stream',
-                    'X-File-Size': String(Math.min(s.partSize, file.size - offset)),
-                  },
-                  body: file.slice(offset, offset + s.partSize),
-                });
-                break;
-              } catch (e) {
-                if (attempt >= 2) throw e;
-              }
-            }
-          }
-          uploaded = await send<FileRecord>('/uploads/' + s.id + '/complete', 'POST');
+          uploaded = await uploadFile(file, folder.id, (percent) =>
+            setStatus(file.name + ' · ' + percent + '%'),
+          );
           setStatus(file.name + ' · 生成直链');
           const r = await send<{ name: string; file_id: string; url: string; duplicate: boolean }>(
             '/images',
@@ -85,18 +77,13 @@ export function ImageHosting({
           setRevision((n) => n + 1);
         } catch (e) {
           setError(file.name + '：' + (e instanceof Error ? e.message : '上传失败'));
-          if (session && !uploaded)
-            try {
-              await send('/uploads/' + session, 'DELETE');
-            } catch {
-              /* Expired uploads are cleaned automatically. */
-            }
         }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '上传失败');
     } finally {
       setBusy(false);
+      onComplete();
     }
   }
   async function revoke(r: Row) {
@@ -154,51 +141,58 @@ export function ImageHosting({
           {error}
         </p>
       )}
-      <div className="image-host-grid">
-        {rows.map((r) => (
-          <article className="image-host-card" key={r.name}>
-            <a href={fileUrl(r.file_id, true)} target="_blank" rel="noreferrer">
-              <img loading="lazy" src={fileUrl(r.file_id, true)} alt={r.name} />
-            </a>
-            <div>
-              <strong title={r.name}>{r.name}</strong>
-              <small>
-                {sizeLabel(r.size)} · {r.enabled ? '公开' : '已撤销'}
-              </small>
-              <input
-                readOnly
-                value={r.url}
-                aria-label="图片直链"
-                onFocus={(e) => e.target.select()}
-              />
-              <div className="image-host-actions">
-                <Button size="sm" variant="outline" onClick={() => copied(r.url)}>
-                  <Link2 size={14} />
-                  直链
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => copied('![图片](' + r.url + ')')}
-                >
-                  <Copy size={14} />
-                  Markdown
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={!r.enabled}
-                  onClick={() => void revoke(r)}
-                >
-                  撤销
-                </Button>
+      {loading ? (
+        <div className="skeleton-list" aria-label="加载图片">
+          <div className="skeleton" />
+          <div className="skeleton" />
+        </div>
+      ) : (
+        <div className="image-host-grid">
+          {rows.map((r) => (
+            <article className="image-host-card" key={r.name}>
+              <a href={fileUrl(r.file_id, true)} target="_blank" rel="noreferrer">
+                <img loading="lazy" src={fileUrl(r.file_id, true)} alt={r.name} />
+              </a>
+              <div>
+                <strong title={r.name}>{r.name}</strong>
+                <small>
+                  {sizeLabel(r.size)} · {r.enabled ? '公开' : '已撤销'}
+                </small>
+                <input
+                  readOnly
+                  value={r.url}
+                  aria-label="图片直链"
+                  onFocus={(e) => e.target.select()}
+                />
+                <div className="image-host-actions">
+                  <Button size="sm" variant="outline" onClick={() => copied(r.url)}>
+                    <Link2 size={14} />
+                    直链
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => copied('![图片](' + r.url + ')')}
+                  >
+                    <Copy size={14} />
+                    Markdown
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!r.enabled}
+                    onClick={() => void revoke(r)}
+                  >
+                    撤销
+                  </Button>
+                </div>
               </div>
-            </div>
-          </article>
-        ))}
-      </div>
-      {!rows.length && <p className="muted">暂无图片</p>}
-      <div className="dialog-footer">
+            </article>
+          ))}
+        </div>
+      )}
+      {!loading && !rows.length && !error && <Empty label="暂无图片" />}
+      <div className="image-pagination">
         <Button variant="outline" disabled={page === 1} onClick={() => setPage((n) => n - 1)}>
           上一页
         </Button>

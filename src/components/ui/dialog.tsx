@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useId, useRef, type ReactNode } from 'react';
 export function Modal({
   title,
   description,
@@ -14,6 +14,10 @@ export function Modal({
   onClose: () => void;
   wide?: boolean;
 }) {
+  const descriptionId = useId();
+  const previousFocus = useRef(
+    document.activeElement instanceof HTMLElement ? document.activeElement : null,
+  );
   return (
     <Dialog.Root
       open
@@ -23,11 +27,22 @@ export function Modal({
     >
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className={`dialog-content ${wide ? 'dialog-wide' : ''}`}>
+        <Dialog.Content
+          className={`dialog-content ${wide ? 'dialog-wide' : ''}`}
+          aria-describedby={description ? descriptionId : undefined}
+          onCloseAutoFocus={(e) => {
+            if (previousFocus.current?.isConnected) {
+              e.preventDefault();
+              previousFocus.current.focus();
+            }
+          }}
+        >
           <header className="dialog-header">
             <div>
               <Dialog.Title>{title}</Dialog.Title>
-              <Dialog.Description>{description ?? '管理你的文件与分享设置'}</Dialog.Description>
+              {description && (
+                <Dialog.Description id={descriptionId}>{description}</Dialog.Description>
+              )}
             </div>
             <Dialog.Close className="button button-ghost button-icon" aria-label="关闭">
               <X size={18} />

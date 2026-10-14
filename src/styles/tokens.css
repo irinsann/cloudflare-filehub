@@ -1,0 +1,40 @@
+:root {
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    'Microsoft YaHei',
+    sans-serif;
+  font-synthesis: none;
+  color-scheme: light;
+  --bg: #f5f7f6;
+  --surface: #fff;
+  --sidebar: #fcfdfc;
+  --fg: #23352d;
+  --muted: #738078;
+  --line: #e4eae6;
+  --accent: #347456;
+  --accent-soft: #e7f1eb;
+  --hover: #f2f6f3;
+  --danger: #ba4a46;
+  --shadow: 0 4px 24px #203d2b05;
+  --radius: 18px;
+  --sidebar-width: 232px;
+  color: var(--fg);
+  background: var(--bg);
+}
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #111a16;
+  --surface: #19241e;
+  --sidebar: #152019;
+  --fg: #e6eee8;
+  --muted: #9baaa0;
+  --line: #2c3d32;
+  --accent: #9ad0ac;
+  --accent-soft: #294233;
+  --hover: #22332a;
+  --danger: #f29791;
+  --shadow: 0 8px 32px #0001;
+}

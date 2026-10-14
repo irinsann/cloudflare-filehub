@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ExternalLink, FileText, Link2, ShieldCheck } from 'lucide-react';
 import { api, send, dateLabel } from '../lib/api';
+import { StorageMeter } from '../components/workspace/WorkspaceShell';
 import { Button } from '../components/ui/button';
 import type { Settings, ShareRecord } from '../../shared/types';
 interface DocumentRow {
@@ -39,13 +40,21 @@ export function Management({
       setLoading(false);
       return;
     }
+    const controller = new AbortController();
     void (
       view === 'shares'
-        ? api<(ShareRecord & { password_protected: number })[]>('/shares').then(setShares)
-        : api<DocumentRow[]>('/markdown').then(setDocs)
+        ? api<(ShareRecord & { password_protected: number })[]>('/shares', {
+            signal: controller.signal,
+          }).then(setShares)
+        : api<DocumentRow[]>('/markdown', { signal: controller.signal }).then(setDocs)
     )
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(e.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [view, refresh, revision]);
   async function revoke(id: string, article: boolean) {
     try {
@@ -84,15 +93,12 @@ export function Management({
               退出登录
             </Button>
           )}
-          <p>当前身份：{settings?.email ?? '正在读取'}</p>
+          <p className="account-email">{settings?.email ?? '正在读取'}</p>
         </section>
         <section className="settings-card">
           <FileText />
           <h3>存储</h3>
-          <p>
-            存储容量：
-            {settings ? `${(settings.storageUsedBytes / 1073741824).toFixed(2)} / 50 GB` : '—'}
-          </p>
+          <StorageMeter settings={settings} />
           <p>文本编辑上限：{settings ? `${settings.maxTextBytes / 1048576} MB` : '—'}</p>
         </section>
       </div>

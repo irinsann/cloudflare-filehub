@@ -1,0 +1,141 @@
+.preview-toc {
+  font-size: 11px;
+  color: var(--muted);
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 20px;
+}
+.preview-toc a {
+  display: block;
+  margin: 8px;
+  color: var(--accent);
+}
+.prose {
+  font-size: 14px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+.prose h1 {
+  font-size: 28px;
+  font-weight: 650;
+  line-height: 1.4;
+  margin: 25px 0;
+}
+.prose h2 {
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.5;
+  margin: 32px 0 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+.prose h3 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 25px 0 13px;
+}
+.prose h4 {
+  font-weight: 600;
+  margin: 20px 0 12px;
+}
+.prose p {
+  margin: 16px 0;
+}
+.prose ul,
+.prose ol {
+  padding-left: 24px;
+  margin: 16px 0;
+}
+.prose ul {
+  list-style: disc;
+}
+.prose ol {
+  list-style: decimal;
+}
+.prose li {
+  margin: 5px 0;
+}
+.prose a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.prose img {
+  max-width: 100%;
+  border-radius: 7px;
+}
+.prose blockquote {
+  margin: 20px 0;
+  padding: 3px 20px;
+  border-left: 3px solid var(--accent);
+  color: var(--muted);
+  background: var(--hover);
+}
+.prose pre {
+  position: relative;
+  background: #242c27;
+  color: #e4ebe6;
+  padding: 25px 18px 18px;
+  border-radius: 8px;
+  overflow: auto;
+  font:
+    12px/1.8 Consolas,
+    monospace;
+}
+.prose :not(pre) > code {
+  font:
+    12px Consolas,
+    monospace;
+  background: var(--hover);
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+.prose table {
+  display: block;
+  overflow: auto;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 20px 0;
+}
+.prose th,
+.prose td {
+  border: 1px solid var(--line);
+  padding: 8px 14px;
+}
+.prose th {
+  background: var(--hover);
+  font-weight: 600;
+}
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 25px 0;
+}
+.prose input {
+  margin-right: 8px;
+}
+.code-copy {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  background: #3a483f;
+  border: 0;
+  color: #e4ebe6;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 9px;
+}
+.hljs-keyword,
+.hljs-selector-tag {
+  color: #c8a5dc;
+}
+.hljs-string,
+.hljs-attr {
+  color: #b2d7a7;
+}
+.hljs-number,
+.hljs-literal {
+  color: #e5bf8b;
+}
+.hljs-comment {
+  color: #91a296;
+}
