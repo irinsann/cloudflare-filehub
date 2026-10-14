@@ -184,3 +184,15 @@ export const adminSetup = sqliteTable('admin_setup', {
 export const adminRecovery = sqliteTable('admin_recovery', {
   codeHash: text('code_hash').primaryKey(),
 });
+
+export const imageHosts = sqliteTable('image_hosts', {
+  name: text().primaryKey(),
+  fileId: text('file_id')
+    .notNull()
+    .unique()
+    .references(() => files.id, { onDelete: 'cascade' }),
+  objectKey: text('object_key').notNull(),
+  sha256: text().notNull(),
+  enabled: integer().notNull().default(1),
+  createdAt: integer('created_at').notNull(),
+});

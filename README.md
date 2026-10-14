@@ -97,3 +97,5 @@ pnpm check
 本项目采用 [MIT License](LICENSE)。第三方依赖保留各自的开源协议。
 
 站内认证可选择 AUTH_MODE=password_totp：密码＋验证器验证码，首次扫码绑定、一次性恢复码、24 小时可撤销会话。详见部署文档；默认 Access 模式仍可选择。
+
+图床：登录后在「图床」上传 PNG、JPEG、GIF 或 WebP，按实际内容 MD5 命名并保存到 Image-hosting；返回 `/i/MD5.ext` 图片直链，可复制 Markdown，重复图片复用链接，撤销或移入回收站立即失效。

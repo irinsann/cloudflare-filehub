@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import type { AppEnv, Env } from './env';
 import { adminAuth, isLocalAuth, rateLimit } from './security';
 import { fileRoutes } from './files';
+import { imageRoutes, imagePage } from './images';
 import { siteAuthRoutes, loginPage, siteIdentity } from './site-auth';
 import { uploadRoutes } from './uploads';
 import { markdownRoutes, publicPageRoutes, readPage, enforceJsonLimit } from './markdown';
@@ -52,6 +53,12 @@ app.get('/login', (c) =>
   c.env.AUTH_MODE === 'password_totp' ? loginPage(c) : c.redirect('/drive/'),
 );
 app.route('/api/admin', fileRoutes);
+app.route('/api/admin', imageRoutes);
+app.use('/i/*', async (c, next) => {
+  await rateLimit(c.env, 'image', c.req.header('CF-Connecting-IP') || 'local', 240);
+  await next();
+});
+app.on(['GET', 'HEAD'], '/i/:name', imagePage);
 app.route('/api/admin', uploadRoutes);
 app.route('/api/admin', shareRoutes);
 app.route('/api/admin', markdownRoutes);

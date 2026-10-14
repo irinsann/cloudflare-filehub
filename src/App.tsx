@@ -42,6 +42,7 @@ import { Actions, type Action } from './components/Actions';
 import { useUploads } from './hooks/useUploads';
 import { brandMark } from '../shared/brand';
 import { Management, Empty } from './pages/Management';
+import { ImageHosting } from './pages/ImageHosting';
 const Editor = lazy(() => import('./pages/Editor')),
   Preview = lazy(() => import('./components/Preview'));
 const sections = [
@@ -50,6 +51,7 @@ const sections = [
   { id: 'markdown', label: 'Markdown 文档', icon: FileText },
   { id: 'published', label: '已发布文章', icon: Globe2 },
   { id: 'shares', label: '文件分享', icon: Link2 },
+  { id: 'images', label: '图床', icon: Image },
   { id: 'trash', label: '回收站', icon: Trash2 },
   { id: 'settings', label: '设置', icon: Settings2 },
 ] as const;
@@ -134,7 +136,7 @@ export default function App() {
   }, [search]);
   useEffect(() => {
     setSelected(new Set());
-    if (['published', 'shares', 'settings'].includes(view)) return;
+    if (['published', 'shares', 'settings', 'images'].includes(view)) return;
     const serial = ++request.current;
     setLoading(true);
     setError('');
@@ -225,7 +227,8 @@ export default function App() {
     notify(`已将 ${completed} 个文件移入回收站`);
   }
   const heading = sections.find((s) => s.id === view)!.label;
-  const management = view === 'published' || view === 'shares' || view === 'settings';
+  const management =
+    view === 'published' || view === 'shares' || view === 'settings' || view === 'images';
   if (editing)
     return (
       <Suspense
@@ -373,17 +376,19 @@ export default function App() {
               <p>
                 {view === 'files'
                   ? '上传、分类和管理文件。'
-                  : view === 'markdown'
-                    ? '创建、编辑和发布 Markdown 文档。'
-                    : view === 'trash'
-                      ? '恢复误删的文件，或永久释放存储空间。'
-                      : view === 'published'
-                        ? '管理已发布的文章。'
-                        : view === 'shares'
-                          ? '管理公开链接，随时收回访问权限。'
-                          : view === 'recent'
-                            ? '最近更新的文件都在这里。'
-                            : '你的身份、存储限制与公开地址。'}
+                  : view === 'images'
+                    ? '上传图片并获取直链。'
+                    : view === 'markdown'
+                      ? '创建、编辑和发布 Markdown 文档。'
+                      : view === 'trash'
+                        ? '恢复误删的文件，或永久释放存储空间。'
+                        : view === 'published'
+                          ? '管理已发布的文章。'
+                          : view === 'shares'
+                            ? '管理公开链接，随时收回访问权限。'
+                            : view === 'recent'
+                              ? '最近更新的文件都在这里。'
+                              : '你的身份、存储限制与公开地址。'}
               </p>
             </div>
             <div className="heading-actions">
@@ -459,7 +464,9 @@ export default function App() {
               </Button>
             </div>
           )}
-          {management ? (
+          {view === 'images' ? (
+            <ImageHosting settings={settings} notify={notify} />
+          ) : management ? (
             <Management
               view={view}
               refresh={refresh}
