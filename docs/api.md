@@ -243,13 +243,21 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 | DELETE   | /api/admin/shares/{id}             | 撤销                                                                                                  |
 | GET      | /s/{token}                         | 公开分享页                                                                                            |
 | GET/HEAD | /d/{token}                         | 直接下载，仍校验密码、下载许可、有效期和撤销                                                          |
-| GET      | /api/public/share/{token}          | 授权后元数据，计浏览次数                                                                              |
+| GET      | /api/public/share/{token}          | 授权后元数据，计浏览次数；HTML 的 preview_type 为 html，其他文件为 null                               |
 | POST     | /api/public/share/{token}/unlock   | {password}，返回 HttpOnly 分享 Cookie                                                                 |
 | GET      | /api/public/share/{token}/text     | 安全文本预览                                                                                          |
 | GET/HEAD | /api/public/share/{token}/preview  | 可预览格式                                                                                            |
 | GET/HEAD | /api/public/share/{token}/download | 受控下载                                                                                              |
 
 分享明文 Token 只在创建时的 URL 中返回，不是上传 Token。默认链接来源为 s.irin.im。密码 Cookie 每个分享独立，最长一小时。无效链接 404，撤销/到期 410，未解锁 401，禁止下载 403。
+
+#### HTML 分享
+
+上传 `.html` 或 `.htm` 文件后按普通文件创建分享即可，无需额外发布接口。分享页按 HTML 渲染；文件仍以 `text/plain` 保存，旧 MIME 为 `application/octet-stream` 的 `.htm` 文件也支持预览。允许关闭下载，密码、有效期、撤销和回收站权限与普通分享一致。
+
+`GET/HEAD /api/public/share/{token}/preview` 对 HTML 返回 `Content-Type: text/html; charset=utf-8`。分享页通过 `sandbox="allow-scripts"` iframe 显示，响应同时带 `Content-Security-Policy: sandbox allow-scripts`；不授予 `allow-same-origin`，即使直接打开预览地址也不能获得本站的 Cookie、存储或父页面访问权限。[CSP sandbox 说明](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/sandbox)
+
+支持内联 CSS、内联 JavaScript 和 `data:` / `blob:` 内嵌图片、音视频，适合单文件页面与简单交互。CSP 禁止外部脚本、样式和图片等资源、网络请求、嵌套框架、Worker、表单提交与修改 base URL；不授予弹窗、顶层导航、同源或下载权限。依赖 CDN、远程接口、相对路径资源或浏览器持久存储的页面需要改为自包含文件。iframe 中的限制不影响分享页按授权提供原始文件下载；`/download` 和 `/d/{token}` 始终返回附件，保留原始字节。
 
 ### 图床
 

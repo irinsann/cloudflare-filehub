@@ -24,7 +24,7 @@
 4. Markdown 保存用新 Key，D1 UPDATE 的版本条件必须匹配；只有切换成功才释放新对象并排队旧对象。冲突留下的新对象随后清理，不覆盖其他窗口内容。
 5. 发布必须提交编辑窗口看到的文件版本；复制正文到新快照，并在 D1 batch 中用版本/存活条件切换发布元数据与附件授权。过期窗口不能意外发布另一窗口的新草稿，冲突也不会移除旧快照的附件授权。未发布草稿永不用于访客响应；已发布快照只在再次发布时切换。
 6. 删除先软删除并关闭分享/文章。永久删除将所有相关 Key 排队并删除 D1 元数据，外键级联移除授权；R2 删除失败可重试，无法通过业务接口读取剩余对象。
-7. Cron 仅处理超过一小时任务，每次 8 个对象及 2 个过期上传任务，删除前检查 files/pages/attachments 是否仍引用 Key，防误删。超过一小时的 pending 上传一并清理。限制批量数以适配免费档子请求预算；永久删除与清空回收站在同一 D1 batch 中先收集文件、附件和快照 Key，再删除记录；提交后按 100 个对象一批立即尝试 R2 删除。再次检查活跃引用，只在 R2 删除成功后释放容量和队列；失败保留原有容量与持久任务，由 Cron 重试。
+7. Cron 仅处理排队超过一小时且没有 files/pages/attachments/image_hosts/upload_sessions 引用的对象，每次 8 个对象及 2 个过期超过一小时的上传任务。回收站、未发布快照、未被文章引用的附件和所有文件状态都受保护；pending 保留清理任务。过期分片必须成功终止或明确返回 NoSuchUpload（10024）后才删除会话和 pending 索引，临时失败保留会话与容量，按尝试次数轮换重试。普通直传明确失败时仅移除本次 pending 索引；进程崩溃等无法确认终止的 pending 需人工对账。限制批量数以适配免费档子请求预算；永久删除与清空回收站在同一 D1 batch 中先收集文件、附件和快照 Key，再删除记录；提交后按 100 个对象一批立即尝试 R2 删除。再次检查活跃引用，只在 R2 删除成功后释放容量和队列；失败保留原有容量与持久任务，由 Cron 重试。
 
 D1 和 R2 没有共享事务。上传和 SQL 异常只能保证可补偿的一致性，不能宣称跨存储强事务。极端后台存储故障需检查任务与平台日志，系统不向访客泄露内部错误详情。
 
@@ -32,7 +32,7 @@ D1 和 R2 没有共享事务。上传和 SQL 异常只能保证可补偿的一�
 
 私人后台与 `/api/admin/*` 验证 Access JWKS RS256 JWT、issuer/AUD、有效期与必要声明，并检查明确邮箱白名单。公开路由独立，不调用后台身份当作授权；公开主机上的后台接口直接拒绝。开发模拟必须 ENVIRONMENT=local、LOCAL_AUTH=true、loopback 主机三者同时成立。
 
-管理员写操作要求同源 Origin 和 X-Drive-Request；没有全局开放 CORS。公开内容禁止未处理 HTML，链接经过 mature sanitizer，图片仅 HTTPS 或受控附件。正文和附件响应 no-store；文件响应 CSP sandbox、nosniff、保守 Content-Disposition；HTML/SVG 扩展名只作文本预览。发布页 CSP 使用每次随机 nonce，禁止任意脚本/iframe/对象；没有第三方脚本、任意远程抓取或公开 R2 地址。
+管理员写操作要求同源 Origin 和 X-Drive-Request；没有全局开放 CORS。Markdown 公开正文禁止原始 HTML，链接经过 sanitizer，图片仅 HTTPS 或受控附件。正文和附件响应 no-store；文件响应 CSP sandbox、nosniff、保守 Content-Disposition；HTML/SVG 私有预览仍作文本。HTML/HTM 公开分享由独立 iframe 和响应头同时设置 sandbox allow-scripts，不授予 allow-same-origin；仅允许内联脚本/样式与内嵌资源，禁止外部资源和接口请求、表单、嵌套框架、弹窗与顶层导航。预览、HEAD、Range 和下载每次检查分享权限；下载保持附件。分享页和 Markdown 发布页 CSP 使用每次随机 nonce；没有任意远程抓取或公开 R2 地址。
 
 分享密码使用 PBKDF2 100,000 迭代（WebCrypto Workers 兼容范围），应用级原子限流限制猜测；强密码仍很重要。token 256 位随机，数据库只保存 SHA-256，无重新构造原始链接的能力。若遗失链接，可撤销并新建。
 

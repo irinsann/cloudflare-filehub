@@ -76,6 +76,8 @@ input:focus-visible{outline-offset:1px}
 #view{overflow:hidden;border:1px solid var(--line);border-radius:16px;background:var(--subtle)}
 #view img,#view video,#view iframe{display:block;width:100%;max-height:65dvh;border:0;object-fit:contain}
 #view iframe{height:65dvh}
+.card.html-share{max-width:1180px}
+#view.html-preview iframe{height:clamp(320px,calc(100dvh - 400px),760px);max-height:none;background:#fff}
 #view audio{display:block;width:100%;margin:16px 0}
 #view pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:65dvh;overflow:auto;margin:0;padding:20px;font:13px/1.8 "Cascadia Code",Consolas,monospace}
 .share-actions{margin-top:24px;display:flex;justify-content:flex-end}

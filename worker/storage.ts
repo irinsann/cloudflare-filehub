@@ -16,6 +16,7 @@ export const mimeFor = (name: string) => {
     py: 'text/plain',
     css: 'text/plain',
     html: 'text/plain',
+    htm: 'text/plain',
     svg: 'text/plain',
     yaml: 'text/plain',
     yml: 'text/plain',
@@ -44,6 +45,7 @@ export const mimeFor = (name: string) => {
   return m[ext] ?? 'application/octet-stream';
 };
 export const isMarkdown = (name: string) => /\.(md|markdown)$/i.test(name);
+export const isHtml = (name: string) => /\.html?$/i.test(name);
 export const isText = (mime: string) => mime.startsWith('text/') || mime === 'application/json';
 export function sniff(bytes: Uint8Array): string | null {
   const prefix = (...v: number[]) => v.every((b, i) => bytes[i] === b);
@@ -235,28 +237,69 @@ export async function cleanupPurgedObjects(env: Env, objectKeys: string[]) {
   }
 }
 export async function cleanup(env: Env) {
+  const cutoff = now() - 3600000;
   const expired = await env.DB.prepare(
-    'SELECT id,file_id,object_key,upload_id FROM upload_sessions WHERE expires_at<? LIMIT 2',
+    `SELECT s.id,s.file_id,s.object_key,s.upload_id FROM upload_sessions s
+     LEFT JOIN cleanup_tasks t ON t.object_key=s.object_key
+     WHERE s.expires_at<? ORDER BY COALESCE(t.attempts,0),s.expires_at LIMIT 2`,
   )
-    .bind(now())
+    .bind(cutoff)
     .all<{ id: string; file_id: string; object_key: string; upload_id: string }>();
   for (const s of expired.results) {
+    await cleanupStatement(env, s.object_key).run();
     try {
       await env.BUCKET.resumeMultipartUpload(s.object_key, s.upload_id).abort();
-    } catch {
-      /* R2 also expires abandoned multipart uploads. */
+    } catch (error) {
+      // Only the documented NoSuchUpload error proves there is no multipart state to retain.
+      const code =
+        typeof error === 'object' && error !== null && 'code' in error ? error.code : null;
+      const missing =
+        code === 10024 ||
+        code === '10024' ||
+        code === 'NoSuchUpload' ||
+        (error instanceof Error && /\(10024\)$/.test(error.message));
+      if (!missing) {
+        await env.DB.prepare('UPDATE cleanup_tasks SET attempts=attempts+1 WHERE object_key=?')
+          .bind(s.object_key)
+          .run();
+        continue;
+      }
     }
-    await env.DB.prepare("DELETE FROM files WHERE id=? AND status='pending'").bind(s.file_id).run();
+    await env.DB.batch([
+      env.DB.prepare(
+        'DELETE FROM upload_sessions WHERE id=? AND object_key=? AND upload_id=? AND expires_at<?',
+      ).bind(s.id, s.object_key, s.upload_id, cutoff),
+      env.DB.prepare(
+        `DELETE FROM files WHERE id=? AND object_key=? AND status='pending'
+        AND created_at<? AND updated_at<?
+        AND NOT EXISTS(SELECT 1 FROM upload_sessions WHERE file_id=files.id)
+        AND NOT EXISTS(SELECT 1 FROM markdown_pages WHERE file_id=files.id)
+        AND NOT EXISTS(SELECT 1 FROM markdown_attachments WHERE file_id=files.id)
+        AND NOT EXISTS(SELECT 1 FROM image_hosts WHERE file_id=files.id)`,
+      ).bind(s.file_id, s.object_key, cutoff, cutoff),
+    ]);
   }
-  const cutoff = now() - 3600000;
   const tasks = await env.DB.prepare(
-    'SELECT object_key FROM cleanup_tasks WHERE created_at<? AND NOT EXISTS(SELECT 1 FROM upload_sessions s WHERE s.object_key=cleanup_tasks.object_key) ORDER BY created_at LIMIT 8',
+    `SELECT object_key FROM cleanup_tasks WHERE created_at<?
+     AND NOT EXISTS(SELECT 1 FROM upload_sessions s WHERE s.object_key=cleanup_tasks.object_key)
+     AND NOT EXISTS(SELECT 1 FROM files f WHERE f.object_key=cleanup_tasks.object_key AND f.status='pending')
+     ORDER BY created_at LIMIT 8`,
   )
     .bind(cutoff)
     .all<{ object_key: string }>();
   for (const task of tasks.results) {
+    // A pending row may be a slow, live single-request upload without a multipart session.
+    const file = await env.DB.prepare('SELECT status FROM files WHERE object_key=?')
+      .bind(task.object_key)
+      .first<{ status: string }>();
+    if (file) {
+      if (file.status !== 'pending') await releaseStatement(env, task.object_key).run();
+      continue;
+    }
     const used = await env.DB.prepare(
-      "SELECT id FROM files WHERE object_key=? AND status='ready' UNION ALL SELECT id FROM markdown_pages WHERE snapshot_key=? UNION ALL SELECT id FROM markdown_attachments WHERE object_key=? LIMIT 1",
+      `SELECT 1 FROM markdown_pages WHERE snapshot_key=?
+       UNION ALL SELECT 1 FROM markdown_attachments WHERE object_key=?
+       UNION ALL SELECT 1 FROM image_hosts WHERE object_key=? LIMIT 1`,
     )
       .bind(task.object_key, task.object_key, task.object_key)
       .first();
@@ -264,14 +307,16 @@ export async function cleanup(env: Env) {
       await releaseStatement(env, task.object_key).run();
       continue;
     }
+    const active = await env.DB.prepare(
+      `SELECT 1 FROM upload_sessions WHERE object_key=?
+       UNION ALL SELECT 1 FROM files WHERE object_key=? LIMIT 1`,
+    )
+      .bind(task.object_key, task.object_key)
+      .first();
+    if (active) continue;
     try {
       await deleteObject(env, task.object_key);
-      await env.DB.batch([
-        env.DB.prepare("DELETE FROM files WHERE object_key=? AND status='pending'").bind(
-          task.object_key,
-        ),
-        releaseStatement(env, task.object_key),
-      ]);
+      await releaseStatement(env, task.object_key).run();
     } catch {
       await env.DB.prepare('UPDATE cleanup_tasks SET attempts=attempts+1 WHERE object_key=?')
         .bind(task.object_key)
