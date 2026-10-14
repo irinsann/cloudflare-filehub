@@ -4,7 +4,7 @@ MIT 开源的 Serverless 个人云盘与 Markdown 发布平台。
 
 运行在 Cloudflare Workers + 私有 R2 + D1 上的个人云盘和 Markdown 发布平台。React / TypeScript / Vite / Tailwind 4，shadcn 风格 Radix 组件，Lucide 图标；Hono API；Drizzle Schema 与参数化 D1 查询；CodeMirror 6 编辑器；unified / remark GFM / rehype-sanitize 安全渲染。
 
-统一站点 `https://233334.xyz`：首页自动进入 `/drive/` 私人后台，`/p/:slug` 为公开文章，`/s/:token` 为分享页，`/d/:token` 为文件直链。生产只绑定一个域名，其他主机停止服务。
+统一站点 `https://233334.xyz`：首页自动进入 `/drive/` 私人后台，`/p/:slug` 为公开文章，`/s/:token` 为分享页，`/d/:token` 为文件直链。Worker 只绑定 233334.xyz；图床、分享和直链默认生成 https://s.irin.im 链接，由已有 VPS 反代访问。
 
 ## 本地开始
 

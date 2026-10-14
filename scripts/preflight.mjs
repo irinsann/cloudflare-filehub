@@ -34,11 +34,14 @@ for (const key of ['ADMIN_ORIGIN', 'FILES_ORIGIN', 'MARKDOWN_ORIGIN'])
       missing.push(`${key} 格式不正确`);
     }
   }
-if (
-  vars.ADMIN_ORIGIN &&
-  (vars.FILES_ORIGIN !== vars.ADMIN_ORIGIN || vars.MARKDOWN_ORIGIN !== vars.ADMIN_ORIGIN)
-)
-  missing.push('三个 Origin 必须统一为同一站点');
+if (vars.ADMIN_ORIGIN && vars.MARKDOWN_ORIGIN !== vars.ADMIN_ORIGIN)
+  missing.push('文章 Origin 必须与后台站点一致');
+const trustedOrigins = (vars.TRUSTED_PROXY_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+if (vars.FILES_ORIGIN !== vars.ADMIN_ORIGIN && !trustedOrigins.includes(vars.FILES_ORIGIN))
+  missing.push('文件链接 Origin 必须使用后台域名或已配置的可信反代域名');
 if (
   config.routes?.length !== 1 ||
   config.routes[0].pattern !== new URL(vars.ADMIN_ORIGIN || 'https://invalid.local').host

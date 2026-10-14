@@ -40,7 +40,7 @@ imageRoutes.get('/images', async (c) => {
   return c.json({
     data: rows.results.map((r) => ({
       ...r,
-      url: (c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + r.name,
+      url: (c.env.FILES_ORIGIN || c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + r.name,
     })),
     page,
   });
@@ -100,7 +100,8 @@ imageRoutes.post('/images', async (c) => {
         data: {
           name,
           file_id: old.id,
-          url: (c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + name,
+          url:
+            (c.env.FILES_ORIGIN || c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + name,
           duplicate: old.id !== file.id,
         },
       });
@@ -131,7 +132,7 @@ imageRoutes.post('/images', async (c) => {
       data: {
         name,
         file_id: file.id,
-        url: (c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + name,
+        url: (c.env.FILES_ORIGIN || c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + name,
         duplicate: false,
       },
     },

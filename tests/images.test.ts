@@ -16,6 +16,27 @@ async function hosted() {
   return { file, result };
 }
 describe('Image-hosting 图床', () => {
+  it('uses the configured public origin for images, shares and direct links', async () => {
+    const publicEnv = { ...testEnv, FILES_ORIGIN: 'https://s.irin.im' };
+    const file = await data<FileRecord>(await upload('origin.png', png));
+    const image = await data<{ name: string; url: string }>(
+      await request('/api/admin/images', 'POST', { file_id: file.id }, publicEnv),
+    );
+    expect(image.url).toBe('https://s.irin.im/i/' + image.name);
+    const duplicate = await data<{ url: string }>(
+      await request('/api/admin/images', 'POST', { file_id: file.id }, publicEnv),
+    );
+    expect(duplicate.url).toBe(image.url);
+    const listing = await data<{ url: string }[]>(
+      await request('/api/admin/images', 'GET', undefined, publicEnv),
+    );
+    expect(listing[0].url).toBe(image.url);
+    const share = await data<{ url: string; directUrl: string }>(
+      await request('/api/admin/shares', 'POST', { file_id: file.id }, publicEnv),
+    );
+    expect(share.url).toMatch(/^https:\/\/s\.irin\.im\/s\//);
+    expect(share.directUrl).toMatch(/^https:\/\/s\.irin\.im\/d\//);
+  });
   it('uses actual content MD5, stores in Image-hosting and returns inline image direct links', async () => {
     const { file, result } = await hosted();
     expect(result.name).toBe('39dd1aed58e76c360216335fda25d0cf.png');

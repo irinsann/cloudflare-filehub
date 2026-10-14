@@ -1,12 +1,12 @@
 # RCloud Cloudflare 部署
 
-站点统一使用 https://233334.xyz。首页自动进入 /drive/ 私人网盘，公开文章 /p/:slug、文件分享 /s/:token、文件直链 /d/:token。只绑定一个域名，旧域名绑定需移除。
+站点统一使用 https://233334.xyz。首页自动进入 /drive/ 私人网盘，公开文章 /p/:slug、文件分享 /s/:token、文件直链 /d/:token。Worker 只绑定 233334.xyz；图床、分享和直链默认使用已有 VPS 反代域名 https://s.irin.im。
 
 ## 准备资源
 
 安装依赖并登录 Wrangler。创建专用私有 R2 Bucket 和 D1 数据库，保持 r2.dev 关闭。复制根目录 wrangler.jsonc 到被 Git 忽略的 wrangler.production.jsonc，删除 env 段，填入真实账号 ID、D1 ID 和 Bucket 名。不要提交真实密钥。
 
-使用 docs/wrangler.production.example.jsonc 的单域名 routes 和变量模板。ADMIN_ORIGIN、MARKDOWN_ORIGIN、FILES_ORIGIN 均为 https://233334.xyz，ENVIRONMENT=production，LOCAL_AUTH=false。全站存储配额固定为 50GB，无单文件大小上限。上传分片为 16MiB，每片通过鉴权 Worker 流式写入 R2，不需要公开 Bucket 或浏览器持有存储密钥。
+使用 docs/wrangler.production.example.jsonc 的单域名 routes 和变量模板。ADMIN_ORIGIN、MARKDOWN_ORIGIN 为 https://233334.xyz；FILES_ORIGIN 为 https://s.irin.im，TRUSTED_PROXY_ORIGINS 包含 https://s.irin.im，ENVIRONMENT=production，LOCAL_AUTH=false。全站存储配额固定为 50GB，无单文件大小上限。上传分片为 16MiB，每片通过鉴权 Worker 流式写入 R2，不需要公开 Bucket 或浏览器持有存储密钥。
 
 ## Access 路径策略
 
