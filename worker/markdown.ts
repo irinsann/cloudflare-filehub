@@ -37,7 +37,16 @@ markdownRoutes.get('/markdown', async (c) => {
 markdownRoutes.post('/markdown', async (c) => {
   const input = markdownInput.parse(await c.req.json());
   if (!isMarkdown(input.name)) fail(400, '文件名应以 .md 结尾');
-  await activeFolder(c.env, input.folder_id);
+  await c.env.DB.prepare(
+    "INSERT OR IGNORE INTO folders(id,name,parent_id,created_at,updated_at) VALUES(?,'Markdown',NULL,?,?)",
+  )
+    .bind(uuid(), now(), now())
+    .run();
+  const folder = await c.env.DB.prepare(
+    "SELECT id FROM folders WHERE name='Markdown' AND parent_id IS NULL AND deleted_at IS NULL",
+  ).first<{ id: string }>();
+  if (!folder) fail(409, 'Markdown 文件夹不可用');
+  await activeFolder(c.env, folder.id);
   const object = await writeText(c.env, input.content),
     id = uuid();
   await c.env.DB.batch([
@@ -47,7 +56,7 @@ markdownRoutes.post('/markdown', async (c) => {
       id,
       input.name,
       object.key,
-      input.folder_id,
+      folder.id,
       'text/markdown',
       object.size,
       object.etag,

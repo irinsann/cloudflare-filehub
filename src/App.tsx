@@ -126,7 +126,7 @@ export default function App() {
     void api<Settings>('/settings')
       .then(setSettings)
       .catch((e) => setError(e.message));
-  }, []);
+  }, [refresh, view]);
   useEffect(() => {
     const timeout = setTimeout(() => {
       setQuery(search);
@@ -400,10 +400,12 @@ export default function App() {
               )}
               {!management && view !== 'trash' && (
                 <>
-                  <Button variant="outline" onClick={() => setAction({ type: 'markdown' })}>
-                    <Plus size={16} />
-                    新建文档
-                  </Button>
+                  {view === 'markdown' && (
+                    <Button variant="outline" onClick={() => setAction({ type: 'markdown' })}>
+                      <Plus size={16} />
+                      新建文档
+                    </Button>
+                  )}
                   <Button onClick={() => fileInput.current?.click()} disabled={!settings}>
                     <Upload size={16} />
                     上传文件
@@ -414,16 +416,6 @@ export default function App() {
           </div>
           {!management && view !== 'trash' && (
             <div className="quick-cards">
-              <button onClick={() => setAction({ type: 'markdown' })}>
-                <span className="quick-icon">
-                  <FileText size={22} />
-                </span>
-                <span>
-                  <strong>写一篇 Markdown</strong>
-                  <small>实时预览，一键发布到网页</small>
-                </span>
-                <ChevronRight size={17} />
-              </button>
               <button onClick={() => fileInput.current?.click()}>
                 <span className="quick-icon beige">
                   <Upload size={22} />
@@ -719,7 +711,9 @@ export default function App() {
               <div className="file-footer">
                 <span>
                   {listing?.total ?? 0} 个文件
-                  {settings ? ` · 单文件上限 ${sizeLabel(settings.maxUploadBytes)}` : ''}
+                  {settings
+                    ? ` · 已用 ${sizeLabel(settings.storageUsedBytes)} / ${sizeLabel(settings.storageLimitBytes)}`
+                    : ''}
                 </span>
                 <div>
                   <Button

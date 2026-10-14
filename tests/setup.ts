@@ -9,8 +9,16 @@ beforeAll(async () => {
   await applyD1Migrations(testEnv.DB, testEnv.TEST_MIGRATIONS);
 });
 beforeEach(async () => {
+  let cursor: string | undefined;
+  do {
+    const objects = await testEnv.BUCKET.list({ cursor });
+    if (objects.objects.length) await testEnv.BUCKET.delete(objects.objects.map((o) => o.key));
+    cursor = objects.truncated ? objects.cursor : undefined;
+  } while (cursor);
+  await testEnv.DB.prepare('UPDATE storage_quota_state SET ready=0,lock_until=0 WHERE id=1').run();
   await testEnv.DB.batch(
     [
+      'storage_allocations',
       'page_attachments',
       'markdown_attachments',
       'markdown_pages',

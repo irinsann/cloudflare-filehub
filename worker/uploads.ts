@@ -1,13 +1,14 @@
+import { deleteObject } from './quota';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv, Env } from './env';
-import { now, uuid, limit } from './env';
+import { now, uuid } from './env';
 import { filename, identifier } from '../shared/validation';
 import { fail } from './errors';
 import { activeFolder, getFile, logStatement } from './files';
 import { reserve, releaseStatement, mimeFor, isText, sniff } from './storage';
 export const PART_SIZE = 16 * 1024 * 1024;
-export const MAX_FILE_SIZE = 1024 * 1024 * 1024;
+
 interface Session {
   id: string;
   file_id: string;
@@ -33,12 +34,10 @@ uploadRoutes.post('/uploads', async (c) => {
       folder_id: identifier.nullable().default(null),
     })
     .parse(await c.req.json());
-  if (input.size > Math.min(MAX_FILE_SIZE, limit(c.env.MAX_UPLOAD_BYTES, MAX_FILE_SIZE)))
-    fail(413, '超过单文件 1GB 上传限制');
   await activeFolder(c.env, input.folder_id);
   const id = uuid(),
     fileId = uuid(),
-    key = await reserve(c.env);
+    key = await reserve(c.env, input.size);
   const mpu = await c.env.BUCKET.createMultipartUpload(key);
   try {
     await c.env.DB.batch([
@@ -132,6 +131,14 @@ uploadRoutes.delete('/uploads/:id', async (c) => {
   } catch {
     /* An already completed upload remains queued for cleanup. */
   }
-  await c.env.DB.prepare("DELETE FROM files WHERE id=? AND status='pending'").bind(s.file_id).run();
+  const removed = await c.env.DB.prepare(
+    "DELETE FROM files WHERE id=? AND status='pending' RETURNING id",
+  )
+    .bind(s.file_id)
+    .first();
+  if (removed) {
+    await deleteObject(c.env, s.object_key);
+    await releaseStatement(c.env, s.object_key).run();
+  }
   return c.json({ data: { id: s.id } });
 });

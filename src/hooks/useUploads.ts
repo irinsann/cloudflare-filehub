@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import type { Settings } from '../../shared/types';
-import { send, sizeLabel } from '../lib/api';
+import { send } from '../lib/api';
 export interface UploadItem {
   id: string;
   file: File;
@@ -117,10 +117,6 @@ export function useUploads(
     }
     const accepted: UploadItem[] = [];
     for (const file of files) {
-      if (file.size > settings.maxUploadBytes) {
-        notify(`${file.name} 超过 ${sizeLabel(settings.maxUploadBytes)} 上限`);
-        continue;
-      }
       accepted.push({ id: crypto.randomUUID(), file, folderId, progress: 0, state: 'queued' });
     }
     setItems((all) => [...all, ...accepted]);

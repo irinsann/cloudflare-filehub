@@ -1,3 +1,4 @@
+import { allocate } from './quota';
 import { Hono } from 'hono';
 import type { AppEnv, AppContext, Env } from './env';
 import { now, uuid } from './env';
@@ -110,6 +111,7 @@ imageRoutes.post('/images', async (c) => {
   await cleanupStatement(c.env, key).run();
   const source = await c.env.BUCKET.get(file.object_key);
   if (!source || source.etag !== object.etag) fail(409, '图片已修改，请重新上传');
+  await allocate(c.env, key, source.size);
   const copy = await c.env.BUCKET.put(key, source.body);
   if (!copy) fail(500, '图片保存失败');
   const results = await c.env.DB.batch([

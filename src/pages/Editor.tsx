@@ -152,10 +152,6 @@ export default function Editor({
   }
   async function uploadImage(file: File) {
     if (!settings) return;
-    if (file.size > settings.maxUploadBytes) {
-      setError('图片超过上传大小上限');
-      return;
-    }
     try {
       const params = new URLSearchParams({ name: file.name });
       const result = await api<{ reference: string }>(`/markdown/${id}/attachments?${params}`, {

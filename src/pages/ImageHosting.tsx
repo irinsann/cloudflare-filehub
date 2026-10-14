@@ -40,8 +40,8 @@ export function ImageHosting({
           setError('仅支持 PNG、JPEG、GIF 和 WebP 图片');
           continue;
         }
-        if (!file.size || file.size > settings.maxUploadBytes) {
-          setError(file.name + ' 超过上传限制');
+        if (!file.size) {
+          setError(file.name + ' 是空文件');
           continue;
         }
         let session: string | undefined, uploaded: FileRecord | undefined;
@@ -130,7 +130,8 @@ export function ImageHosting({
           {busy ? '上传中…' : '选择图片'}
         </Button>
         <small>
-          PNG / JPEG / GIF / WebP · 最大 {settings ? sizeLabel(settings.maxUploadBytes) : '—'}
+          PNG / JPEG / GIF / WebP · 剩余{' '}
+          {settings ? sizeLabel(settings.storageAvailableBytes) : '—'}
         </small>
         <input
           ref={input}

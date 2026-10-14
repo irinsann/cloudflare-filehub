@@ -3,7 +3,8 @@ import { app } from '../worker/index';
 import { request, data, upload } from './helpers';
 import { testEnv } from './setup';
 import type { FileRecord } from '../shared/types';
-import { PART_SIZE, MAX_FILE_SIZE } from '../worker/uploads';
+import { PART_SIZE } from '../worker/uploads';
+import { STORAGE_LIMIT } from '../worker/quota';
 async function part(id: string, n: number, bytes: Uint8Array, declared = bytes.length) {
   return app.request(
     'http://localhost/api/admin/uploads/' + id + '/parts/' + n,
@@ -21,15 +22,15 @@ async function part(id: string, n: number, bytes: Uint8Array, declared = bytes.l
   );
 }
 describe('RCloud uploads and direct links', () => {
-  it('accepts 1GB metadata, rejects above limit, rejects missing and wrong-size parts', async () => {
+  it('accepts files above 1GB, rejects over total quota, rejects missing and wrong-size parts', async () => {
     const s = await data<{ id: string }>(
-      await request('/api/admin/uploads', 'POST', { name: 'large.bin', size: MAX_FILE_SIZE }),
+      await request('/api/admin/uploads', 'POST', { name: 'large.bin', size: 2 * 1024 ** 3 }),
     );
     expect(
       (
         await request('/api/admin/uploads', 'POST', {
           name: 'too-large.bin',
-          size: MAX_FILE_SIZE + 1,
+          size: STORAGE_LIMIT + 1,
         })
       ).status,
     ).toBe(413);

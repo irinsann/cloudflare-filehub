@@ -32,7 +32,6 @@
   "vars": {
     "ENVIRONMENT": "production",
     "LOCAL_AUTH": "false",
-    "MAX_UPLOAD_BYTES": "1073741824",
     "MAX_TEXT_BYTES": "1048576",
     "ADMIN_ORIGIN": "https://233334.xyz",
     "MARKDOWN_ORIGIN": "https://233334.xyz",

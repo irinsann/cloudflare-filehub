@@ -1,3 +1,4 @@
+import { storageUsage, deleteObject } from './quota';
 import { Hono } from 'hono';
 import { drizzle } from 'drizzle-orm/d1';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -43,10 +44,11 @@ export async function getFile(env: Env, id: string, deleted = false) {
   return file;
 }
 export const fileRoutes = new Hono<AppEnv>();
-fileRoutes.get('/settings', (c) =>
+fileRoutes.get('/settings', async (c) =>
   c.json({
     data: {
-      maxUploadBytes: limit(c.env.MAX_UPLOAD_BYTES, 1073741824),
+      maxUploadBytes: null,
+      ...(await storageUsage(c.env)),
       maxTextBytes: limit(c.env.MAX_TEXT_BYTES, 1048576),
       environment: c.env.ENVIRONMENT,
       authMode: c.env.AUTH_MODE || 'access',
@@ -315,7 +317,7 @@ fileRoutes.delete('/files/:id/permanent', async (c) => {
   ]);
   // Metadata removal revokes access atomically; durable tasks make R2 deletion retryable.
   try {
-    await c.env.BUCKET.delete(file.object_key);
+    await deleteObject(c.env, file.object_key);
     await releaseStatement(c.env, file.object_key).run();
   } catch {
     /* Scheduled cleanup retries durable tasks; attachments/snapshots are deferred. */

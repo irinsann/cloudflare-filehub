@@ -10,7 +10,6 @@ export interface Env {
   ASSETS: Fetcher;
   ENVIRONMENT: string;
   LOCAL_AUTH: string;
-  MAX_UPLOAD_BYTES: string;
   MAX_TEXT_BYTES: string;
   ADMIN_ORIGIN: string;
   FILES_ORIGIN: string;

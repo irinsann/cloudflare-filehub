@@ -1,3 +1,4 @@
+import { allocate, deleteObject } from './quota';
 import type { Env } from './env';
 import { limit, now, uuid } from './env';
 import { fail } from './errors';
@@ -59,11 +60,12 @@ export function sniff(bytes: Uint8Array): string | null {
   if (ascii(0, 4) === 'OggS') return 'audio/ogg';
   return null;
 }
-export async function reserve(env: Env) {
+export async function reserve(env: Env, size?: number) {
   const key = `objects/${uuid()}`;
   await env.DB.prepare('INSERT INTO cleanup_tasks(object_key,created_at) VALUES(?,?)')
     .bind(key, now())
     .run();
+  if (size !== undefined) await allocate(env, key, size);
   return key;
 }
 export const releaseStatement = (env: Env, key: string) =>
@@ -78,8 +80,8 @@ export async function uploadStream(env: Env, request: Request, key: string, name
   const size = Number(rawSize);
   if (rawSize === null || !Number.isSafeInteger(size) || size < 0)
     fail(400, '必须提供有效文件大小');
-  if (size > Math.min(limit(env.MAX_UPLOAD_BYTES, 1024 * 1024 * 1024), 32 * 1024 * 1024))
-    fail(413, '超过单文件上传限制');
+  if (size > 32 * 1024 * 1024) fail(413, '请使用分片上传');
+  await allocate(env, key, size);
   if (!request.body && size > 0) fail(400, '上传内容为空');
   const fixed = new FixedLengthStream(size);
   const pump = request.body
@@ -116,7 +118,7 @@ export async function textObject(env: Env, key: string) {
 export async function writeText(env: Env, text: string) {
   const bytes = new TextEncoder().encode(text);
   if (bytes.byteLength > limit(env.MAX_TEXT_BYTES, 1024 * 1024)) fail(413, 'Markdown 超过大小限制');
-  const key = await reserve(env);
+  const key = await reserve(env, bytes.byteLength);
   const object = await env.BUCKET.put(key, bytes);
   if (!object) fail(500, '保存失败');
   return { key, size: object.size, etag: object.etag };
@@ -222,7 +224,7 @@ export async function cleanup(env: Env) {
       continue;
     }
     try {
-      await env.BUCKET.delete(task.object_key);
+      await deleteObject(env, task.object_key);
       await env.DB.batch([
         env.DB.prepare("DELETE FROM files WHERE object_key=? AND status='pending'").bind(
           task.object_key,

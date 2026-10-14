@@ -6,7 +6,7 @@
 
 安装依赖并登录 Wrangler。创建专用私有 R2 Bucket 和 D1 数据库，保持 r2.dev 关闭。复制根目录 wrangler.jsonc 到被 Git 忽略的 wrangler.production.jsonc，删除 env 段，填入真实账号 ID、D1 ID 和 Bucket 名。不要提交真实密钥。
 
-使用 docs/wrangler.production.example.jsonc 的单域名 routes 和变量模板。ADMIN_ORIGIN、MARKDOWN_ORIGIN、FILES_ORIGIN 均为 https://233334.xyz，ENVIRONMENT=production，LOCAL_AUTH=false。MAX_UPLOAD_BYTES=1073741824。上传分片为 16MiB，每片通过鉴权 Worker 流式写入 R2，不需要公开 Bucket 或浏览器持有存储密钥。
+使用 docs/wrangler.production.example.jsonc 的单域名 routes 和变量模板。ADMIN_ORIGIN、MARKDOWN_ORIGIN、FILES_ORIGIN 均为 https://233334.xyz，ENVIRONMENT=production，LOCAL_AUTH=false。全站存储配额固定为 50GB，无单文件大小上限。上传分片为 16MiB，每片通过鉴权 Worker 流式写入 R2，不需要公开 Bucket 或浏览器持有存储密钥。
 
 ## Access 路径策略
 
@@ -32,7 +32,7 @@ pnpm run deploy:production
 
 首页会跳转 /drive/；/drive/ 和 /api/admin/files 未登录应进入 Access 登录；登录后检查上传与列表。匿名 /p/:slug、/s/:token、/d/:token 和 /api/public/* 无需管理员登录，但仍受发布、令牌、有效期和密码约束。未创建内容时公开路径返回 404。测试直链 Range/HEAD，撤销链接后不可下载。清空回收站必须由用户在界面确认，正常文件不受影响。
 
-默认上限 1GB；分片失败自动重试，24 小时未完成任务自动清理。文本在线编辑上限仍为 1MiB。发布后可在 Cloudflare 查看用量，实际消耗取决于文件与访问量。
+全站存储上限 50GB，无单文件上限；分片失败自动重试，24 小时未完成任务自动清理。文本在线编辑上限仍为 1MiB。发布后可在 Cloudflare 查看用量，实际消耗取决于文件与访问量。
 
 ## 站内密码与验证器登录
 

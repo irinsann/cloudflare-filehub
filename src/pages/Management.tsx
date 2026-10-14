@@ -95,7 +95,10 @@ export function Management({
         <section className="settings-card">
           <FileText />
           <h3>存储与发布</h3>
-          <p>单文件上限：{settings ? `${settings.maxUploadBytes / 1048576} MB` : '—'}</p>
+          <p>
+            存储容量：
+            {settings ? `${(settings.storageUsedBytes / 1073741824).toFixed(2)} / 50 GB` : '—'}
+          </p>
           <p>文本编辑上限：{settings ? `${settings.maxTextBytes / 1048576} MB` : '—'}</p>
           <p className="muted">文件保存在私有 R2，元数据保存在 D1。环境参数在部署配置中修改。</p>
         </section>
