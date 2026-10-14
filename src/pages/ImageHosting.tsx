@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Upload, Copy, Link2, ImagePlus } from 'lucide-react';
 import { api, send, copy, fileUrl, sizeLabel } from '../lib/api';
-import { uploadFile } from '../lib/upload';
+import { imageMarkdown, uploadHostedImage } from '../lib/image-upload';
 import { EmptyState } from '../components/EmptyState';
 import { Button } from '../components/ui/button';
-import type { FileRecord, Settings } from '../../shared/types';
+import type { Settings } from '../../shared/types';
 interface Row {
   name: string;
   file_id: string;
@@ -48,31 +48,12 @@ export function ImageHosting({
     setBusy(true);
     setError('');
     try {
-      const folder = await send<{ id: string }>('/images/folder', 'POST');
       for (const file of files) {
-        if (!/\.(png|jpg|jpeg|gif|webp)$/i.test(file.name)) {
-          setError('仅支持 PNG、JPEG、GIF 和 WebP 图片');
-          continue;
-        }
-        if (!file.size) {
-          setError(file.name + ' 是空文件');
-          continue;
-        }
-        let uploaded: FileRecord | undefined;
         try {
-          uploaded = await uploadFile(file, folder.id, (percent) =>
-            setStatus(file.name + ' · ' + percent + '%'),
+          const r = await uploadHostedImage(file, (percent) =>
+            setStatus(file.name + ' · ' + (percent === null ? '生成直链' : percent + '%')),
           );
-          setStatus(file.name + ' · 生成直链');
-          const r = await send<{ name: string; file_id: string; url: string; duplicate: boolean }>(
-            '/images',
-            'POST',
-            { file_id: uploaded.id },
-          );
-          if (r.duplicate && r.file_id !== uploaded.id) {
-            await send('/files/' + uploaded.id, 'DELETE');
-            await send('/files/' + uploaded.id + '/permanent', 'DELETE');
-          }
+          if (r.cleanupWarning) setError(r.cleanupWarning);
           setStatus(r.name + ' · 已上传');
           setRevision((n) => n + 1);
         } catch (e) {
@@ -172,7 +153,7 @@ export function ImageHosting({
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => copied('![图片](' + r.url + ')')}
+                    onClick={() => copied(imageMarkdown('图片', r.url))}
                   >
                     <Copy size={14} />
                     Markdown

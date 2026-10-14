@@ -191,11 +191,11 @@ curl --fail-with-body --request POST \
 
 以下接口仅接受管理员网页登录认证，上传 Token 无权调用。
 
-| Method | 路径                       | 请求/响应                                                              |
-| ------ | -------------------------- | ---------------------------------------------------------------------- |
-| GET    | /api/admin/api-tokens      | 最近 100 条；名称、前缀、scope、创建/到期/最近使用/撤销时间，不含明文或哈希   |
+| Method | 路径                       | 请求/响应                                                                                     |
+| ------ | -------------------------- | --------------------------------------------------------------------------------------------- |
+| GET    | /api/admin/api-tokens      | 最近 100 条；名称、前缀、scope、创建/到期/最近使用/撤销时间，不含明文或哈希                   |
 | POST   | /api/admin/api-tokens      | `{"name":"备份脚本","scope":"files:upload","expires_in_days":30}`；201 返回记录与一次性 token |
-| DELETE | /api/admin/api-tokens/{id} | 撤销；返回 {id}；重复撤销已有记录仍成功                                |
+| DELETE | /api/admin/api-tokens/{id} | 撤销；返回 {id}；重复撤销已有记录仍成功                                                       |
 
 scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 files:upload，不自动获得公开图片权限。名称 1–80 字符；有效期 1–365 天，默认 30 天；最多同时 20 个有效 Token。数据库仅存 SHA-256 哈希。prefix 用于识别；last_used_at 最多每分钟更新一次，代表通过认证的调用，不代表上传成功。撤销/到期拒绝后续请求，已在执行的请求可能完成。无续期接口，需要创建新 Token。
 
@@ -261,7 +261,9 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 | DELETE   | /api/admin/images/{name} | 撤销直链                                                                  |
 | GET/HEAD | /i/{name}                | 公开内联图片，支持 Range                                                  |
 
-获取目录 → 管理员分片上传至目录 → 调用 /images 公开。支持 PNG/JPEG/GIF/WebP，通过文件头识别，另用 SHA-256 检查 MD5 命名冲突。保存到 Image-hosting，名称为 32位md5.ext，链接默认 s.irin.im。重复图片可能复用已有文件，应使用返回的 file_id；重复源文件不会自动删除。
+获取目录 → 管理员分片上传至目录 → 调用 /images 公开。支持 PNG/JPEG/GIF/WebP，通过文件头识别，另用 SHA-256 检查 MD5 命名冲突。保存到 Image-hosting，名称为 32位md5.ext，链接默认 s.irin.im。重复图片可能复用已有文件，应使用返回的 file_id；单独调用 POST /images 不会自动删除重复源文件，网页共用上传流程会继续清理重复源。
+
+网页图床与 Markdown 编辑器的新图片上传共用上述管理员流程；编辑器支持选取、拖入和粘贴，将返回的 `url` 插入正文。该流程使用网页管理员会话，不要求用户提供上传 Token，也不调用旧文档附件接口。图床图片上传成功后独立公开，与文章的草稿、发布状态和生命周期无关。
 
 ### Markdown
 
@@ -271,15 +273,17 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 | POST     | /api/admin/markdown                                 | {name,content?}，.md/.markdown；统一保存 /Markdown，旧 folder_id 参数不改变目的地          |
 | GET      | /api/admin/markdown/{id}                            | {file,content,page}，id 为文件 ID                                                          |
 | PUT      | /api/admin/markdown/{id}                            | {content,version}，版本冲突 409                                                            |
-| POST     | /api/admin/markdown/{id}/attachments?name=…         | 图片原始 Body 与 X-File-Size；返回 {id,reference}                                          |
-| GET      | /api/admin/markdown/{id}/attachments/{attachmentId} | 私人图片，校验归属                                                                         |
+| POST     | /api/admin/markdown/{id}/attachments?name=…         | 兼容旧受控附件；图片原始 Body 与 X-File-Size，返回 {id,reference}                          |
+| GET      | /api/admin/markdown/{id}/attachments/{attachmentId} | 旧格式私人附件，校验归属                                                                   |
 | POST     | /api/admin/markdown/{id}/publish                    | {title,slug,version,description?,allow_source?,allow_index?}；创建快照，两项权限默认 false |
-| POST     | /api/admin/markdown/{id}/unpublish                  | 取消发布，保留原文                                                                         |
+| POST     | /api/admin/markdown/{id}/unpublish                  | 取消发布，保留原文；阻断旧受控附件公开访问，不撤销图床直链                                 |
 | GET/HEAD | /p/{slug}                                           | 公开阅读页                                                                                 |
 | GET/HEAD | /api/public/pages/{slug}/source                     | 开启源文件下载时返回发布快照                                                               |
 | GET/HEAD | /api/public/pages/{slug}/attachments/{id}           | 校验发布、引用与归属                                                                       |
 
-私有附件格式 `![图片](attachment:UUID)`，外部图片仅允许 HTTPS。Slug 1–100 字符，仅小写字母、数字和连字符，不能是系统保留名。Markdown/在线文本上限 1MiB。
+编辑器新图片使用 `![图片](https://s.irin.im/i/MD5.ext)`，实际 URL 取图床接口返回值；自部署使用配置的图床域名。旧私有附件格式 `![图片](attachment:UUID)` 继续兼容，仅发布快照实际引用且属于该文档的附件可以公开。HTTPS 图片（包括图床）由浏览器直接请求，取消发布或删除 Markdown 文件不会撤销这些图片；需要在图床中单独撤销直链或删除图片。
+
+Slug 1–100 字符，仅小写字母、数字和连字符，不能是系统保留名。Markdown/在线文本上限 1MiB。单篇发布最多 20 张旧格式受控附件，图床 HTTPS 直链不计入该数量。
 
 ### 网页认证
 
@@ -295,7 +299,7 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 | 404     | 接口/文件/目录不存在；其他 Token 的文件/任务也返回此状态 |
 | 409     | 状态/版本冲突、缺失分片、Token 数量上限                  |
 | 410     | 上传任务已完成/取消/过期/不存在，或分享失效              |
-| 411     | 图片表单缺少有效 Content-Length                         |
+| 411     | 图片表单缺少有效 Content-Length                          |
 | 413     | 容量不足、直接上传超过 32MiB、文本/JSON 超限             |
 | 415     | 不支持的预览或图片格式                                   |
 | 416     | Range 无法满足                                           |

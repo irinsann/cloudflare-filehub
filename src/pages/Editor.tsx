@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type { FileRecord, PageRecord, Settings } from '../../shared/types';
 import { api, copy, send } from '../lib/api';
+import { clipboardImages, imageMarkdown, uploadHostedImage } from '../lib/image-upload';
 import { Button } from '../components/ui/button';
 import { Modal } from '../components/ui/dialog';
 import { MarkdownView } from '../components/MarkdownView';
@@ -50,9 +51,22 @@ export default function Editor({
     [allowIndex, setAllowIndex] = useState(false),
     [link, setLink] = useState(''),
     [mobilePreview, setMobilePreview] = useState(false),
-    [draft, setDraft] = useState<string | null>(null);
+    [draft, setDraft] = useState<string | null>(null),
+    [imageUploading, setImageUploading] = useState(false),
+    [imageStatus, setImageStatus] = useState('');
   const editor = useRef<ReactCodeMirrorRef>(null),
     imageInput = useRef<HTMLInputElement>(null);
+  const mounted = useRef(true),
+    imageUploadBusy = useRef(false),
+    imageUploadRun = useRef(0);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      imageUploadBusy.current = false;
+      imageUploadRun.current++;
+    };
+  }, [id]);
   const dirty = content !== saved;
   const makeLink = (page: PageRecord) =>
     `${settings?.markdownOrigin || location.origin}/p/${page.slug}`;
@@ -90,7 +104,7 @@ export default function Editor({
   }, [id]);
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (dirty) {
+      if (dirty || imageUploadBusy.current) {
         e.preventDefault();
       }
     };
@@ -105,17 +119,22 @@ export default function Editor({
     return () => window.removeEventListener('beforeunload', handler);
   }, [content, dirty, id, version]);
   const save = useCallback(async () => {
+    if (imageUploadBusy.current) {
+      setError('请等待图片上传完成后保存');
+      return null;
+    }
     if (!data || busy) return null;
-    if (!dirty) return version;
+    const currentContent = editor.current?.view?.state.doc.toString() ?? content;
+    if (currentContent === saved) return version;
     setBusy(true);
     setError('');
     try {
       const result = await send<{ version: number }>(`/markdown/${id}`, 'PUT', {
-        content,
+        content: currentContent,
         version,
       });
       setVersion(result.version);
-      setSaved(content);
+      setSaved(currentContent);
       try {
         localStorage.removeItem(`draft:${id}`);
       } catch {
@@ -129,7 +148,7 @@ export default function Editor({
     } finally {
       setBusy(false);
     }
-  }, [data, busy, dirty, id, content, version, notify]);
+  }, [data, busy, id, content, saved, version, notify]);
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -152,19 +171,50 @@ export default function Editor({
       view.focus();
     } else setContent((value) => value + before + after);
   }
-  async function uploadImage(file: File) {
-    if (!settings) return;
+  async function uploadImages(files: File[]) {
+    if (!files.length) return;
+    if (!settings || !data) {
+      setError('请等待文档加载完成');
+      return;
+    }
+    if (busy || imageUploadBusy.current) {
+      setError('请等待当前操作完成后再上传图片');
+      return;
+    }
+    const run = ++imageUploadRun.current;
+    const active = () => mounted.current && imageUploadRun.current === run;
+    imageUploadBusy.current = true;
+    setImageUploading(true);
+    setError('');
+    let completed = 0;
+    const errors: string[] = [];
     try {
-      const params = new URLSearchParams({ name: file.name });
-      const result = await api<{ reference: string }>(`/markdown/${id}/attachments?${params}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream', 'X-File-Size': String(file.size) },
-        body: file,
-      });
-      insert(`\n![${file.name.replace(/[\[\]\\]/g, '')}](${result.reference})\n`);
-      notify('图片已上传并插入');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '图片上传失败');
+      for (const [index, file] of files.entries()) {
+        if (!active()) break;
+        const label = `图片 ${index + 1} / ${files.length} · ${file.name}`;
+        setImageStatus(label + ' · 上传中');
+        try {
+          const result = await uploadHostedImage(file, (percent) => {
+            if (active()) {
+              setImageStatus(label + ' · ' + (percent === null ? '生成直链' : percent + '%'));
+            }
+          });
+          if (!active()) break;
+          insert('\n' + imageMarkdown(file.name, result.url) + '\n');
+          completed++;
+          if (result.cleanupWarning) errors.push(file.name + '：' + result.cleanupWarning);
+        } catch (cause) {
+          if (!active()) break;
+          errors.push(file.name + '：' + (cause instanceof Error ? cause.message : '上传失败'));
+        }
+        if (errors.length) setError(errors.join('；'));
+      }
+    } finally {
+      if (active()) {
+        imageUploadBusy.current = false;
+        setImageUploading(false);
+        setImageStatus(completed ? `已插入 ${completed} 张图片` : '');
+      }
     }
   }
   async function publish() {
@@ -193,13 +243,14 @@ export default function Editor({
     }
   }
   async function unpublish() {
+    if (imageUploadBusy.current || busy) return;
     setBusy(true);
     try {
       await send(`/markdown/${id}/unpublish`, 'POST');
       setLink('');
       setData(await api<DocumentData>(`/markdown/${id}`));
       setPublishing(false);
-      notify('已取消发布，文章和公开附件立即失效');
+      notify('文章已取消发布');
     } catch (e) {
       setError(e instanceof Error ? e.message : '操作失败');
     } finally {
@@ -213,7 +264,9 @@ export default function Editor({
           variant="ghost"
           size="icon"
           aria-label="返回文件列表"
+          disabled={imageUploading}
           onClick={() => {
+            if (imageUploadBusy.current) return;
             if (!dirty || window.confirm('有未保存内容，确定返回吗？本地草稿会保留。')) onClose();
           }}
         >
@@ -222,19 +275,35 @@ export default function Editor({
         <div className="editor-heading">
           <strong>{data?.file.name ?? '加载文档…'}</strong>
           <span>
-            {busy ? '正在处理…' : dirty ? '有未保存更改' : '已保存'} · v{version}
+            {imageUploading
+              ? '正在上传图片…'
+              : busy
+                ? '正在处理…'
+                : dirty
+                  ? '有未保存更改'
+                  : '已保存'}{' '}
+            · v{version}
             {data?.page?.published ? ` · 已发布 v${data.page.published_version}` : ' · 私人草稿'}
           </span>
         </div>
-        <Button variant="outline" onClick={() => void save()} disabled={busy || !dirty}>
+        <Button
+          variant="outline"
+          onClick={() => void save()}
+          disabled={busy || imageUploading || !dirty}
+        >
           <Save size={16} />
           保存
         </Button>
-        <Button onClick={() => setPublishing(true)} disabled={busy || !data}>
+        <Button onClick={() => setPublishing(true)} disabled={busy || imageUploading || !data}>
           <Globe size={16} />
           {data?.page?.published ? '更新发布' : '发布'}
         </Button>
       </header>
+      {imageStatus && (
+        <div className="editor-message" role="status">
+          <span style={{ overflowWrap: 'anywhere' }}>{imageStatus}</span>
+        </div>
+      )}
       {error && (
         <div className="editor-message error-text" role="alert">
           {error}{' '}
@@ -322,6 +391,7 @@ export default function Editor({
           size="icon"
           title="上传图片"
           aria-label="上传图片"
+          disabled={busy || imageUploading || !settings || !data}
           onClick={() => imageInput.current?.click()}
         >
           <ImagePlus size={17} />
@@ -330,10 +400,10 @@ export default function Editor({
           ref={imageInput}
           type="file"
           hidden
+          multiple
           accept="image/png,image/jpeg,image/gif,image/webp"
           onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void uploadImage(f);
+            void uploadImages(Array.from(e.target.files ?? []));
             e.target.value = '';
           }}
         />
@@ -351,15 +421,22 @@ export default function Editor({
       <div className={`editor-columns ${mobilePreview ? 'show-preview' : ''}`}>
         <section
           className="editor-source"
-          onDragOver={(e) => {
-            e.preventDefault();
+          onDragOverCapture={(e) => {
+            if (e.dataTransfer.types.includes('Files')) e.preventDefault();
           }}
-          onDrop={(e) => {
+          onDropCapture={(e) => {
             if (e.dataTransfer.files.length) {
               e.preventDefault();
-              const f = e.dataTransfer.files[0];
-              if (f) void uploadImage(f);
+              e.stopPropagation();
+              void uploadImages(Array.from(e.dataTransfer.files));
             }
+          }}
+          onPasteCapture={(e) => {
+            const files = clipboardImages(e.clipboardData);
+            if (!files.length) return;
+            e.preventDefault();
+            e.stopPropagation();
+            void uploadImages(files);
           }}
         >
           <div className="panel-label">
@@ -456,13 +533,13 @@ export default function Editor({
                 <Button
                   variant="danger"
                   type="button"
-                  disabled={busy}
+                  disabled={busy || imageUploading}
                   onClick={() => void unpublish()}
                 >
                   取消发布
                 </Button>
               )}
-              <Button disabled={busy}>{busy ? '处理中…' : '保存并发布'}</Button>
+              <Button disabled={busy || imageUploading}>{busy ? '处理中…' : '保存并发布'}</Button>
             </div>
           </form>
         </Modal>

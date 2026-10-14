@@ -4,19 +4,29 @@
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-synthesis: none;
   color-scheme: light;
-  --bg: #f5f4f0;
+  --bg: #eef3fb;
   --surface: #ffffff;
-  --sidebar: #eeefed;
-  --fg: #202329;
-  --muted: #70747c;
-  --line: #e1e2e5;
+  --fg: #23324b;
+  --muted: #62718a;
+  --line: #778ba62b;
   --accent: #3559e0;
   --accent-ink: #ffffff;
   --accent-soft: #edf1ff;
-  --hover: #f4f5f8;
+  --hover: #eef3fb;
   --danger: #b93642;
-  --shadow: 0 16px 48px #171c2c1f;
-  --radius: 10px;
+  --shadow: 0 24px 70px #213e6b26;
+  --glass: #ffffffb8;
+  --glass-strong: #ffffffe0;
+  --glass-line: #ffffffd9;
+  --glass-highlight: #ffffffee;
+  --glass-shadow: 0 12px 36px #33578914, 0 2px 8px #33578908;
+  --panel-shadow: 0 14px 40px #3357890d, 0 2px 6px #33578905;
+  --glass-filter: blur(20px) saturate(145%);
+  --canvas-glow:
+    radial-gradient(ellipse at 8% 6%, #cadcf88a, transparent 48%),
+    radial-gradient(ellipse at 88% 28%, #e4daf77a, transparent 42%),
+    radial-gradient(ellipse at 55% 100%, #cfece870, transparent 50%);
+  --radius: 24px;
   --sidebar-width: 220px;
   --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   color: var(--fg);
@@ -24,16 +34,44 @@
 }
 html[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #15171c;
-  --surface: #1d2027;
-  --sidebar: #191b21;
+  --bg: #101827;
+  --surface: #1b273b;
   --fg: #eceef3;
-  --muted: #a0a6b3;
-  --line: #343943;
+  --muted: #a7b6ce;
+  --line: #95afd12b;
   --accent: #95aaff;
   --accent-ink: #151c36;
   --accent-soft: #28324e;
-  --hover: #262a34;
+  --hover: #29384e;
   --danger: #f28b96;
   --shadow: 0 16px 48px #0005;
+  --glass: #19273cc7;
+  --glass-strong: #1b293eea;
+  --glass-line: #bcd6ff24;
+  --glass-highlight: #d6e5ff1c;
+  --glass-shadow: 0 16px 44px #03091642, 0 2px 8px #03091626;
+  --panel-shadow: 0 18px 48px #03091633, 0 2px 8px #0309161f;
+  --canvas-glow:
+    radial-gradient(ellipse at 8% 6%, #274b785c, transparent 48%),
+    radial-gradient(ellipse at 88% 28%, #40356047, transparent 42%),
+    radial-gradient(ellipse at 55% 100%, #20463f3d, transparent 50%);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root,
+  html[data-theme='dark'] {
+    --glass: var(--surface);
+    --glass-strong: var(--surface);
+    --glass-line: var(--line);
+    --glass-filter: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root,
+  html[data-theme='dark'] {
+    --glass: var(--surface);
+    --glass-strong: var(--surface);
+    --glass-line: var(--line);
+    --glass-filter: none;
+    --canvas-glow: none;
+  }
 }

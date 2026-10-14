@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { request, data, upload } from './helpers';
+import { request, data, upload, createMarkdown } from './helpers';
 import { testEnv } from './setup';
 import type { FileRecord } from '../shared/types';
 const png = Uint8Array.from(
@@ -8,10 +8,10 @@ const png = Uint8Array.from(
   ),
   (c) => c.charCodeAt(0),
 );
-async function hosted() {
+async function hosted(env = testEnv) {
   const file = await data<FileRecord>(await upload('original.png', png));
   const result = await data<{ name: string; file_id: string; url: string; duplicate: boolean }>(
-    await request('/api/admin/images', 'POST', { file_id: file.id }),
+    await request('/api/admin/images', 'POST', { file_id: file.id }, env),
   );
   return { file, result };
 }
@@ -78,5 +78,31 @@ describe('Image-hosting 图床', () => {
       .bind('changed-key', file.id)
       .run();
     expect((await request('/i/' + result.name)).status).toBe(410);
+  });
+  it('keeps hosted images public when an article using the direct URL is unpublished', async () => {
+    const { result } = await hosted({ ...testEnv, FILES_ORIGIN: 'https://s.irin.im' });
+    const document = await createMarkdown(`![Image](<${result.url}>)`);
+    expect(
+      (
+        await request(`/api/admin/markdown/${document.id}/publish`, 'POST', {
+          title: 'Hosted image',
+          slug: 'hosted-image',
+          version: document.version,
+        })
+      ).status,
+    ).toBe(200);
+    expect(await (await request('/p/hosted-image')).text()).toContain(result.url);
+    expect((await request(`/api/admin/markdown/${document.id}/unpublish`, 'POST')).status).toBe(
+      200,
+    );
+    expect((await request('/p/hosted-image')).status).toBe(404);
+    const response = await request('/i/' + result.name);
+    expect(response.status).toBe(200);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(png);
+    expect(
+      await testEnv.DB.prepare('SELECT COUNT(*) AS n FROM markdown_attachments WHERE file_id=?')
+        .bind(document.id)
+        .first<number>('n'),
+    ).toBe(0);
   });
 });

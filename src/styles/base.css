@@ -12,6 +12,8 @@ body {
   margin: 0;
   color: var(--fg);
   background: var(--bg);
+  background-image: var(--canvas-glow);
+  background-attachment: fixed;
   font-size: 14px;
   line-height: 1.5;
 }
@@ -114,7 +116,7 @@ input[type='checkbox'] {
   min-height: 38px;
   padding: 0 14px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 12px;
   font-size: 13px;
   font-weight: 550;
   white-space: nowrap;
@@ -126,12 +128,15 @@ input[type='checkbox'] {
 .button-primary {
   background: var(--accent);
   color: var(--accent-ink);
+  box-shadow:
+    0 4px 12px color-mix(in srgb, var(--accent) 22%, transparent),
+    inset 0 1px 0 #ffffff30;
 }
 .button-primary:hover:not(:disabled) {
   filter: brightness(0.94);
 }
 .button-outline {
-  background: var(--surface);
+  background: var(--glass-strong);
   border-color: var(--line);
 }
 .button-ghost {

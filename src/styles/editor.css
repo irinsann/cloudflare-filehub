@@ -2,16 +2,25 @@
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
+  background: var(--canvas-glow), var(--bg);
   color: var(--fg);
   overflow: hidden;
+  padding: 12px 16px 0;
 }
 .editor-top {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 24px;
-  border-bottom: 1px solid var(--line);
+  padding: 12px 20px;
+  margin-bottom: 10px;
+  border: 1px solid var(--glass-line);
+  border-radius: 24px;
+  background: var(--glass);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
   flex-shrink: 0;
 }
 .editor-heading {
@@ -36,9 +45,16 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 22px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg);
+  padding: 6px 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--glass-line);
+  border-radius: 18px;
+  background: var(--glass);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--panel-shadow);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
   flex-shrink: 0;
 }
 .editor-tools-label {
@@ -55,6 +71,13 @@
   grid-template-columns: 1fr 1fr;
   flex: 1;
   min-height: 0;
+  border: 1px solid var(--glass-line);
+  border-radius: 22px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--panel-shadow);
 }
 .editor-source,
 .editor-preview {
@@ -111,7 +134,6 @@
   display: flex;
   justify-content: space-between;
   padding: 8px 24px max(8px, env(safe-area-inset-bottom));
-  border-top: 1px solid var(--line);
   font: 10px var(--mono);
   color: var(--muted);
 }
@@ -123,6 +145,9 @@
   padding: 10px 24px;
   background: var(--hover);
   font-size: 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
 }
 .editor-message > button:not(.button) {
   background: none;
@@ -137,6 +162,9 @@
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--glass-line);
+  border-radius: 16px;
 }
 .published-banner > span {
   flex: 1;
@@ -177,10 +205,14 @@
   }
 }
 @media (max-width: 540px) {
+  .editor-page {
+    padding: 8px 8px 0;
+  }
   .editor-top {
     padding: 10px 12px;
     gap: 7px;
     flex-wrap: wrap;
+    border-radius: 20px;
   }
   .editor-top > .button-icon {
     width: 36px;
@@ -203,6 +235,9 @@
     padding: 6px 10px;
     gap: 2px;
     flex-wrap: wrap;
+  }
+  .editor-columns {
+    border-radius: 18px;
   }
   .editor-tools > .button-icon {
     width: 34px;

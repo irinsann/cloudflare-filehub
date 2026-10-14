@@ -3,18 +3,18 @@ const icon = (path: string) =>
 
 export const loginCss = `
 .login-layout{width:100%;flex:1;display:grid;place-items:center;padding:48px 24px 24px}
-.login-main{width:100%;max-width:420px;padding:36px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.login-main{width:100%;max-width:420px;min-width:0;padding:36px;background:var(--card);border:1px solid var(--line);border-radius:24px;box-shadow:var(--glass-shadow)}
 .login-heading{margin-bottom:30px}
 .login-label{margin:0 0 8px;color:var(--muted);font-size:11px;font-weight:500;letter-spacing:.8px}
 .login-main h1{margin:0;font-size:28px;font-weight:650;letter-spacing:-.8px;line-height:1.4}
 #auth{display:flex;flex-direction:column;gap:22px}
 .field-label{display:block;margin-bottom:8px;font-size:13px;font-weight:500}
 .field-wrap{position:relative;display:flex;align-items:center}
-.field-wrap input{height:46px;padding:10px 12px;background:var(--card)}
+.field-wrap input{height:46px;padding:10px 12px;background:var(--card);box-shadow:inset 0 1px 2px #213c6805}
 .field-wrap input#password{padding-right:46px}
 .password-toggle{position:absolute;right:4px;display:grid;place-items:center;width:38px;min-height:38px;padding:9px;border:0;background:transparent;color:var(--muted)}
 .password-toggle svg{width:18px;height:18px}
-#submit{width:100%;min-height:46px;margin-top:4px;border-color:var(--accent);background:var(--accent);color:var(--on-accent);font-size:14px}
+#submit{width:100%;min-height:46px;margin-top:4px;border-color:var(--accent);background:var(--accent);color:var(--on-accent);box-shadow:0 5px 14px #3559e01f,inset 0 1px 0 #ffffff24;font-size:14px}
 #submit:hover{filter:brightness(.96)}
 #submit svg{width:17px;height:17px}
 #error:not(:empty){margin:20px 0 0;padding:10px 12px;border-left:2px solid var(--danger);background:var(--subtle);color:var(--danger);font-size:13px;overflow-wrap:anywhere}
@@ -26,8 +26,11 @@ export const loginCss = `
 #recovery h2{margin:0 0 16px;font-size:22px;letter-spacing:-.4px}
 #recovery pre{margin:0 0 22px;padding:16px;border:1px solid var(--line);border-radius:8px;background:var(--subtle);font:13px/2 "Cascadia Code",Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
 #recovery .button{width:100%}
-@media(max-width:600px){.login-layout{padding:32px 20px 16px}.login-main{padding:28px 24px;border-radius:10px}.login-main h1{font-size:26px}.login-heading{margin-bottom:28px}}
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.login-main{background:var(--glass);border-color:var(--glass-edge);-webkit-backdrop-filter:blur(20px) saturate(145%);backdrop-filter:blur(20px) saturate(145%)}}
+@media(max-width:600px){.login-layout{padding:32px 20px 16px}.login-main{padding:28px 24px}.login-main h1{font-size:26px}.login-heading{margin-bottom:28px}}
 @media(max-width:360px){.login-layout{padding-right:16px;padding-left:16px}.login-main{padding:26px 20px}}
+@media(max-height:700px){.login-layout{padding-top:20px;padding-bottom:12px}.login-main{padding-top:24px;padding-bottom:24px}.login-heading{margin-bottom:24px}#auth{gap:18px}footer{padding:22px 24px 16px}}
+@media(prefers-reduced-transparency:reduce),(prefers-contrast:more){.login-main{background:var(--card);border-color:var(--line);-webkit-backdrop-filter:none;backdrop-filter:none}}
 `;
 
 export function loginBody(ready: boolean) {
