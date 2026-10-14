@@ -1,0 +1,12 @@
+{
+  "Version": "17.0.0",
+  "Name": "RCloud 图床",
+  "DestinationType": "ImageUploader",
+  "RequestMethod": "POST",
+  "RequestURL": "https://s.irin.im/api/v1/images",
+  "Headers": { "Authorization": "Bearer REPLACE_WITH_IMAGE_UPLOAD_TOKEN" },
+  "Body": "MultipartFormData",
+  "FileFormName": "file",
+  "URL": "{json:data.url}",
+  "ErrorMessage": "{json:error.message}"
+}

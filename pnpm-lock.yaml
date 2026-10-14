@@ -14,6 +14,9 @@ importers:
       '@codemirror/language-data':
         specifier: ^6.5.0
         version: 6.5.2
+      '@fastify/busboy':
+        specifier: 3.2.3
+        version: 3.2.3
       '@radix-ui/react-dialog':
         specifier: ^1.1.0
         version: 1.3.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -572,6 +575,9 @@ packages:
   '@eslint/plugin-kit@0.7.3':
     resolution: {integrity: sha512-IkO+/KEUvwbVpiURZg+P7zF74z5Jxe0UgJxVni+RtoHQ6IZieXaO02kmadomap/q+l6bc/jdPGGqTjhuZnuz1Q==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+
+  '@fastify/busboy@3.2.3':
+    resolution: {integrity: sha512-fmo/IKgkenPzz3qTKG+sIUXdF/Kv83AkvvOXJHPTHJeKJbat8SsL1ihUaFaDotqoEl4UZ1Lf8Eb/3vK6eaWX2A==}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -3160,6 +3166,8 @@ snapshots:
     dependencies:
       '@eslint/core': 1.2.1
       levn: 0.4.1
+
+  '@fastify/busboy@3.2.3': {}
 
   '@humanfs/core@0.19.2':
     dependencies:

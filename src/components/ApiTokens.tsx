@@ -3,16 +3,24 @@ import { KeyRound, Plus, Copy, ExternalLink } from 'lucide-react';
 import { api, send, dateLabel } from '../lib/api';
 import { Button } from './ui/button';
 import { Modal } from './ui/dialog';
+import { sharexConfig } from '../../shared/sharex';
 
 interface Token {
   id: string;
   name: string;
   prefix: string;
+  scope: 'files:upload' | 'images:upload';
   expires_at: number;
   last_used_at: number | null;
   revoked_at: number | null;
 }
-export function ApiTokens({ notify }: { notify: (text: string) => void }) {
+export function ApiTokens({
+  notify,
+  uploadOrigin,
+}: {
+  notify: (text: string) => void;
+  uploadOrigin: string;
+}) {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -21,6 +29,7 @@ export function ApiTokens({ notify }: { notify: (text: string) => void }) {
   const [revoking, setRevoking] = useState<Token | null>(null);
   const [name, setName] = useState('');
   const [days, setDays] = useState('30');
+  const [scope, setScope] = useState<'files:upload' | 'images:upload'>('files:upload');
   const [secret, setSecret] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -55,6 +64,7 @@ export function ApiTokens({ notify }: { notify: (text: string) => void }) {
           onClick={() => {
             setName('');
             setDays('30');
+            setScope('files:upload');
             setCreating(true);
           }}
         >
@@ -94,7 +104,7 @@ export function ApiTokens({ notify }: { notify: (text: string) => void }) {
                       ? '已撤销'
                       : !active
                         ? '已到期'
-                        : `仅上传 · 有效至 ${dateLabel(t.expires_at)}`}
+                        : `${t.scope === 'images:upload' ? '图床上传' : '文件上传'} · 有效至 ${dateLabel(t.expires_at)}`}
                   </small>
                   <small>最近使用：{t.last_used_at ? dateLabel(t.last_used_at) : '未使用'}</small>
                 </div>
@@ -112,15 +122,35 @@ export function ApiTokens({ notify }: { notify: (text: string) => void }) {
         </div>
       )}
       {creating && (
-        <Modal title={secret ? '保存 Token' : '创建上传 Token'} onClose={close}>
+        <Modal title={secret ? '保存 Token' : '创建 API Token'} onClose={close}>
           {secret ? (
             <div className="form-stack">
               <p>Token 仅显示一次，请保存到安全位置。</p>
+              {scope === 'images:upload' && <p>ShareX 配置包含 Token，请勿公开。</p>}
               <label>
                 Token
                 <input className="api-token-secret" value={secret} readOnly spellCheck={false} />
               </label>
               <div className="dialog-footer">
+                {scope === 'images:upload' && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const blob = new Blob(
+                        [JSON.stringify(sharexConfig(uploadOrigin, secret), null, 2)],
+                        { type: 'application/json' },
+                      );
+                      const url = URL.createObjectURL(blob),
+                        link = document.createElement('a');
+                      link.href = url;
+                      link.download = 'RCloud.sxcu';
+                      link.click();
+                      setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    }}
+                  >
+                    下载 ShareX 配置
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   onClick={async () => {
@@ -147,6 +177,7 @@ export function ApiTokens({ notify }: { notify: (text: string) => void }) {
                 try {
                   const result = await send<{ token: string }>('/api-tokens', 'POST', {
                     name,
+                    scope,
                     expires_in_days: Number(days),
                   });
                   setSecret(result.token);
@@ -170,6 +201,13 @@ export function ApiTokens({ notify }: { notify: (text: string) => void }) {
                 />
               </label>
               <label>
+                类型
+                <select value={scope} onChange={(e) => setScope(e.target.value as typeof scope)}>
+                  <option value="files:upload">文件上传（私有）</option>
+                  <option value="images:upload">图床上传（公开直链 / ShareX）</option>
+                </select>
+              </label>
+              <label>
                 有效期
                 <select value={days} onChange={(e) => setDays(e.target.value)}>
                   <option value="30">30 天</option>
@@ -177,7 +215,11 @@ export function ApiTokens({ notify }: { notify: (text: string) => void }) {
                   <option value="365">365 天</option>
                 </select>
               </label>
-              <p>仅可上传文件和查询自己的上传结果。</p>
+              <p>
+                {scope === 'images:upload'
+                  ? '图片上传后公开，保存到 Image-hosting。'
+                  : '仅可上传文件和查询自己的上传结果。'}
+              </p>
               <div className="dialog-footer">
                 <Button type="button" variant="ghost" disabled={busy} onClick={close}>
                   取消

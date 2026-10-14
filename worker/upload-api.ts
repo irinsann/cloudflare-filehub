@@ -4,8 +4,10 @@ import { uploadRoutes } from './uploads';
 import { getFile, uploadSingleFile } from './files';
 import { requireUploadOwner, uploadMetadata } from './upload-access';
 import { fail } from './errors';
+import { uploadImage } from './image-upload-api';
 
 export const uploadApi = new Hono<AppEnv>();
+uploadApi.post('/images', uploadImage);
 uploadApi.post('/files', uploadSingleFile);
 uploadApi.get('/files/:id', async (c) => {
   await requireUploadOwner(c, c.req.param('id'));

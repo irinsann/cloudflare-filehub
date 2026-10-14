@@ -44,6 +44,6 @@ pnpm run deploy:production
 
 ## VPS 反代
 
-上传 API 使用独立 Bearer Token。升级时先应用 `0007_api_tokens.sql` 再部署 Worker，登录「设置 → 上传 API」手动创建 Token。无需配置全局上传密钥。反代须转发 Authorization、Content-Type 和 X-File-Size，并禁止缓存 `/api/*`。详情和脚本见 [API 文档](api.md)。
+上传 API 使用独立 Bearer Token。升级时先应用 `0007_api_tokens.sql` 和 `0008_image_api_scope.sql`，在 Worker 配置中保留 `"compatibility_flags": ["nodejs_compat"]`，再部署 Worker，登录「设置 → 上传 API」手动创建 Token。无需配置全局上传密钥。反代须转发 Authorization、Content-Type 和 X-File-Size，并禁止缓存 `/api/*`。详情和脚本见 [API 文档](api.md)；图床上传与可导入配置见 [ShareX 文档](sharex.md)，反代表单请求需保留正确的 Content-Length。
 
 反代使用其他域名时，将外部 HTTPS Origin 加入 TRUSTED_PROXY_ORIGINS，例如 https://s.irin.im（无尾随斜线）。反代上游仍为 233334.xyz，保留浏览器 Origin、Cookie 与 Set-Cookie，不改写 Origin，不缓存登录和管理接口。应用只接受配置的精确可信 Origin，保留写接口的自定义头与会话验证，不信任任意 X-Forwarded-Host。

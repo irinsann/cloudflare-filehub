@@ -41,6 +41,8 @@ pnpm dev
 - 生产 Access JWT 签名、issuer、audience、过期/必要声明、管理员邮箱白名单；写 API Origin 与自定义请求头校验；安全响应头、保守 no-store 缓存与请求限流。
 - D1/R2 跨存储恢复机制：预先登记待清理对象，D1 提交成功才释放；永久删除原子移除元数据并持久化清理任务，R2 失败由每小时 Cron 重试。
 
+- 独立图床上传 API，兼容 ShareX 自定义上传器；复用网页图床的 MD5 命名、Image-hosting 目录与公开直链。支持在设置中创建图床专用 Token 并下载配置。见 [ShareX 配置指南](docs/sharex.md) 与 [配置模板](docs/RCloud.sxcu)。
+
 ## 项目布局
 
 ```text

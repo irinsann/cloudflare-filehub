@@ -8,7 +8,7 @@ import { fail } from './errors';
 import { writeOriginAllowed } from './origins';
 
 export const tokenRoutes = new Hono<AppEnv>();
-const fields = 'id,name,prefix,created_at,expires_at,last_used_at,revoked_at';
+const fields = 'id,name,prefix,scope,created_at,expires_at,last_used_at,revoked_at';
 tokenRoutes.get('/api-tokens', async (c) => {
   const rows = await c.env.DB.prepare(
     `SELECT ${fields} FROM api_tokens ORDER BY created_at DESC LIMIT 100`,
@@ -19,6 +19,7 @@ tokenRoutes.post('/api-tokens', async (c) => {
   const input = z
     .object({
       name: z.string().trim().min(1).max(80),
+      scope: z.enum(['files:upload', 'images:upload']).default('files:upload'),
       expires_in_days: z.number().int().min(1).max(365).default(30),
     })
     .parse(await c.req.json().catch(() => fail(400, 'JSON 格式无效')));
@@ -31,10 +32,19 @@ tokenRoutes.post('/api-tokens', async (c) => {
     created = now(),
     expires = created + input.expires_in_days * 86400000;
   const row = await c.env.DB.prepare(
-    `INSERT INTO api_tokens(id,name,token_hash,prefix,created_at,expires_at)
-    SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM api_tokens WHERE revoked_at IS NULL AND expires_at>?)<20 RETURNING ${fields}`,
+    `INSERT INTO api_tokens(id,name,token_hash,prefix,created_at,expires_at,scope)
+    SELECT ?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM api_tokens WHERE revoked_at IS NULL AND expires_at>?)<20 RETURNING ${fields}`,
   )
-    .bind(id, input.name, await digest(token), token.slice(0, 12), created, expires, created)
+    .bind(
+      id,
+      input.name,
+      await digest(token),
+      token.slice(0, 12),
+      created,
+      expires,
+      input.scope,
+      created,
+    )
     .first();
   if (!row) fail(409, '有效 Token 已达 20 个，请先撤销旧 Token');
   return c.json({ data: { ...row, token } }, 201);
@@ -56,16 +66,20 @@ export const uploadTokenAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   const match = /^Bearer (rcu_[a-f0-9]{64})$/i.exec(c.req.header('Authorization') || '');
   if (!match) fail(401, '请提供有效的上传 Token');
   const token = await c.env.DB.prepare(
-    'SELECT id FROM api_tokens WHERE token_hash=? AND revoked_at IS NULL AND expires_at>?',
+    'SELECT id,scope FROM api_tokens WHERE token_hash=? AND revoked_at IS NULL AND expires_at>?',
   )
     .bind(await digest(match[1]), now())
-    .first<{ id: string }>();
+    .first<{ id: string; scope: 'files:upload' | 'images:upload' }>();
   if (!token) fail(401, '上传 Token 无效、已到期或已撤销');
   // Scripts omit Origin; browser callers must still originate from an allowed site.
   if (c.req.header('Origin') && !writeOriginAllowed(c.env, c.req.raw))
     fail(403, '请求来源校验失败');
   await rateLimit(c.env, 'upload-api-token', token.id, 240);
   c.set('apiTokenId', token.id);
+  c.set('apiTokenScope', token.scope);
+  const imageRequest = c.req.path === '/api/v1/images';
+  if (imageRequest ? token.scope !== 'images:upload' : token.scope !== 'files:upload')
+    fail(403, 'Token 类型不允许调用此接口');
   await c.env.DB.prepare(
     'UPDATE api_tokens SET last_used_at=? WHERE id=? AND (last_used_at IS NULL OR last_used_at<?)',
   )

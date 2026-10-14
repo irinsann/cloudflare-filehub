@@ -312,6 +312,9 @@
 .api-token-secret {
   font-family: monospace;
 }
+.dialog-footer {
+  flex-wrap: wrap;
+}
 .form-stack select {
   min-height: 44px;
   border: 1px solid var(--line);

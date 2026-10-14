@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "RCloud Upload API",
-    "version": "1.0.0",
-    "description": "上传专用Token，文件私有；全站50GiB，直接上传32MiB，分片16MiB。每Token每分钟240请求，IP每分钟600请求。其他管理/公开API见docs/api.md。"
+    "version": "1.1.0",
+    "description": "文件上传需要 files:upload Token，文件私有；图片上传需要 images:upload Token，直接公开。全站50GiB，普通文件直接上传32MiB、分片16MiB；图片单请求仍受上游限制。每Token每分钟240请求，IP每分钟600请求。"
   },
   "servers": [
     {
@@ -24,6 +24,9 @@
     },
     {
       "name": "Token 管理"
+    },
+    {
+      "name": "图床"
     }
   ],
   "paths": {
@@ -102,7 +105,7 @@
             }
           }
         },
-        "description": "原始二进制，非multipart/form-data。非幂等；默认根目录，文件私有。"
+        "description": "需要 files:upload 类型的 Token。原始二进制，非multipart/form-data。非幂等；默认根目录，文件私有。"
       }
     },
     "/api/v1/files/{id}": {
@@ -149,7 +152,7 @@
             }
           }
         },
-        "description": "pending、已删除或其他Token的文件返回404。不返回内容或下载地址。"
+        "description": "需要 files:upload 类型的 Token。pending、已删除或其他Token的文件返回404。不返回内容或下载地址。"
       }
     },
     "/api/v1/uploads": {
@@ -212,7 +215,8 @@
               }
             }
           }
-        }
+        },
+        "description": "需要 files:upload 类型的 Token。"
       }
     },
     "/api/v1/uploads/{id}": {
@@ -258,7 +262,8 @@
               }
             }
           }
-        }
+        },
+        "description": "需要 files:upload 类型的 Token。"
       },
       "delete": {
         "operationId": "cancelUpload",
@@ -299,7 +304,7 @@
             }
           }
         },
-        "description": "不删除已完成文件；已完成、取消、过期或不存在返回410。"
+        "description": "需要 files:upload 类型的 Token。不删除已完成文件；已完成、取消、过期或不存在返回410。"
       }
     },
     "/api/v1/uploads/{id}/parts/{part}": {
@@ -385,7 +390,7 @@
             }
           }
         },
-        "description": "固定16MiB，最后一片为剩余长度。不要并发写同一片。"
+        "description": "需要 files:upload 类型的 Token。固定16MiB，最后一片为剩余长度。不要并发写同一片。"
       }
     },
     "/api/v1/uploads/{id}/complete": {
@@ -432,7 +437,7 @@
             }
           }
         },
-        "description": "无Body；缺片409；完成删除任务，之后查询任务410；可查询fileId核对完成结果。不保证并发幂等。"
+        "description": "需要 files:upload 类型的 Token。无Body；缺片409；完成删除任务，之后查询任务410；可查询fileId核对完成结果。不保证并发幂等。"
       }
     },
     "/api/admin/api-tokens": {
@@ -572,6 +577,11 @@
                     "minimum": 1,
                     "maximum": 365,
                     "default": 30
+                  },
+                  "scope": {
+                    "type": "string",
+                    "enum": ["files:upload", "images:upload"],
+                    "default": "files:upload"
                   }
                 },
                 "required": ["name"]
@@ -663,6 +673,88 @@
           }
         ],
         "description": "不终止在执行的请求，也不取消任务；重复撤销已有记录仍成功。"
+      }
+    },
+    "/api/v1/images": {
+      "post": {
+        "operationId": "uploadImage",
+        "summary": "上传并公开图片（ShareX）",
+        "tags": ["图床"],
+        "description": "仅 images:upload Token。仅接受一个 file 字段；PNG/JPEG/GIF/WebP。MD5命名并保存到Image-hosting，与网页共用发布和去重。无额外应用层文件上限，受50GiB配额（含临时副本）和上游单请求限制。",
+        "parameters": [
+          {
+            "name": "Content-Length",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "完整multipart请求字节数，ShareX/cURL自动生成。"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["file"],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "新图片已发布",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImageUpload"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "复用已有图片",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImageUpload"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 表单错误；401 未认证；403 Token类型/来源错误；409 冲突；411 缺少长度；413 配额或上游大小限制；415 格式错误；429 限流；500/503 服务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -816,6 +908,11 @@
           "revoked_at": {
             "type": ["integer", "null"],
             "format": "int64"
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["files:upload", "images:upload"],
+            "default": "files:upload"
           }
         },
         "required": [
@@ -825,7 +922,8 @@
           "created_at",
           "expires_at",
           "last_used_at",
-          "revoked_at"
+          "revoked_at",
+          "scope"
         ]
       },
       "Error": {
@@ -849,6 +947,27 @@
           }
         },
         "required": ["error"]
+      },
+      "ImageUpload": {
+        "type": "object",
+        "required": ["name", "file_id", "url", "duplicate"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}\\.(png|jpg|gif|webp)$"
+          },
+          "file_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "duplicate": {
+            "type": "boolean"
+          }
+        }
       }
     }
   }

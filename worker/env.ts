@@ -21,7 +21,12 @@ export interface Env {
 }
 export type AppEnv = {
   Bindings: Env;
-  Variables: { email: string; requestId: string; apiTokenId?: string };
+  Variables: {
+    email: string;
+    requestId: string;
+    apiTokenId?: string;
+    apiTokenScope?: 'files:upload' | 'images:upload';
+  };
 };
 export type AppContext = Context<AppEnv>;
 export const now = () => Date.now();

@@ -3,6 +3,7 @@
 上传 API 使用 `/api/v1`，供命令行、备份脚本和自动化工具调用。当前地址为 `https://s.irin.im`，也可直接使用 `https://233334.xyz`；自部署请替换为自己的 HTTPS 站点。
 
 - [上传快速开始](#上传快速开始)
+- [图片上传与 ShareX](sharex.md)（MD5 命名、公开直链）
 - [分片上传](#分片上传)
 - [Token 管理](#token-管理)
 - [管理与公开接口](#管理与公开接口)
@@ -19,7 +20,7 @@
 | `/api/auth/*`  | 登录/首次绑定流程                                    | 允许的 Origin 和 `X-Drive-Request: 1`                                                          |
 | 公开接口       | 按发布状态、分享权限和密码校验                       | 上传 Token 不作为公开内容授权                                                                  |
 
-上传 Token 不授予列出网盘、下载、删除已完成文件、创建分享、公开图片或管理 Token 的权限。它只能上传、查询和取消自己的上传任务，并查询自己的已完成文件元数据。网页会话与上传 Token 不可互换，跨站浏览器调用未开放 CORS。不要把 Token 放入 URL、公开网页或 Git 仓库。
+Token 分为两类：`files:upload` 用于私有文件上传、查询和取消自己的上传任务、查询自己的文件元数据；`images:upload` 仅用于 `/api/v1/images` 图片上传并生成公开直链。两类权限不可互换，均无列出网盘、下载私有文件、删除已完成文件、创建分享或管理 Token 的权限。网页会话与上传 Token 不可互换，跨站浏览器调用未开放 CORS。不要把 Token 放入 URL、公开网页或 Git 仓库。
 
 成功响应除文件流外统一为 `{"data": ...}`。新建通常返回 201；查询、分片写入和取消返回 200。失败响应：
 
@@ -29,12 +30,12 @@
 }
 ```
 
-响应带 X-Request-Id，API 响应禁止共享缓存。ID 为 UUID，时间为 Unix 毫秒，大小为字节。JSON 使用 Content-Type: application/json；文件和分片使用 application/octet-stream 和原始二进制 Body，**不是 multipart/form-data**。
+响应带 X-Request-Id，API 响应禁止共享缓存。ID 为 UUID，时间为 Unix 毫秒，大小为字节。JSON 使用 Content-Type: application/json；文件和分片使用 application/octet-stream 和原始二进制 Body，**不是 multipart/form-data**。图片接口 `/api/v1/images` 使用 multipart/form-data，详见 [图片上传与 ShareX](sharex.md)。
 
 ## 上传快速开始
 
 1. 登录网站，打开 **设置 → 上传 API → 创建 Token**。
-2. 填写名称与有效期，保存仅显示一次的 Token。
+2. 选择「文件上传（私有）」，填写名称与有效期，保存仅显示一次的 Token。
 3. 将 Token 放入环境变量 RCLOUD_TOKEN，上传后在网盘查看文件。
 
 ### Python：普通文件、大文件和空文件
@@ -192,11 +193,11 @@ curl --fail-with-body --request POST \
 
 | Method | 路径                       | 请求/响应                                                              |
 | ------ | -------------------------- | ---------------------------------------------------------------------- |
-| GET    | /api/admin/api-tokens      | 最近 100 条；名称、前缀、创建/到期/最近使用/撤销时间，不含明文或哈希   |
-| POST   | /api/admin/api-tokens      | `{"name":"备份脚本","expires_in_days":30}`；201 返回记录与一次性 token |
+| GET    | /api/admin/api-tokens      | 最近 100 条；名称、前缀、scope、创建/到期/最近使用/撤销时间，不含明文或哈希   |
+| POST   | /api/admin/api-tokens      | `{"name":"备份脚本","scope":"files:upload","expires_in_days":30}`；201 返回记录与一次性 token |
 | DELETE | /api/admin/api-tokens/{id} | 撤销；返回 {id}；重复撤销已有记录仍成功                                |
 
-名称 1–80 字符；有效期 1–365 天，默认 30 天；最多同时 20 个有效 Token。数据库仅存 SHA-256 哈希。prefix 用于识别；last_used_at 最多每分钟更新一次，代表通过认证的调用，不代表上传成功。撤销/到期拒绝后续请求，已在执行的请求可能完成。无续期接口，需要创建新 Token。
+scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 files:upload，不自动获得公开图片权限。名称 1–80 字符；有效期 1–365 天，默认 30 天；最多同时 20 个有效 Token。数据库仅存 SHA-256 哈希。prefix 用于识别；last_used_at 最多每分钟更新一次，代表通过认证的调用，不代表上传成功。撤销/到期拒绝后续请求，已在执行的请求可能完成。无续期接口，需要创建新 Token。
 
 ## 管理与公开接口
 
@@ -292,6 +293,7 @@ curl --fail-with-body --request POST \
 | 404     | 接口/文件/目录不存在；其他 Token 的文件/任务也返回此状态 |
 | 409     | 状态/版本冲突、缺失分片、Token 数量上限                  |
 | 410     | 上传任务已完成/取消/过期/不存在，或分享失效              |
+| 411     | 图片表单缺少有效 Content-Length                         |
 | 413     | 容量不足、直接上传超过 32MiB、文本/JSON 超限             |
 | 415     | 不支持的预览或图片格式                                   |
 | 416     | Range 无法满足                                           |
@@ -300,8 +302,8 @@ curl --fail-with-body --request POST \
 
 - 全站 50GiB（53,687,091,200 字节），网页/API 共用，包含回收站、附件、快照和上传预留。
 - 每 Token 每分钟 240 请求；上传 API 同一来源 IP 每分钟 600 请求，包含失败认证。使用固定分钟窗口；管理和公开接口另有限流。
-- 反代、Cloudflare 套餐与客户端可能有单请求大小/超时限制，建议大文件分片。反代需转发 Authorization、Content-Type、X-File-Size，禁止缓存 API 响应。
+- 反代、Cloudflare 套餐与客户端可能有单请求大小/超时限制，建议大文件分片。反代需转发 Authorization、Content-Type、X-File-Size，图片表单需保留正确 Content-Length，禁止缓存 API 响应。
 - 任务 24 小时后失效，定时任务分批清理，容量到实际删除对象才释放。撤销 Token 不等于取消任务。
 - 上传不覆盖同名文件。直接上传和初始化不是幂等操作，不应自动重试整个 POST；分片 PUT 可重试。
-- 文件类型判断不代表病毒扫描或完整解码；公开图片和分享是独立显式操作。
-- 部署新增功能先应用 0007_api_tokens.sql，再发布 Worker；无需新增 Cloudflare Secret。现有网页认证和上传继续可用。
+- 文件类型判断不代表病毒扫描或完整解码；图床 Token 上传会直接公开图片；普通文件上传仍为私有。
+- 部署新增功能先应用 0007_api_tokens.sql 和 0008_image_api_scope.sql，再发布 Worker（启用 nodejs_compat）；无需新增 Cloudflare Secret。现有网页认证和上传继续可用。

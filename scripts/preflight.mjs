@@ -13,6 +13,8 @@ if (parseErrors.length) {
 }
 const vars = config.vars ?? {};
 const missing = [];
+if (!config.compatibility_flags?.includes('nodejs_compat'))
+  missing.push('图片上传 API 需要 compatibility_flags 包含 nodejs_compat');
 if (vars.ENVIRONMENT !== 'production' || vars.LOCAL_AUTH !== 'false')
   missing.push('生产必须 ENVIRONMENT=production、LOCAL_AUTH=false');
 if (

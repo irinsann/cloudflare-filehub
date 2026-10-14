@@ -102,7 +102,7 @@ export function Management({
           <StorageMeter settings={settings} />
           <p>文本编辑上限：{settings ? `${settings.maxTextBytes / 1048576} MB` : '—'}</p>
         </section>
-        <ApiTokens notify={notify} />
+        <ApiTokens notify={notify} uploadOrigin={settings?.filesOrigin || location.origin} />
       </div>
     );
   return (

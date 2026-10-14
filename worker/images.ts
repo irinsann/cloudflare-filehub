@@ -13,7 +13,7 @@ const extensions: Record<string, string> = {
   'image/gif': 'gif',
   'image/webp': 'webp',
 };
-async function folder(env: Env) {
+export async function imageFolder(env: Env) {
   const id = uuid();
   await env.DB.prepare(
     "INSERT OR IGNORE INTO folders(id,name,parent_id,created_at,updated_at) VALUES(?,'Image-hosting',NULL,?,?)",
@@ -29,7 +29,7 @@ async function folder(env: Env) {
 const hex = (b: ArrayBuffer) =>
   Array.from(new Uint8Array(b), (v) => v.toString(16).padStart(2, '0')).join('');
 export const imageRoutes = new Hono<AppEnv>();
-imageRoutes.post('/images/folder', async (c) => c.json({ data: { id: await folder(c.env) } }));
+imageRoutes.post('/images/folder', async (c) => c.json({ data: { id: await imageFolder(c.env) } }));
 imageRoutes.get('/images', async (c) => {
   const page = Math.max(1, Math.min(100000, Math.floor(Number(c.req.query('page'))) || 1));
   const rows = await c.env.DB.prepare(
@@ -47,7 +47,11 @@ imageRoutes.get('/images', async (c) => {
 });
 imageRoutes.post('/images', async (c) => {
   const input = z.object({ file_id: identifier }).parse(await c.req.json());
-  const file = await getFile(c.env, input.file_id);
+  const result = await publishImage(c, input.file_id);
+  return c.json({ data: result }, result.duplicate ? 200 : 201);
+});
+export async function publishImage(c: AppContext, fileId: string) {
+  const file = await getFile(c.env, fileId);
   if (!file.size) fail(415, '图片为空');
   const head = await c.env.BUCKET.get(file.object_key, {
     range: { offset: 0, length: Math.min(32, file.size) },
@@ -96,18 +100,15 @@ imageRoutes.post('/images', async (c) => {
       await activeFolder(c.env, old.folder_id);
       if (!existing.enabled)
         await c.env.DB.prepare('UPDATE image_hosts SET enabled=1 WHERE name=?').bind(name).run();
-      return c.json({
-        data: {
-          name,
-          file_id: old.id,
-          url:
-            (c.env.FILES_ORIGIN || c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + name,
-          duplicate: old.id !== file.id,
-        },
-      });
+      return {
+        name,
+        file_id: old.id,
+        url: (c.env.FILES_ORIGIN || c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + name,
+        duplicate: old.id !== file.id,
+      };
     }
   }
-  const folderId = await folder(c.env),
+  const folderId = await imageFolder(c.env),
     key = 'Image-hosting/' + uuid() + '/' + name;
   await cleanupStatement(c.env, key).run();
   const source = await c.env.BUCKET.get(file.object_key);
@@ -127,18 +128,13 @@ imageRoutes.post('/images', async (c) => {
   ]);
   if (!results[0].meta.changes || !results[1].meta.changes) fail(409, '图片状态已改变，请重试');
   await releaseStatement(c.env, key).run();
-  return c.json(
-    {
-      data: {
-        name,
-        file_id: file.id,
-        url: (c.env.FILES_ORIGIN || c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + name,
-        duplicate: false,
-      },
-    },
-    201,
-  );
-});
+  return {
+    name,
+    file_id: file.id,
+    url: (c.env.FILES_ORIGIN || c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + name,
+    duplicate: false,
+  };
+}
 imageRoutes.delete('/images/:name', async (c) => {
   await c.env.DB.prepare('UPDATE image_hosts SET enabled=0 WHERE name=?')
     .bind(c.req.param('name'))
