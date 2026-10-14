@@ -55,7 +55,7 @@ export default function Editor({
     imageInput = useRef<HTMLInputElement>(null);
   const dirty = content !== saved;
   const makeLink = (page: PageRecord) =>
-    `${settings?.markdownOrigin || location.origin}${settings?.markdownOrigin && settings.markdownOrigin !== location.origin ? '' : '/p'}/${page.slug}`;
+    `${settings?.markdownOrigin || location.origin}/p/${page.slug}`;
   useEffect(() => {
     let live = true;
     void api<DocumentData>(`/markdown/${id}`)

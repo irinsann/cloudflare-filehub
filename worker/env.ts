@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 export interface Env {
+  TRUSTED_PROXY_ORIGINS?: string;
   AUTH_MODE?: string;
   AUTH_ENCRYPTION_KEY?: string;
   AUTH_SETUP_SECRET?: string;

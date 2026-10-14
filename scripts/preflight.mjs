@@ -44,6 +44,18 @@ if (
   config.routes[0].pattern !== new URL(vars.ADMIN_ORIGIN || 'https://invalid.local').host
 )
   missing.push('生产必须只绑定一个与 ADMIN_ORIGIN 对应的自定义域名');
+for (const origin of (vars.TRUSTED_PROXY_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)) {
+  try {
+    const u = new URL(origin);
+    if (u.protocol !== 'https:' || u.origin !== origin)
+      missing.push('反代来源必须是精确 HTTPS Origin');
+  } catch {
+    missing.push('反代来源格式无效');
+  }
+}
 if (missing.length) {
   console.error(
     '部署配置尚未完成：\n' +

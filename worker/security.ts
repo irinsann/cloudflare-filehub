@@ -2,6 +2,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { MiddlewareHandler } from 'hono';
 import type { AppEnv, Env } from './env';
 import { fail } from './errors';
+import { siteOriginAllowed, writeOriginAllowed } from './origins';
 import { siteIdentity } from './site-auth';
 const jwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 export function isLocalAuth(env: Env, url: URL) {
@@ -53,10 +54,10 @@ export async function verifyAdmin(token: string, env: Env, key?: Parameters<type
 }
 export const adminAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   const url = new URL(c.req.url);
-  if (c.env.ADMIN_ORIGIN && url.origin !== new URL(c.env.ADMIN_ORIGIN).origin)
+  if (c.env.ADMIN_ORIGIN && !siteOriginAllowed(c.env, url.origin))
     fail(403, '管理员接口只能通过管理域名访问');
   if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
-    if (c.req.header('Origin') !== url.origin || c.req.header('X-Drive-Request') !== '1')
+    if (!writeOriginAllowed(c.env, c.req.raw) || c.req.header('X-Drive-Request') !== '1')
       fail(403, '请求来源校验失败');
   }
   if (isLocalAuth(c.env, url)) c.set('email', 'local@localhost');

@@ -114,4 +114,47 @@ describe('站内密码与验证器认证', () => {
       expect((await post('/login', { password, code: '000000' })).status).toBe(401);
     expect((await post('/login', { password, code: '000000' })).status).toBe(429);
   });
+  it('allows only configured proxy origins for login and authenticated writes', async () => {
+    const { finish } = await setup();
+    const cookie = finish.headers.get('set-cookie')!.split(';')[0];
+    const proxyEnv = { ...env, TRUSTED_PROXY_ORIGINS: 'https://s.irin.im' };
+    const headers = {
+      Origin: 'https://s.irin.im',
+      'X-Drive-Request': '1',
+      'Content-Type': 'application/json',
+      Cookie: cookie,
+    };
+    const create = await app.request(
+      'https://233334.xyz/api/admin/folders',
+      { method: 'POST', headers, body: JSON.stringify({ name: 'via-proxy' }) },
+      proxyEnv,
+    );
+    expect(create.status).toBe(201);
+    const bad = await app.request(
+      'https://233334.xyz/api/auth/login',
+      { method: 'POST', headers, body: JSON.stringify({ password: 'wrong', code: '000000' }) },
+      proxyEnv,
+    );
+    expect(bad.status).toBe(401);
+    const evil = await app.request(
+      'https://233334.xyz/api/auth/login',
+      {
+        method: 'POST',
+        headers: { ...headers, Origin: 'https://evil.test', 'X-Forwarded-Host': 's.irin.im' },
+        body: JSON.stringify({ password, code: '000000' }),
+      },
+      proxyEnv,
+    );
+    expect(evil.status).toBe(403);
+    const unknown = await app.request(
+      'https://233334.xyz/api/admin/folders',
+      {
+        method: 'POST',
+        headers: { ...headers, Origin: 'https://s.irin.im.evil.test' },
+        body: JSON.stringify({ name: 'reject' }),
+      },
+      proxyEnv,
+    );
+    expect(unknown.status).toBe(403);
+  });
 });

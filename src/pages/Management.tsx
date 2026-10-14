@@ -163,7 +163,7 @@ export function Management({
           {docs
             .filter((d) => d.published)
             .map((d) => {
-              const url = `${settings?.markdownOrigin || location.origin}${settings?.markdownOrigin && settings.markdownOrigin !== location.origin ? '' : '/p'}/${d.slug}`;
+              const url = `${settings?.markdownOrigin || location.origin}/p/${d.slug}`;
               return (
                 <article key={d.id} className="management-row">
                   <div className="type-icon">

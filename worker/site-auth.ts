@@ -5,8 +5,11 @@ import qrcode from 'qrcode-generator';
 import type { Env, AppEnv, AppContext } from './env';
 import { now } from './env';
 import { fail } from './errors';
+import { writeOriginAllowed } from './origins';
 import { hashPassword, checkPassword, digest, rateLimit } from './auth-crypto';
 import { htmlPage } from './html';
+import { loginBody, loginCss, loginBrand, themeIcon, loginUiScript } from './login-view';
+import { brandMark } from '../shared/brand';
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const randomToken = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
@@ -125,10 +128,7 @@ export const siteAuthRoutes = new Hono<AppEnv>();
 siteAuthRoutes.use('*', async (c, next) => {
   if (c.env.AUTH_MODE !== 'password_totp') fail(404, '未启用站内登录');
   if (c.req.method !== 'GET') {
-    if (
-      c.req.header('Origin') !== new URL(c.req.url).origin ||
-      c.req.header('X-Drive-Request') !== '1'
-    )
+    if (!writeOriginAllowed(c.env, c.req.raw) || c.req.header('X-Drive-Request') !== '1')
       fail(403, '请求来源校验失败');
     await rateLimit(c.env, 'auth-ip', c.req.header('CF-Connecting-IP') || 'local', 20, 300);
   }
@@ -257,8 +257,11 @@ siteAuthRoutes.post('/logout', async (c) => {
 export async function loginPage(c: AppContext) {
   const ready = !!(await c.env.DB.prepare('SELECT id FROM admin_account WHERE id=1').first());
   const script = String.raw`const ready=${ready};const form=document.getElementById('auth');const error=document.getElementById('error');let token='';async function post(path,data){const r=await fetch('/api/auth/'+path,{method:'POST',headers:{'Content-Type':'application/json','X-Drive-Request':'1'},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw Error(j.error.message);return j.data;}if(!ready){const invite=new URLSearchParams(location.hash.slice(1)).get('setup');history.replaceState(null,'','/login');if(invite)post('setup/start',{token:invite}).then(d=>{token=d.token;document.getElementById('qr').innerHTML=d.qr;document.getElementById('secret').textContent=d.secret;form.hidden=false;document.getElementById('loading').hidden=true;}).catch(e=>error.textContent=e.message);else error.textContent='请使用管理员提供的一次性设置链接。';}form.onsubmit=async e=>{e.preventDefault();const button=document.getElementById('submit');button.disabled=true;error.textContent='';try{const p=document.getElementById('password').value;const confirm=document.getElementById('confirm');if(!ready&&p!==confirm.value)throw Error('两次密码不一致');const d=await post(ready?'login':'setup/finish',{token,password:p,code:document.getElementById('code').value.trim().toLowerCase()});document.getElementById('password').value='';if(ready)location.replace('/drive/');else{form.hidden=true;document.getElementById('qr').replaceChildren();document.getElementById('secret').textContent='';document.getElementById('recovery').hidden=false;document.getElementById('codes').textContent=d.recovery.join('\n');}}catch(e){error.textContent=e.message;}finally{button.disabled=false;}};`;
-  const body = `<main class="card"><div class="eyebrow">RCLOUD · PRIVATE SPACE</div><h1>${ready ? '登录 RCloud' : '设置密码与验证器'}</h1><p>${ready ? '使用密码和验证器验证码登录。' : '使用验证器扫描二维码；也可手动添加下方密钥。'}</p><p id="loading">${ready ? '' : '正在加载验证器设置…'}</p><div id="qr"></div><code id="secret"></code><form id="auth" ${ready ? '' : 'hidden'}><label>密码<input id="password" type="password" autocomplete="${ready ? 'current-password' : 'new-password'}" minlength="${ready ? 1 : 12}" maxlength="128" required></label>${ready ? '' : '<label>确认密码<input id="confirm" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>'}<label>${ready ? '验证器验证码或恢复码' : '验证器验证码'}<input id="code" autocomplete="one-time-code" maxlength="16" required></label><button id="submit">${ready ? '登录' : '完成设置'}</button></form><p id="error" role="alert"></p><section id="recovery" hidden><h2>保存恢复码</h2><p>每个恢复码只能使用一次，需要与密码一起使用。请保存到安全的位置，关闭后不再显示。</p><pre id="codes"></pre><a class="button" href="/drive/">已保存，进入网盘</a></section></main>`;
-  const page = htmlPage('登录', body, script);
-  page.html = page.html.replace('RCloud / 阅读与分享', 'RCloud / 私人空间');
+  const page = htmlPage('登录', loginBody(ready), script + loginUiScript);
+  page.html = page.html
+    .replace('</style>', loginCss + '</style>')
+    .replace(brandMark + '<span>RCloud</span>', loginBrand)
+    .replace('>切换主题</button>', '>' + themeIcon + '<span>切换主题</span></button>')
+    .replace('RCloud · 让文件与想法有处安放', 'RCloud');
   return new Response(page.html, { headers: page.headers });
 }

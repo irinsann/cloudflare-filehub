@@ -10,6 +10,7 @@ import { markdownRoutes, publicPageRoutes, readPage, enforceJsonLimit } from './
 import { shareRoutes, publicShareRoutes, sharePage, directRoutes } from './shares';
 import { cleanup } from './storage';
 import { fail } from './errors';
+import { siteOriginAllowed } from './origins';
 import { htmlPage } from './html';
 import { escapeHtml } from '../shared/markdown';
 const app = new Hono<AppEnv>();
@@ -18,7 +19,7 @@ app.use('*', async (c, next) => {
   if (
     c.env.ADMIN_ORIGIN &&
     !isLocalAuth(c.env, new URL(c.req.url)) &&
-    new URL(c.req.url).origin !== c.env.ADMIN_ORIGIN
+    !siteOriginAllowed(c.env, new URL(c.req.url).origin)
   )
     fail(404, '站点已迁移');
   await next();
@@ -71,6 +72,7 @@ app.use('/s/*', async (c, next) => {
 });
 app.on(['GET', 'HEAD'], '/p/:slug', (c) => readPage(c));
 app.get('/s/:token', sharePage);
+app.get('/favicon.svg', (c) => c.env.ASSETS.fetch(c.req.raw));
 app.get('/robots.txt', (c) =>
   c.text('User-agent: *\nAllow: /p/\nDisallow: /api/\nDisallow: /s/\nDisallow: /d/\nDisallow: /\n'),
 );

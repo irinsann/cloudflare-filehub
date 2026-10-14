@@ -1,6 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Cloud,
   FolderOpen,
   Clock3,
   FileText,
@@ -41,6 +40,7 @@ import { Button } from './components/ui/button';
 import { Modal } from './components/ui/dialog';
 import { Actions, type Action } from './components/Actions';
 import { useUploads } from './hooks/useUploads';
+import { brandMark } from '../shared/brand';
 import { Management, Empty } from './pages/Management';
 const Editor = lazy(() => import('./pages/Editor')),
   Preview = lazy(() => import('./components/Preview'));
@@ -262,11 +262,9 @@ export default function App() {
       <aside className={`sidebar ${sidebar ? 'is-open' : ''}`}>
         <div className="logo">
           <span className="logo-mark">
-            <Cloud size={23} />
+            <span className="rcloud-mark" dangerouslySetInnerHTML={{ __html: brandMark }} />
           </span>
-          <strong>
-            RCloud<span>RCLOUD</span>
-          </strong>
+          <strong>RCloud</strong>
           <Button
             className="mobile-close"
             variant="ghost"
@@ -297,9 +295,9 @@ export default function App() {
           <div className="status-dot" />
           <span>私有存储 · 安全访问</span>
           <p>
-            让文件与想法
+            文件、文档与分享
             <br />
-            都有一处安放。
+            统一管理。
           </p>
         </div>
         <div className="profile">
@@ -368,20 +366,19 @@ export default function App() {
         <div className="content">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">YOUR PERSONAL CLOUD</div>
               <h1>
                 {heading}
                 <span className="heading-dot">.</span>
               </h1>
               <p>
                 {view === 'files'
-                  ? '整理文件，记录想法，分享值得被看见的内容。'
+                  ? '上传、分类和管理文件。'
                   : view === 'markdown'
-                    ? '从一份草稿，到一个可以分享的阅读链接。'
+                    ? '创建、编辑和发布 Markdown 文档。'
                     : view === 'trash'
                       ? '恢复误删的文件，或永久释放存储空间。'
                       : view === 'published'
-                        ? '每一篇公开文章，都来自你主动发布的快照。'
+                        ? '管理已发布的文章。'
                         : view === 'shares'
                           ? '管理公开链接，随时收回访问权限。'
                           : view === 'recent'
@@ -427,8 +424,8 @@ export default function App() {
                   <Upload size={22} />
                 </span>
                 <span>
-                  <strong>收纳你的文件</strong>
-                  <small>拖入文件，安全保存在私有云端</small>
+                  <strong>上传文件</strong>
+                  <small>拖入或选择文件上传</small>
                 </span>
                 <ChevronRight size={17} />
               </button>
@@ -740,8 +737,8 @@ export default function App() {
             </section>
           )}
           <div className="content-footer">
-            <span>RCloud · PERSONAL CLOUD</span>
-            <span>文件属于你，分享由你决定。</span>
+            <span>RCloud</span>
+            <span></span>
           </div>
         </div>
         {dropping && (

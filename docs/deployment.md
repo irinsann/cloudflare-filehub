@@ -41,3 +41,7 @@ pnpm run deploy:production
 用户亲自设置至少 12 字符密码，并扫描站内二维码输入验证码完成绑定，保存显示一次的 8 个恢复码。密码用独立随机盐 PBKDF2 保存；TOTP 为 SHA1 / 6 位 / 30 秒，接受前后一个窗口且原子拒绝已用验证码。恢复码只存哈希并只能使用一次，仍须提供密码。登录 Cookie 为 Secure、HttpOnly、SameSite=Strict 的随机会话，服务端存哈希，24 小时过期，退出立即撤销。
 
 迁移时先部署并完成账户绑定，再移除 RCloud Access 应用；不要在账户未建立时移除现有保护。绑定成功后 /setup/start 会永久拒绝初始化，随后删除 AUTH_SETUP_SECRET。密码或验证器凭据更新必须由用户本人操作；遗失密码时由 Cloudflare 账户所有者进行受控离线重置，平台无公开绕过或重置接口。
+
+## VPS 反代
+
+反代使用其他域名时，将外部 HTTPS Origin 加入 TRUSTED_PROXY_ORIGINS，例如 https://s.irin.im（无尾随斜线）。反代上游仍为 233334.xyz，保留浏览器 Origin、Cookie 与 Set-Cookie，不改写 Origin，不缓存登录和管理接口。应用只接受配置的精确可信 Origin，保留写接口的自定义头与会话验证，不信任任意 X-Forwarded-Host。

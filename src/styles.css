@@ -1742,3 +1742,5 @@ html[data-theme='dark'] .type-icon {
     font-size: 11px;
   }
 }
+
+.rcloud-mark{display:inline-flex}.rcloud-mark svg{width:38px;height:38px;display:block}
