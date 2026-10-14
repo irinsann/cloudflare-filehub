@@ -124,7 +124,6 @@ export function ImageHosting({
       >
         <ImagePlus size={28} />
         <strong>上传图片</strong>
-        <p>图片将公开访问，保存到 Image-hosting，文件名为 MD5。</p>
         <Button disabled={busy || !settings} onClick={() => input.current?.click()}>
           <Upload size={16} />
           {busy ? '上传中…' : '选择图片'}

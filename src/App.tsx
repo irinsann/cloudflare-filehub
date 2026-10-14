@@ -294,15 +294,6 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="sidebar-note">
-          <div className="status-dot" />
-          <span>私有存储 · 安全访问</span>
-          <p>
-            文件、文档与分享
-            <br />
-            统一管理。
-          </p>
-        </div>
         <div className="profile">
           <div className="avatar">I</div>
           <div>
@@ -373,23 +364,6 @@ export default function App() {
                 {heading}
                 <span className="heading-dot">.</span>
               </h1>
-              <p>
-                {view === 'files'
-                  ? '上传、分类和管理文件。'
-                  : view === 'images'
-                    ? '上传图片并获取直链。'
-                    : view === 'markdown'
-                      ? '创建、编辑和发布 Markdown 文档。'
-                      : view === 'trash'
-                        ? '恢复误删的文件，或永久释放存储空间。'
-                        : view === 'published'
-                          ? '管理已发布的文章。'
-                          : view === 'shares'
-                            ? '管理公开链接，随时收回访问权限。'
-                            : view === 'recent'
-                              ? '最近更新的文件都在这里。'
-                              : '你的身份、存储限制与公开地址。'}
-              </p>
             </div>
             <div className="heading-actions">
               {view === 'trash' && (
@@ -679,16 +653,7 @@ export default function App() {
                   {!listing?.files.length && !listing?.folders.length && !error && (
                     <Empty
                       label={
-                        query
-                          ? '没有找到匹配文件'
-                          : view === 'trash'
-                            ? '回收站很干净'
-                            : '这里还有很多可能'
-                      }
-                      note={
-                        query
-                          ? '试试更短的关键词。'
-                          : '上传第一个文件，或新建一篇 Markdown 开始记录。'
+                        query ? '没有找到匹配文件' : view === 'trash' ? '回收站为空' : '暂无文件'
                       }
                     />
                   )}
@@ -732,7 +697,6 @@ export default function App() {
           <div className="drop-zone" onDragLeave={() => setDropping(false)}>
             <Upload size={48} />
             <h2>松开即可上传</h2>
-            <p>文件将存入当前目录</p>
           </div>
         )}
       </main>
@@ -783,7 +747,6 @@ export default function App() {
         <Actions
           key={`${action.type}${action.file?.id ?? action.folder?.id ?? ''}`}
           action={action}
-          settings={settings}
           currentFolder={folder}
           onClose={() => setAction(null)}
           onDone={(id) => {
@@ -800,11 +763,7 @@ export default function App() {
         </Suspense>
       )}
       {menu && (
-        <Modal
-          title={menu.file?.name ?? menu.folder!.name}
-          description="文件操作"
-          onClose={() => setMenu(null)}
-        >
+        <Modal title={menu.file?.name ?? menu.folder!.name} onClose={() => setMenu(null)}>
           <div className="action-menu">
             {view === 'trash' ? (
               <>

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import type { FileRecord, FolderRecord, Settings } from '../../shared/types';
+import type { FileRecord, FolderRecord } from '../../shared/types';
 import { Modal } from './ui/dialog';
 import { Button } from './ui/button';
 import { api, copy, send } from '../lib/api';
@@ -20,14 +20,12 @@ export type Action = {
 export function Actions({
   action,
   currentFolder,
-  settings,
   onClose,
   onDone,
   notify,
 }: {
   action: Action;
   currentFolder: string | null;
-  settings: Settings | null;
   onClose: () => void;
   onDone: (id?: string) => void;
   notify: (message: string) => void;
@@ -100,7 +98,7 @@ export function Actions({
           allow_download: action.type === 'direct' || download,
         });
         setLink(action.type === 'direct' ? result.directUrl : result.url);
-        notify(action.type === 'direct' ? '文件直链已创建，请保存链接' : '分享已创建，请保存链接');
+        notify(action.type === 'direct' ? '文件直链已创建' : '分享已创建');
         return;
       }
       onDone(id);
@@ -117,11 +115,6 @@ export function Actions({
       onClose={() => {
         if (!busy) onClose();
       }}
-      description={
-        action.type === 'share'
-          ? '只有持有链接的人可以访问，密码与有效期可进一步控制访问。'
-          : undefined
-      }
     >
       <form onSubmit={(e) => void submit(e)} className="form-stack">
         {['folder', 'markdown', 'rename'].includes(action.type) && (
@@ -211,27 +204,9 @@ export function Actions({
                 允许下载
               </label>
             )}
-            {action.type === 'share' && (
-              <p className="hint">
-                关闭下载仅隐藏和拒绝下载入口。浏览器预览仍会接收内容，无法防止截图或另存。
-              </p>
-            )}
-            {action.file?.mime === 'text/markdown' && (
-              <p className="hint">
-                文件分享提供当前 Markdown
-                原文，保存后链接内容会随之更新。需要隔离私人草稿时，请在编辑器使用「发布」。
-              </p>
-            )}
           </>
         )}
-        {action.type === 'direct' && !link && (
-          <p className="hint">
-            直链会公开此文件，持有链接的人可直接下载，无需登录。可设置有效期，并在「文件分享」中撤销。文件移入回收站后立即失效。
-          </p>
-        )}
-        {action.type === 'emptyTrash' && (
-          <p>永久删除回收站中的全部文件和文件夹？此操作无法恢复，所有关联链接会失效。</p>
-        )}
+        {action.type === 'emptyTrash' && <p>清空回收站？此操作无法恢复。</p>}
         {link && (
           <>
             <label>
@@ -261,13 +236,8 @@ export function Actions({
           <p>
             确定{action.type === 'purge' ? '永久删除' : '移入回收站'}「
             {action.file?.name ?? action.folder?.name}」？
-            {action.type === 'purge'
-              ? '此操作无法恢复。'
-              : '关联的分享和文章会立即失效；恢复文件不会自动恢复公开访问。'}
+            {action.type === 'purge' ? '此操作无法恢复。' : ''}
           </p>
-        )}
-        {settings && action.type === 'markdown' && (
-          <p className="hint">Markdown 会保存为 R2 中的真实文件。</p>
         )}
         {error && (
           <p className="error-text" role="alert">

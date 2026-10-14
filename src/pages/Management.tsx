@@ -64,7 +64,7 @@ export function Management({
       <div className="settings-grid">
         <section className="settings-card">
           <ShieldCheck />
-          <h3>身份与访问</h3>
+          <h3>账号</h3>
           {settings?.authMode === 'password_totp' && (
             <Button
               variant="outline"
@@ -85,31 +85,15 @@ export function Management({
             </Button>
           )}
           <p>当前身份：{settings?.email ?? '正在读取'}</p>
-          <p>环境：{settings?.environment ?? '—'}</p>
-          <p className="muted">
-            {settings?.authMode === 'password_totp'
-              ? '使用密码与验证器验证码登录，会话有效期为 24 小时。'
-              : '后台仅允许配置的管理员身份登录。'}
-          </p>
         </section>
         <section className="settings-card">
           <FileText />
-          <h3>存储与发布</h3>
+          <h3>存储</h3>
           <p>
             存储容量：
             {settings ? `${(settings.storageUsedBytes / 1073741824).toFixed(2)} / 50 GB` : '—'}
           </p>
           <p>文本编辑上限：{settings ? `${settings.maxTextBytes / 1048576} MB` : '—'}</p>
-          <p className="muted">文件保存在私有 R2，元数据保存在 D1。环境参数在部署配置中修改。</p>
-        </section>
-        <section className="settings-card">
-          <Link2 />
-          <h3>公开域名</h3>
-          <p>文件：{settings?.filesOrigin || '当前域名 /s/:token'}</p>
-          <p>文章：{settings?.markdownOrigin || '当前域名 /p/:slug'}</p>
-          <p className="muted">
-            分享列表最多显示最近 100 条。分享令牌只保存哈希，创建后请妥善保存完整链接。
-          </p>
         </section>
       </div>
     );
@@ -157,9 +141,7 @@ export function Management({
               </Button>
             </article>
           ))}
-          {!shares.length && (
-            <Empty label="还没有文件分享" note="从文件菜单创建分享，你可以随时撤销访问。" />
-          )}
+          {!shares.length && <Empty label="暂无文件分享" />}
         </div>
       ) : (
         <div className="management-list">
@@ -193,25 +175,19 @@ export function Management({
                 </article>
               );
             })}
-          {!docs.some((d) => d.published) && (
-            <Empty
-              label="让想法拥有一个链接"
-              note="新建 Markdown，写下内容，再发布为公开阅读网页。"
-            />
-          )}
+          {!docs.some((d) => d.published) && <Empty label="暂无已发布文章" />}
         </div>
       )}
     </>
   );
 }
-export function Empty({ label, note }: { label: string; note: string }) {
+export function Empty({ label }: { label: string }) {
   return (
     <div className="empty-state">
       <div className="empty-art">
         <FileText size={36} strokeWidth={1} />
       </div>
       <h3>{label}</h3>
-      <p>{note}</p>
     </div>
   );
 }

@@ -279,7 +279,7 @@ export default function Editor({
       {link && (
         <div className="published-banner">
           <Check size={15} />
-          <span>文章已公开，草稿修改需再次发布才会生效。</span>
+          <span>已发布</span>
           <Button
             size="sm"
             variant="ghost"
@@ -384,12 +384,10 @@ export default function Editor({
       </div>
       <footer className="editor-bottom">
         <span>{content.length.toLocaleString()} 字符</span>
-        <span>草稿与发布版本独立保存</span>
       </footer>
       {publishing && (
         <Modal
           title={data?.page?.published ? '更新公开文章' : '发布 Markdown'}
-          description="发布会创建独立快照。修改 Slug 后，旧链接立即失效。"
           onClose={() => {
             if (!busy) setPublishing(false);
           }}
