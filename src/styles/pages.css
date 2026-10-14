@@ -261,3 +261,67 @@
     padding: 0 10px;
   }
 }
+.api-token-card {
+  grid-column: 1 / -1;
+}
+.api-token-heading,
+.api-token-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.api-token-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.api-token-heading h3 {
+  margin: 0;
+}
+.api-token-heading svg {
+  color: var(--accent);
+}
+.api-doc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 18px 0;
+  color: var(--accent);
+  font-size: 13px;
+}
+.api-token-row {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.api-token-row > div {
+  min-width: 0;
+}
+.api-token-row strong,
+.api-token-row code,
+.api-token-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.api-token-row code,
+.api-token-row small {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.api-token-secret {
+  font-family: monospace;
+}
+.form-stack select {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 12px;
+  font-size: 16px;
+}
+@media (max-width: 600px) {
+  .api-token-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+}

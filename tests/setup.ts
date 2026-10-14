@@ -26,6 +26,8 @@ beforeEach(async () => {
       'image_hosts',
       'upload_parts',
       'upload_sessions',
+      'api_file_owners',
+      'api_tokens',
       'files',
       'folders',
       'operations',

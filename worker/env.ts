@@ -19,7 +19,10 @@ export interface Env {
   ADMIN_EMAILS: string;
   SHARE_SESSION_SECRET: string;
 }
-export type AppEnv = { Bindings: Env; Variables: { email: string; requestId: string } };
+export type AppEnv = {
+  Bindings: Env;
+  Variables: { email: string; requestId: string; apiTokenId?: string };
+};
 export type AppContext = Context<AppEnv>;
 export const now = () => Date.now();
 export const uuid = () => crypto.randomUUID();

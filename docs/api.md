@@ -1,69 +1,307 @@
-# API
+# RCloud API
 
-统一成功 `{ "data": ... }`；错误 `{ "error": { "code": 400, "message": "...", "request_id": "..." } }`。JSON 请求使用 Content-Type。管理员写操作必须同时携带同 Origin 和 `X-Drive-Request: 1`。生产由 Cloudflare 注入 `Cf-Access-Jwt-Assertion`，不能自行信任邮箱头。标识符均为 UUID，日期是 Unix 毫秒。
+上传 API 使用 `/api/v1`，供命令行、备份脚本和自动化工具调用。当前地址为 `https://s.irin.im`，也可直接使用 `https://233334.xyz`；自部署请替换为自己的 HTTPS 站点。
 
-## 文件与目录
+- [上传快速开始](#上传快速开始)
+- [分片上传](#分片上传)
+- [Token 管理](#token-管理)
+- [管理与公开接口](#管理与公开接口)
+- [错误与限制](#错误与限制)
+- [OpenAPI 规范](openapi.json)（上传 API 和 Token 管理）
+- [Python 上传脚本](../scripts/upload.py)（Python 3.10+，无需第三方库）
 
-| Method   | 路径（前缀 `/api/admin`）                  | 内容                                                                                                                                   |
-| -------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| GET      | `/settings`                                | 身份、大小限制、公开域名                                                                                                               |
-| GET      | `/files`                                   | `folder_id`, `view=files/recent/markdown/trash`, `search`, `page`, `limit`（1–100）, `sort=name/size/updated_at`, `direction=asc/desc` |
-| POST     | `/files/upload?name=文件名&folder_id=UUID` | 原始二进制 Body，`X-File-Size` 是必需整数；绑定有限长度流，实际大小必须匹配                                                            |
-| GET      | `/files/:id`                               | 元数据                                                                                                                                 |
-| PATCH    | `/files/:id`                               | `{name?,folder_id?:UUID                                                                                                                | null}`         |
-| DELETE   | `/files/:id`                               | 软删除并撤销所有公开访问                                                                                                               |
-| POST     | `/files/:id/restore`                       | 恢复私人文件                                                                                                                           |
-| DELETE   | `/files/:id/permanent`                     | 仅已软删除文件；永久删除元数据及重试清理 R2                                                                                            |
-| GET/HEAD | `/files/:id/download`                      | 文件流，`preview=1` 使用安全内联；支持 Range                                                                                           |
-| GET      | `/files/:id/content`                       | 有大小上限的文本与版本                                                                                                                 |
-| GET/POST | `/folders`                                 | 查询当前父目录，或创建 `{name,parent_id:UUID                                                                                           | null}`         |
-| GET      | `/folders/:id`                             | 目录元数据                                                                                                                             |
-| PATCH    | `/folders/:id`                             | `{name?,parent_id?:UUID                                                                                                                | null}`，防循环 |
-| DELETE   | `/folders/:id`                             | 仅空目录（含回收站内容检查）                                                                                                           |
-| POST     | `/folders/:id/restore`                     | 父目录存活且名称无冲突才能恢复                                                                                                         |
-| DELETE   | `/folders/:id/permanent`                   | 永久删除空回收站目录                                                                                                                   |
+## 认证与响应
 
-文件列表数据 `{ files, folders, total, page, limit }`，按文件总数分页。近期与 Markdown 视图为全局索引查询；名称搜索对 `%`/`_` 做转义。目录选择器和管理列表默认最多 100 条。
+| 接口           | 认证                                                 | 写请求要求                                                                                     |
+| -------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `/api/v1/*`    | `Authorization: Bearer rcu_…`                        | 不需要 Cookie、验证码或 X-Drive-Request；脚本可不发送 Origin；若发送，必须是站点或可信反代来源 |
+| `/api/admin/*` | 网页管理员会话；Access 模式使用经过验证的 Access JWT | 必须携带允许的 Origin 和 `X-Drive-Request: 1`                                                  |
+| `/api/auth/*`  | 登录/首次绑定流程                                    | 允许的 Origin 和 `X-Drive-Request: 1`                                                          |
+| 公开接口       | 按发布状态、分享权限和密码校验                       | 上传 Token 不作为公开内容授权                                                                  |
 
-## 分享
+上传 Token 不授予列出网盘、下载、删除已完成文件、创建分享、公开图片或管理 Token 的权限。它只能上传、查询和取消自己的上传任务，并查询自己的已完成文件元数据。网页会话与上传 Token 不可互换，跨站浏览器调用未开放 CORS。不要把 Token 放入 URL、公开网页或 Git 仓库。
 
-| Method   | 路径                                | 内容                                                     |
-| -------- | ----------------------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
-| GET      | `/api/admin/shares`                 | 最近 100 条，含状态、保护标志、计数，无密码哈希/明文令牌 |
-| POST     | `/api/admin/shares`                 | `{file_id,password?,expires_at:number                    | null,allow_download:boolean}`，创建后一次性返回 `id,url` |
-| PATCH    | `/api/admin/shares/:id`             | `{enabled?,allow_download?,expires_at?,password?:string  | null}`；null 移除密码                                    |
-| DELETE   | `/api/admin/shares/:id`             | 撤销                                                     |
-| GET      | `/s/:token`                         | 访客页面；密码验证前不嵌入文件元数据                     |
-| GET      | `/api/public/share/:token`          | 已授权元数据，计页面查看次数                             |
-| POST     | `/api/public/share/:token/unlock`   | `{password}`；受频率限制，HttpOnly 会话 Cookie           |
-| GET      | `/api/public/share/:token/text`     | 安全文本预览                                             |
-| GET/HEAD | `/api/public/share/:token/preview`  | 可预览类型的受控响应                                     |
-| GET/HEAD | `/api/public/share/:token/download` | 服务端重新校验链接、密码、状态、有效期和下载权限         |
+成功响应除文件流外统一为 `{"data": ...}`。新建通常返回 201；查询、分片写入和取消返回 200。失败响应：
 
-无效 token 404，失效/撤销 410，密码未验证 401，禁止下载 403；不返回私有对象 Key。密码 Cookie 每个分享独立，签名绑定分享 ID 与当前密码哈希，最长 1 小时，生产 Secure。
+```json
+{
+  "error": { "code": 401, "message": "上传 Token 无效、已到期或已撤销", "request_id": "请求 UUID" }
+}
+```
 
-## Markdown
+响应带 X-Request-Id，API 响应禁止共享缓存。ID 为 UUID，时间为 Unix 毫秒，大小为字节。JSON 使用 Content-Type: application/json；文件和分片使用 application/octet-stream 和原始二进制 Body，**不是 multipart/form-data**。
 
-| Method   | 路径                                                | 内容                                                                                          |
-| -------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| GET      | `/api/admin/markdown`                               | 最近 100 个文档及发布状态                                                                     |
-| POST     | `/api/admin/markdown`                               | `{name,folder_id?,content?}`，文件名 .md/.markdown                                            |
-| GET      | `/api/admin/markdown/:id`                           | `{file,content,page}`，id 是文件 ID                                                           |
-| PUT      | `/api/admin/markdown/:id`                           | `{content,version}`；乐观并发冲突 409                                                         |
-| POST     | `/api/admin/markdown/:id/attachments?name=...`      | 图片原始 Body，`X-File-Size`；返回 `{id,reference:attachment:UUID}`                           |
-| GET      | `/api/admin/markdown/:id/attachments/:attachmentId` | 私人图片预览，验证归属                                                                        |
-| POST     | `/api/admin/markdown/:id/publish`                   | `{title,slug,description,allow_source,allow_index,version}`；创建独立快照；版本不匹配返回 409 |
-| POST     | `/api/admin/markdown/:id/unpublish`                 | 取消发布，原始文件保留                                                                        |
-| GET/HEAD | `/p/:slug` 或 md 主机 `/:slug`                      | Worker 安全 SSR 正文                                                                          |
-| GET/HEAD | `/api/public/pages/:slug/source`                    | 只返回已发布快照，需开启允许源文件下载                                                        |
-| GET/HEAD | `/api/public/pages/:slug/attachments/:id`           | 验证发布状态、文件存活、实际引用和附件归属                                                    |
+## 上传快速开始
 
-正文图片示例 `![示例](attachment:UUID)`。远程图片仅接受 HTTPS，直接由读者浏览器请求。其他本地路径、私人 API URL、data URL 不会作为图片渲染；不提供任意 URL 代理。
+1. 登录网站，打开 **设置 → 上传 API → 创建 Token**。
+2. 填写名称与有效期，保存仅显示一次的 Token。
+3. 将 Token 放入环境变量 RCLOUD_TOKEN，上传后在网盘查看文件。
 
-响应常用状态：201 新建，400 无效参数，401 未登录/密码，403 权限或来源失败，404 不存在，409 名称/Slug/版本冲突，410 分享失效，413 超限，415 不支持预览，416 Range 不可满足，429 请求限流，503 缺少必要认证或会话配置。
+### Python：普通文件、大文件和空文件
 
-RCloud 新接口：POST `/api/admin/uploads` 初始化分片上传并预留全站 50GB 配额；PUT `/api/admin/uploads/:id/parts/:part` 上传固定 16MiB 分片（最后一片按剩余长度）；POST `.../:id/complete` 由服务端保存的分片列表完成上传；DELETE `.../:id` 取消任务。DELETE `/api/admin/trash` 清空全部回收站。分享创建响应包含 directUrl，GET/HEAD `/d/:token` 直接下载并遵守分享有效期、密码、下载许可及撤销。
+Bash（隐藏输入，不把 Token 字面值写入命令历史）：
 
-图床接口：POST `/api/admin/images/folder` 获取 Image-hosting 目录；通过已有分片上传接口上传到该目录；POST `/api/admin/images`（file_id）计算服务端 MD5 并公开图片；GET `/api/admin/images?page=1` 分页列表；DELETE `/api/admin/images/:name` 撤销直链；GET/HEAD `/i/:name` 公开内联图片，支持 Range。MD5 用于文件名，另存 SHA-256 防止哈希碰撞覆盖。
+```bash
+read -rsp 'RCloud Token: ' RCLOUD_TOKEN; echo
+export RCLOUD_TOKEN
+python3 scripts/upload.py ./backup.zip --url https://s.irin.im
+unset RCLOUD_TOKEN
+```
 
-新建 Markdown 文档统一写入根目录 `/Markdown`，复用同名现有文件夹。设置接口返回 storageUsedBytes、storageLimitBytes、storageAvailableBytes；maxUploadBytes 为 null。容量直到 R2 对象实际删除才释放，清空回收站和旧版本清理由定时任务完成。
+PowerShell 7：
+
+```powershell
+$env:RCLOUD_TOKEN = Read-Host 'RCloud Token' -MaskInput
+python scripts/upload.py 'C:\Backups\backup.zip' --url https://s.irin.im
+Remove-Item Env:RCLOUD_TOKEN
+```
+
+可选 `--folder UUID` 指定已有文件夹，默认根目录。脚本只缓存一个分片，显示进度，对分片网络错误、429 和 5xx 最多尝试 3 次；失败或中断时尝试取消任务。上传期间不要修改源文件。脚本不会自动续传上次进程的任务，也不会自动创建公开链接。
+
+### cURL：32MiB 以内的文件
+
+`POST /api/v1/files?name=URL编码文件名&folder_id=可选UUID`
+
+| 字段        | 位置     | 要求                                       |
+| ----------- | -------- | ------------------------------------------ |
+| name        | query    | 必填，1–180 字符，不含路径分隔符或控制字符 |
+| folder_id   | query    | 可选，已有且未删除目录 UUID；省略为根目录  |
+| X-File-Size | header   | 必填，精确字节数，允许 0                   |
+| body        | 请求正文 | 原始文件字节，必须与声明大小一致           |
+
+Bash 示例，支持中文和空格文件名：
+
+```bash
+FILE='./示例文件.txt'
+SIZE=$(wc -c < "$FILE" | tr -d '[:space:]')
+NAME=$(python3 -c 'import os,sys,urllib.parse; print(urllib.parse.quote(os.path.basename(sys.argv[1]), safe=""))' "$FILE")
+curl --fail-with-body --request POST \
+  "https://s.irin.im/api/v1/files?name=$NAME" \
+  --header "Authorization: Bearer $RCLOUD_TOKEN" \
+  --header 'Content-Type: application/octet-stream' \
+  --header "X-File-Size: $SIZE" \
+  --data-binary "@$FILE"
+```
+
+成功响应示意：
+
+```json
+{
+  "data": {
+    "id": "5b691acf-6c30-4c9d-92b0-0d44f34931a1",
+    "name": "示例文件.txt",
+    "size": 12,
+    "mime": "text/plain",
+    "folder_id": null,
+    "status": "ready",
+    "created_at": 1791936000000,
+    "updated_at": 1791936000000
+  }
+}
+```
+
+文件默认私有，不返回公开 URL 或 R2 对象 Key。需要公开时在网盘创建分享、直链或使用图床。重试整个直接上传会创建另一份文件，接口没有幂等键，响应不明确时先在网盘确认。
+
+32MiB 仅为直接上传这一请求方式的限制；大文件使用分片方式，无应用层单文件上限，但不能超过剩余全站容量。
+
+## 分片上传
+
+### 1. 创建任务
+
+`POST /api/v1/uploads`
+
+```bash
+curl --fail-with-body 'https://s.irin.im/api/v1/uploads' \
+  -H "Authorization: Bearer $RCLOUD_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"name":"backup.zip","size":20000000,"folder_id":null}'
+```
+
+name 与直接上传规则相同；size 为正整数且不超过 JavaScript 安全整数；folder_id 可省略或为 null。空文件使用直接上传。
+
+```json
+{
+  "data": {
+    "id": "89eb107c-b74b-4bb2-bfe1-3b14049a5f87",
+    "fileId": "5b691acf-6c30-4c9d-92b0-0d44f34931a1",
+    "partSize": 16777216
+  }
+}
+```
+
+id 是任务 ID，fileId 是最终文件 ID，二者不同。初始化预留完整文件容量。任务自创建起有效 24 小时，分片写入不会延长有效期。
+
+### 2. 写入分片
+
+`PUT /api/v1/uploads/{id}/parts/{part}`
+
+编号从 1 开始。按 partSize（目前 16MiB）切分，最后一片为剩余长度。每片都发送精确的 X-File-Size，服务端还会验证实际 Body 长度。建议依次上传；同一片可以重试，同一任务不要并发写同一片或同时执行完成/取消。
+
+```bash
+curl --fail-with-body --request PUT \
+  "https://s.irin.im/api/v1/uploads/$UPLOAD_ID/parts/1" \
+  -H "Authorization: Bearer $RCLOUD_TOKEN" \
+  -H 'Content-Type: application/octet-stream' \
+  -H 'X-File-Size: 16777216' --data-binary @part-001.bin
+```
+
+返回 `{"data":{"partNumber":1}}`，无需保存 R2 ETag 或提交分片清单。
+
+### 3. 查询进度与续传
+
+`GET /api/v1/uploads/{id}`
+
+```json
+{
+  "data": {
+    "id": "89eb107c-b74b-4bb2-bfe1-3b14049a5f87",
+    "fileId": "5b691acf-6c30-4c9d-92b0-0d44f34931a1",
+    "size": 20000000,
+    "partSize": 16777216,
+    "expires_at": 1792022400000,
+    "parts": [{ "partNumber": 1, "size": 16777216 }]
+  }
+}
+```
+
+保留任务 ID 与原文件，可在任务有效期内用**原 Token**查询并上传缺失分片。客户端须保证续传源文件完全相同，接口不校验完整文件内容哈希。另一个 Token 无法接管原任务。
+
+### 4. 完成任务
+
+`POST /api/v1/uploads/{id}/complete`，不需要 Body：
+
+```bash
+curl --fail-with-body --request POST \
+  "https://s.irin.im/api/v1/uploads/$UPLOAD_ID/complete" \
+  -H "Authorization: Bearer $RCLOUD_TOKEN"
+```
+
+成功返回 201 与文件元数据，格式同直接上传；缺失分片返回 409。完成后任务被删除，查询任务返回 410。可用 `GET /api/v1/files/{fileId}` 查询自己的已完成文件元数据；尚未就绪、已删除或不属于当前 Token 的文件返回 404。
+
+如果完成响应丢失，先查询 fileId：200 表示完成；404 也可能代表仍在完成，再查询任务状态后判断，不要盲目重新创建任务。完成操作不保证并发幂等。
+
+### 5. 取消任务
+
+`DELETE /api/v1/uploads/{id}`，返回 `{"data":{"id":"任务UUID"}}`。
+
+只取消未完成任务，不删除已完成文件。重复取消或已完成/过期任务返回 410。Token 失效后管理员仍可取消；过期任务也由定时清理回收，容量释放可能晚于过期时间。
+
+## Token 管理
+
+以下接口仅接受管理员网页登录认证，上传 Token 无权调用。
+
+| Method | 路径                       | 请求/响应                                                              |
+| ------ | -------------------------- | ---------------------------------------------------------------------- |
+| GET    | /api/admin/api-tokens      | 最近 100 条；名称、前缀、创建/到期/最近使用/撤销时间，不含明文或哈希   |
+| POST   | /api/admin/api-tokens      | `{"name":"备份脚本","expires_in_days":30}`；201 返回记录与一次性 token |
+| DELETE | /api/admin/api-tokens/{id} | 撤销；返回 {id}；重复撤销已有记录仍成功                                |
+
+名称 1–80 字符；有效期 1–365 天，默认 30 天；最多同时 20 个有效 Token。数据库仅存 SHA-256 哈希。prefix 用于识别；last_used_at 最多每分钟更新一次，代表通过认证的调用，不代表上传成功。撤销/到期拒绝后续请求，已在执行的请求可能完成。无续期接口，需要创建新 Token。
+
+## 管理与公开接口
+
+### 文件与目录（前缀 /api/admin）
+
+| Method   | 路径                             | 参数/行为                                                                                                                |
+| -------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| GET      | /settings                        | 身份、认证模式、文本限制、存储容量与链接来源                                                                             |
+| GET      | /files                           | folder_id、view=files/recent/markdown/trash、search、page、limit（1–100）、sort=name/size/updated_at、direction=asc/desc |
+| POST     | /files/upload?name=…&folder_id=… | 原始 Body 与 X-File-Size，最多 32MiB，支持空文件                                                                         |
+| POST     | /uploads                         | 创建分片任务，参数同外部上传 API                                                                                         |
+| GET      | /uploads/{id}                    | 查询任务与已上传分片                                                                                                     |
+| PUT      | /uploads/{id}/parts/{part}       | 上传分片                                                                                                                 |
+| POST     | /uploads/{id}/complete           | 完成上传                                                                                                                 |
+| DELETE   | /uploads/{id}                    | 取消；管理员可操作所有上传任务                                                                                           |
+| GET      | /files/{id}                      | 就绪文件元数据                                                                                                           |
+| PATCH    | /files/{id}                      | {name?,folder_id?}；folder_id 可为 null                                                                                  |
+| DELETE   | /files/{id}                      | 移入回收站并停止公开访问                                                                                                 |
+| POST     | /files/{id}/restore              | 恢复私人文件，分享/发布保持撤销                                                                                          |
+| DELETE   | /files/{id}/permanent            | 永久删除回收站文件，清理 R2                                                                                              |
+| DELETE   | /trash                           | 清空回收站；前端须确认                                                                                                   |
+| GET/HEAD | /files/{id}/download             | 下载；preview=1 安全内联预览；支持 Range                                                                                 |
+| GET      | /files/{id}/content              | 有大小限制的文本与版本                                                                                                   |
+| GET      | /folders                         | parent_id 查询目录，省略为根目录                                                                                         |
+| POST     | /folders                         | {name,parent_id?}，省略或 null 为根目录                                                                                  |
+| GET      | /folders/{id}                    | 目录元数据                                                                                                               |
+| PATCH    | /folders/{id}                    | {name?,parent_id?}，防循环                                                                                               |
+| DELETE   | /folders/{id}                    | 仅空目录，回收站子项也算非空                                                                                             |
+| POST     | /folders/{id}/restore            | 父目录必须存活                                                                                                           |
+| DELETE   | /folders/{id}/permanent          | 永久删除空回收站目录                                                                                                     |
+
+列表响应 `{data:{files,folders,total,page,limit}}`，按文件总数分页。近期、Markdown 视图与文件名搜索是全局查询；搜索中的 %、\_ 视为普通字符。上传 Token 无列目录权限，文件夹 ID 可在已登录的目录 API 中查看。
+
+### 分享与直链
+
+| Method   | 路径                               | 参数/行为                                                                                             |
+| -------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| GET      | /api/admin/shares                  | 最近 100 条，无明文分享 Token、密码或哈希                                                             |
+| POST     | /api/admin/shares                  | {file_id,password?,expires_at?,allow_download?}；到期可为 null，默认允许下载；返回 {id,url,directUrl} |
+| PATCH    | /api/admin/shares/{id}             | {enabled?,allow_download?,expires_at?,password?}；password=null 移除密码                              |
+| DELETE   | /api/admin/shares/{id}             | 撤销                                                                                                  |
+| GET      | /s/{token}                         | 公开分享页                                                                                            |
+| GET/HEAD | /d/{token}                         | 直接下载，仍校验密码、下载许可、有效期和撤销                                                          |
+| GET      | /api/public/share/{token}          | 授权后元数据，计浏览次数                                                                              |
+| POST     | /api/public/share/{token}/unlock   | {password}，返回 HttpOnly 分享 Cookie                                                                 |
+| GET      | /api/public/share/{token}/text     | 安全文本预览                                                                                          |
+| GET/HEAD | /api/public/share/{token}/preview  | 可预览格式                                                                                            |
+| GET/HEAD | /api/public/share/{token}/download | 受控下载                                                                                              |
+
+分享明文 Token 只在创建时的 URL 中返回，不是上传 Token。默认链接来源为 s.irin.im。密码 Cookie 每个分享独立，最长一小时。无效链接 404，撤销/到期 410，未解锁 401，禁止下载 403。
+
+### 图床
+
+| Method   | 路径                     | 参数/行为                                                                 |
+| -------- | ------------------------ | ------------------------------------------------------------------------- |
+| POST     | /api/admin/images/folder | 获取或创建 Image-hosting，返回 {id}                                       |
+| POST     | /api/admin/images        | {file_id}，将已有图片按 MD5 命名并公开；返回 {name,file_id,url,duplicate} |
+| GET      | /api/admin/images?page=1 | 每页 40 条，响应 {data:[…],page}                                          |
+| DELETE   | /api/admin/images/{name} | 撤销直链                                                                  |
+| GET/HEAD | /i/{name}                | 公开内联图片，支持 Range                                                  |
+
+获取目录 → 管理员分片上传至目录 → 调用 /images 公开。支持 PNG/JPEG/GIF/WebP，通过文件头识别，另用 SHA-256 检查 MD5 命名冲突。保存到 Image-hosting，名称为 32位md5.ext，链接默认 s.irin.im。重复图片可能复用已有文件，应使用返回的 file_id；重复源文件不会自动删除。
+
+### Markdown
+
+| Method   | 路径                                                | 参数/行为                                                                                  |
+| -------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| GET      | /api/admin/markdown                                 | 最近 100 个文档与发布状态                                                                  |
+| POST     | /api/admin/markdown                                 | {name,content?}，.md/.markdown；统一保存 /Markdown，旧 folder_id 参数不改变目的地          |
+| GET      | /api/admin/markdown/{id}                            | {file,content,page}，id 为文件 ID                                                          |
+| PUT      | /api/admin/markdown/{id}                            | {content,version}，版本冲突 409                                                            |
+| POST     | /api/admin/markdown/{id}/attachments?name=…         | 图片原始 Body 与 X-File-Size；返回 {id,reference}                                          |
+| GET      | /api/admin/markdown/{id}/attachments/{attachmentId} | 私人图片，校验归属                                                                         |
+| POST     | /api/admin/markdown/{id}/publish                    | {title,slug,version,description?,allow_source?,allow_index?}；创建快照，两项权限默认 false |
+| POST     | /api/admin/markdown/{id}/unpublish                  | 取消发布，保留原文                                                                         |
+| GET/HEAD | /p/{slug}                                           | 公开阅读页                                                                                 |
+| GET/HEAD | /api/public/pages/{slug}/source                     | 开启源文件下载时返回发布快照                                                               |
+| GET/HEAD | /api/public/pages/{slug}/attachments/{id}           | 校验发布、引用与归属                                                                       |
+
+私有附件格式 `![图片](attachment:UUID)`，外部图片仅允许 HTTPS。Slug 1–100 字符，仅小写字母、数字和连字符，不能是系统保留名。Markdown/在线文本上限 1MiB。
+
+### 网页认证
+
+站内模式在 /login 使用密码＋验证器验证码登录；POST /api/auth/login 请求 {password,code}，设置 24 小时 HttpOnly 会话，code 也可使用一次性恢复码。POST /api/auth/logout 撤销会话。首次绑定使用 /api/auth/setup/start 与 /api/auth/setup/finish，详见 [部署文档](deployment.md)。脚本请使用 Token，避免保存账号密码和 TOTP 密钥。
+
+## 错误与限制
+
+| 状态码  | 含义与处理                                               |
+| ------- | -------------------------------------------------------- |
+| 400     | 参数、大小或分片编号错误                                 |
+| 401     | 未认证或 Token 无效/到期/撤销                            |
+| 403     | 来源或权限校验失败                                       |
+| 404     | 接口/文件/目录不存在；其他 Token 的文件/任务也返回此状态 |
+| 409     | 状态/版本冲突、缺失分片、Token 数量上限                  |
+| 410     | 上传任务已完成/取消/过期/不存在，或分享失效              |
+| 413     | 容量不足、直接上传超过 32MiB、文本/JSON 超限             |
+| 415     | 不支持的预览或图片格式                                   |
+| 416     | Range 无法满足                                           |
+| 429     | 限流，退避重试，不保证返回 Retry-After                   |
+| 500/503 | 服务或配置错误；记录 request_id，避免无限重试非幂等请求  |
+
+- 全站 50GiB（53,687,091,200 字节），网页/API 共用，包含回收站、附件、快照和上传预留。
+- 每 Token 每分钟 240 请求；上传 API 同一来源 IP 每分钟 600 请求，包含失败认证。使用固定分钟窗口；管理和公开接口另有限流。
+- 反代、Cloudflare 套餐与客户端可能有单请求大小/超时限制，建议大文件分片。反代需转发 Authorization、Content-Type、X-File-Size，禁止缓存 API 响应。
+- 任务 24 小时后失效，定时任务分批清理，容量到实际删除对象才释放。撤销 Token 不等于取消任务。
+- 上传不覆盖同名文件。直接上传和初始化不是幂等操作，不应自动重试整个 POST；分片 PUT 可重试。
+- 文件类型判断不代表病毒扫描或完整解码；公开图片和分享是独立显式操作。
+- 部署新增功能先应用 0007_api_tokens.sql，再发布 Worker；无需新增 Cloudflare Secret。现有网页认证和上传继续可用。

@@ -101,3 +101,13 @@ pnpm check
 图床：登录后在「图床」上传 PNG、JPEG、GIF 或 WebP，按实际内容 MD5 命名并保存到 Image-hosting；返回 `/i/MD5.ext` 图片直链，可复制 Markdown，重复图片复用链接，撤销或移入回收站立即失效。
 
 界面模块划分和响应式验收见 [UI 架构](docs/ui-architecture.md)。
+
+## 上传 API
+
+在「设置 → 上传 API」创建仅上传 Token，可设有效期并随时撤销。脚本通过 Bearer Token 调用 `/api/v1`，支持直接上传、16MiB 分片、查询进度和取消任务；文件默认私有，与网盘共用 50GiB 容量。
+
+- [API 文档与 cURL 示例](docs/api.md)
+- [OpenAPI 3.1 规范](docs/openapi.json)
+- [Python 上传脚本](scripts/upload.py)：设置环境变量 `RCLOUD_TOKEN` 后执行 `python scripts/upload.py ./backup.zip`。
+
+已有部署需先执行 `pnpm db:production` 应用 `0007_api_tokens.sql`，再部署。无需新增 Cloudflare Secret。

@@ -7,6 +7,8 @@ import { fileRoutes } from './files';
 import { imageRoutes, imagePage } from './images';
 import { siteAuthRoutes, loginPage, siteIdentity } from './site-auth';
 import { uploadRoutes } from './uploads';
+import { tokenRoutes, uploadTokenAuth } from './api-tokens';
+import { uploadApi } from './upload-api';
 import { markdownRoutes, publicPageRoutes, readPage, enforceJsonLimit } from './markdown';
 import { shareRoutes, publicShareRoutes, sharePage, directRoutes } from './shares';
 import { cleanup } from './storage';
@@ -39,6 +41,7 @@ app.use('*', async (c, next) => {
   }
 });
 app.use('/api/admin/*', adminAuth);
+app.use('/api/v1/*', uploadTokenAuth);
 app.use('/api/admin/*', async (c, next) => {
   await rateLimit(c.env, 'admin', c.get('email'), 240);
   await next();
@@ -53,6 +56,8 @@ app.get('/login', (c) =>
   c.env.AUTH_MODE === 'password_totp' ? loginPage(c) : c.redirect('/drive/'),
 );
 app.route('/api/admin', fileRoutes);
+app.route('/api/admin', tokenRoutes);
+app.route('/api/v1', uploadApi);
 app.route('/api/admin', imageRoutes);
 app.use('/i/*', async (c, next) => {
   await rateLimit(c.env, 'image', c.req.header('CF-Connecting-IP') || 'local', 240);

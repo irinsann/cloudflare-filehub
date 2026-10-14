@@ -3,7 +3,8 @@ import { Hono } from 'hono';
 import { drizzle } from 'drizzle-orm/d1';
 import { and, eq, isNull } from 'drizzle-orm';
 import { files as fileTable } from '../db/schema';
-import type { AppEnv, Env } from './env';
+import type { AppEnv, AppContext, Env } from './env';
+import { uploadOwnerStatements, uploadMetadata } from './upload-access';
 import { now, uuid, limit } from './env';
 import { fail } from './errors';
 import type { FileRecord, FolderRecord } from '../shared/types';
@@ -214,17 +215,23 @@ fileRoutes.delete('/folders/:id/permanent', async (c) => {
   if (!result.meta.changes) fail(409, '必须先将文件夹移入回收站');
   return c.json({ data: { id } });
 });
-fileRoutes.post('/files/upload', async (c) => {
+export async function uploadSingleFile(c: AppContext) {
+  const rawSize = c.req.header('X-File-Size');
+  const size = Number(rawSize);
+  if (rawSize === undefined || !Number.isSafeInteger(size) || size < 0)
+    fail(400, '必须提供有效文件大小');
+  if (size > 32 * 1024 * 1024) fail(413, '请使用分片上传');
   const name = filename.parse(c.req.query('name')),
     folder = c.req.query('folder_id') || null;
   await activeFolder(c.env, folder);
   const id = uuid(),
     key = await reserve(c.env);
-  await c.env.DB.prepare(
-    'INSERT INTO files(id,name,object_key,folder_id,mime,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',
-  )
-    .bind(id, name, key, folder, 'application/octet-stream', now(), now())
-    .run();
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      'INSERT INTO files(id,name,object_key,folder_id,mime,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',
+    ).bind(id, name, key, folder, 'application/octet-stream', now(), now()),
+    ...uploadOwnerStatements(c, id),
+  ]);
   const object = await uploadStream(c.env, c.req.raw, key, name);
   await c.env.DB.batch([
     c.env.DB.prepare("UPDATE files SET size=?,mime=?,etag=?,status='ready' WHERE id=?").bind(
@@ -236,8 +243,9 @@ fileRoutes.post('/files/upload', async (c) => {
     releaseStatement(c.env, key),
     logStatement(c.env, 'file.upload', id),
   ]);
-  return c.json({ data: await getFile(c.env, id) }, 201);
-});
+  return c.json({ data: uploadMetadata(c, await getFile(c.env, id)) }, 201);
+}
+fileRoutes.post('/files/upload', uploadSingleFile);
 fileRoutes.get('/files/:id', async (c) =>
   c.json({ data: await getFile(c.env, c.req.param('id')) }),
 );

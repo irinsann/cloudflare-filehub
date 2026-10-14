@@ -1,0 +1,855 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "RCloud Upload API",
+    "version": "1.0.0",
+    "description": "上传专用Token，文件私有；全站50GiB，直接上传32MiB，分片16MiB。每Token每分钟240请求，IP每分钟600请求。其他管理/公开API见docs/api.md。"
+  },
+  "servers": [
+    {
+      "url": "https://s.irin.im"
+    },
+    {
+      "url": "https://233334.xyz"
+    }
+  ],
+  "security": [
+    {
+      "UploadToken": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "上传"
+    },
+    {
+      "name": "Token 管理"
+    }
+  ],
+  "paths": {
+    "/api/v1/files": {
+      "post": {
+        "operationId": "uploadFile",
+        "summary": "直接上传（含空文件，最多32MiB）",
+        "tags": ["上传"],
+        "responses": {
+          "201": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/File"
+                    }
+                  },
+                  "required": ["data"]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 参数或大小错误；401 认证失败；403 来源错误；404 不存在或无权访问；409 冲突；410 任务失效；413 超限；429 限流；500/503 服务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
+            },
+            "description": "不含路径分隔符或控制字符"
+          },
+          {
+            "name": "folder_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-File-Size",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "此请求 Body 的精确字节数"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "description": "原始二进制，非multipart/form-data。非幂等；默认根目录，文件私有。"
+      }
+    },
+    "/api/v1/files/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getUploadedFile",
+        "summary": "查询当前Token的已完成文件元数据",
+        "tags": ["上传"],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/File"
+                    }
+                  },
+                  "required": ["data"]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 参数或大小错误；401 认证失败；403 来源错误；404 不存在或无权访问；409 冲突；410 任务失效；413 超限；429 限流；500/503 服务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "pending、已删除或其他Token的文件返回404。不返回内容或下载地址。"
+      }
+    },
+    "/api/v1/uploads": {
+      "post": {
+        "operationId": "createUpload",
+        "summary": "预留容量并创建24小时有效的分片任务",
+        "tags": ["上传"],
+        "responses": {
+          "201": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Upload"
+                    }
+                  },
+                  "required": ["data"]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 参数或大小错误；401 认证失败；403 来源错误；404 不存在或无权访问；409 冲突；410 任务失效；413 超限；429 限流；500/503 服务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "folder_id": {
+                    "type": ["string", "null"],
+                    "format": "uuid",
+                    "default": null
+                  }
+                },
+                "required": ["name", "size"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getUpload",
+        "summary": "查询原Token创建的任务及分片进度",
+        "tags": ["上传"],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UploadStatus"
+                    }
+                  },
+                  "required": ["data"]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 参数或大小错误；401 认证失败；403 来源错误；404 不存在或无权访问；409 冲突；410 任务失效；413 超限；429 限流；500/503 服务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "cancelUpload",
+        "summary": "取消未完成任务",
+        "tags": ["上传"],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": ["id"]
+                    }
+                  },
+                  "required": ["data"]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 参数或大小错误；401 认证失败；403 来源错误；404 不存在或无权访问；409 冲突；410 任务失效；413 超限；429 限流；500/503 服务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "不删除已完成文件；已完成、取消、过期或不存在返回410。"
+      }
+    },
+    "/api/v1/uploads/{id}/parts/{part}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "part",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      ],
+      "put": {
+        "operationId": "uploadPart",
+        "summary": "上传或重试一个分片",
+        "tags": ["上传"],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "partNumber": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": ["partNumber"]
+                    }
+                  },
+                  "required": ["data"]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 参数或大小错误；401 认证失败；403 来源错误；404 不存在或无权访问；409 冲突；410 任务失效；413 超限；429 限流；500/503 服务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-File-Size",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "此请求 Body 的精确字节数"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "description": "固定16MiB，最后一片为剩余长度。不要并发写同一片。"
+      }
+    },
+    "/api/v1/uploads/{id}/complete": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "completeUpload",
+        "summary": "完成上传",
+        "tags": ["上传"],
+        "responses": {
+          "201": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/File"
+                    }
+                  },
+                  "required": ["data"]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 参数或大小错误；401 认证失败；403 来源错误；404 不存在或无权访问；409 冲突；410 任务失效；413 超限；429 限流；500/503 服务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "无Body；缺片409；完成删除任务，之后查询任务410；可查询fileId核对完成结果。不保证并发幂等。"
+      }
+    },
+    "/api/admin/api-tokens": {
+      "get": {
+        "operationId": "listApiTokens",
+        "summary": "最近100条Token记录，不含明文或哈希",
+        "tags": ["Token 管理"],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Token"
+                      }
+                    }
+                  },
+                  "required": ["data"]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 参数或大小错误；401 认证失败；403 来源错误；404 不存在或无权访问；409 冲突；410 任务失效；413 超限；429 限流；500/503 服务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AdminSession": []
+          },
+          {
+            "AccessJWT": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createApiToken",
+        "summary": "创建仅上传Token，明文仅返回一次",
+        "tags": ["Token 管理"],
+        "responses": {
+          "201": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Token"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "token": {
+                              "type": "string",
+                              "pattern": "^rcu_[a-f0-9]{64}$"
+                            }
+                          },
+                          "required": ["token"]
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["data"]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 参数或大小错误；401 认证失败；403 来源错误；404 不存在或无权访问；409 冲突；410 任务失效；413 超限；429 限流；500/503 服务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AdminSession": []
+          },
+          {
+            "AccessJWT": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            },
+            "description": "管理站点或可信反代Origin"
+          },
+          {
+            "name": "X-Drive-Request",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "expires_in_days": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 365,
+                    "default": 30
+                  }
+                },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "description": "最多20个有效Token；默认有效30天。仅管理员网页会话可创建。"
+      }
+    },
+    "/api/admin/api-tokens/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "revokeApiToken",
+        "summary": "撤销Token，阻止后续请求",
+        "tags": ["Token 管理"],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": ["id"]
+                    }
+                  },
+                  "required": ["data"]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 参数或大小错误；401 认证失败；403 来源错误；404 不存在或无权访问；409 冲突；410 任务失效；413 超限；429 限流；500/503 服务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AdminSession": []
+          },
+          {
+            "AccessJWT": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            },
+            "description": "管理站点或可信反代Origin"
+          },
+          {
+            "name": "X-Drive-Request",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            }
+          }
+        ],
+        "description": "不终止在执行的请求，也不取消任务；重复撤销已有记录仍成功。"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "UploadToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "rcu_<64 lowercase hex>",
+        "description": "在设置→上传API创建；只用于/api/v1。"
+      },
+      "AdminSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-rcloud-session"
+      },
+      "AccessJWT": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Cf-Access-Jwt-Assertion",
+        "description": "只用于Access认证模式"
+      }
+    },
+    "schemas": {
+      "File": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mime": {
+            "type": "string"
+          },
+          "folder_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ready"]
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "size",
+          "mime",
+          "folder_id",
+          "status",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "Upload": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fileId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partSize": {
+            "type": "integer",
+            "const": 16777216
+          }
+        },
+        "required": ["id", "fileId", "partSize"]
+      },
+      "UploadStatus": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Upload"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "size": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "expires_at": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "parts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "partNumber": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": ["partNumber", "size"]
+                }
+              }
+            },
+            "required": ["size", "expires_at", "parts"]
+          }
+        ]
+      },
+      "Token": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expires_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_used_at": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "revoked_at": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "created_at",
+          "expires_at",
+          "last_used_at",
+          "revoked_at"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "integer"
+              },
+              "message": {
+                "type": "string"
+              },
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": ["code", "message", "request_id"]
+          }
+        },
+        "required": ["error"]
+      }
+    }
+  }
+}

@@ -1,7 +1,8 @@
 import { deleteObject } from './quota';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { AppEnv, Env } from './env';
+import type { AppEnv, AppContext } from './env';
+import { requireUploadOwner, uploadOwnerStatements, uploadMetadata } from './upload-access';
 import { now, uuid } from './env';
 import { filename, identifier } from '../shared/validation';
 import { fail } from './errors';
@@ -17,11 +18,12 @@ interface Session {
   size: number;
   expires_at: number;
 }
-async function session(env: Env, id: string) {
+async function session(c: AppContext, id: string) {
   identifier.parse(id);
-  const row = await env.DB.prepare('SELECT * FROM upload_sessions WHERE id=?')
+  const row = await c.env.DB.prepare('SELECT * FROM upload_sessions WHERE id=?')
     .bind(id)
     .first<Session>();
+  if (row && c.get('apiTokenId')) await requireUploadOwner(c, row.file_id);
   if (!row || row.expires_at <= now()) fail(410, '上传任务已过期，请重新上传');
   return row;
 }
@@ -30,10 +32,10 @@ uploadRoutes.post('/uploads', async (c) => {
   const input = z
     .object({
       name: filename,
-      size: z.number().int().min(1),
+      size: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
       folder_id: identifier.nullable().default(null),
     })
-    .parse(await c.req.json());
+    .parse(await c.req.json().catch(() => fail(400, 'JSON 格式无效')));
   await activeFolder(c.env, input.folder_id);
   const id = uuid(),
     fileId = uuid(),
@@ -47,6 +49,7 @@ uploadRoutes.post('/uploads', async (c) => {
       c.env.DB.prepare(
         'INSERT INTO upload_sessions(id,file_id,upload_id,object_key,size,expires_at) VALUES(?,?,?,?,?,?)',
       ).bind(id, fileId, mpu.uploadId, key, input.size, now() + 86400000),
+      ...uploadOwnerStatements(c, fileId),
     ]);
   } catch (e) {
     await mpu.abort();
@@ -54,8 +57,26 @@ uploadRoutes.post('/uploads', async (c) => {
   }
   return c.json({ data: { id, fileId, partSize: PART_SIZE } }, 201);
 });
+uploadRoutes.get('/uploads/:id', async (c) => {
+  const s = await session(c, c.req.param('id'));
+  const parts = await c.env.DB.prepare(
+    'SELECT part_number AS partNumber,size FROM upload_parts WHERE session_id=? ORDER BY part_number',
+  )
+    .bind(s.id)
+    .all();
+  return c.json({
+    data: {
+      id: s.id,
+      fileId: s.file_id,
+      size: s.size,
+      partSize: PART_SIZE,
+      expires_at: s.expires_at,
+      parts: parts.results,
+    },
+  });
+});
 uploadRoutes.put('/uploads/:id/parts/:part', async (c) => {
-  const s = await session(c.env, c.req.param('id'));
+  const s = await session(c, c.req.param('id'));
   const part = Number(c.req.param('part'));
   const count = Math.ceil(s.size / PART_SIZE);
   if (!Number.isInteger(part) || part < 1 || part > count) fail(400, '分片编号无效');
@@ -84,7 +105,7 @@ uploadRoutes.put('/uploads/:id/parts/:part', async (c) => {
   return c.json({ data: { partNumber: part } });
 });
 uploadRoutes.post('/uploads/:id/complete', async (c) => {
-  const s = await session(c.env, c.req.param('id'));
+  const s = await session(c, c.req.param('id'));
   const file = await c.env.DB.prepare('SELECT name,folder_id FROM files WHERE id=?')
     .bind(s.file_id)
     .first<{ name: string; folder_id: string | null }>();
@@ -122,10 +143,10 @@ uploadRoutes.post('/uploads/:id/complete', async (c) => {
     releaseStatement(c.env, s.object_key),
     logStatement(c.env, 'file.upload', s.file_id),
   ]);
-  return c.json({ data: await getFile(c.env, s.file_id) }, 201);
+  return c.json({ data: uploadMetadata(c, await getFile(c.env, s.file_id)) }, 201);
 });
 uploadRoutes.delete('/uploads/:id', async (c) => {
-  const s = await session(c.env, c.req.param('id'));
+  const s = await session(c, c.req.param('id'));
   try {
     await c.env.BUCKET.resumeMultipartUpload(s.object_key, s.upload_id).abort();
   } catch {

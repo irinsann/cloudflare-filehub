@@ -3,6 +3,7 @@ import { ExternalLink, FileText, Link2, ShieldCheck } from 'lucide-react';
 import { api, send, dateLabel } from '../lib/api';
 import { StorageMeter } from '../components/workspace/WorkspaceShell';
 import { Button } from '../components/ui/button';
+import { ApiTokens } from '../components/ApiTokens';
 import type { Settings, ShareRecord } from '../../shared/types';
 interface DocumentRow {
   id: string;
@@ -101,6 +102,7 @@ export function Management({
           <StorageMeter settings={settings} />
           <p>文本编辑上限：{settings ? `${settings.maxTextBytes / 1048576} MB` : '—'}</p>
         </section>
+        <ApiTokens notify={notify} />
       </div>
     );
   return (
