@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Upload, Copy, Link2, ImagePlus } from 'lucide-react';
 import { api, send, copy, fileUrl, sizeLabel } from '../lib/api';
 import { uploadFile } from '../lib/upload';
-import { Empty } from './Management';
+import { EmptyState } from '../components/EmptyState';
 import { Button } from '../components/ui/button';
 import type { FileRecord, Settings } from '../../shared/types';
 interface Row {
@@ -191,16 +191,22 @@ export function ImageHosting({
           ))}
         </div>
       )}
-      {!loading && !rows.length && !error && <Empty label="暂无图片" />}
-      <div className="image-pagination">
-        <Button variant="outline" disabled={page === 1} onClick={() => setPage((n) => n - 1)}>
-          上一页
-        </Button>
-        <span>{page}</span>
-        <Button variant="outline" disabled={rows.length < 40} onClick={() => setPage((n) => n + 1)}>
-          下一页
-        </Button>
-      </div>
+      {!loading && !rows.length && !error && <EmptyState label="暂无图片" />}
+      {(page > 1 || rows.length >= 40) && (
+        <div className="image-pagination">
+          <Button variant="outline" disabled={page === 1} onClick={() => setPage((n) => n - 1)}>
+            上一页
+          </Button>
+          <span>{page}</span>
+          <Button
+            variant="outline"
+            disabled={rows.length < 40}
+            onClick={() => setPage((n) => n + 1)}
+          >
+            下一页
+          </Button>
+        </div>
+      )}
     </section>
   );
 }

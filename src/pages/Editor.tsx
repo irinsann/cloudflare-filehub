@@ -57,10 +57,10 @@ export default function Editor({
   const makeLink = (page: PageRecord) =>
     `${settings?.markdownOrigin || location.origin}/p/${page.slug}`;
   useEffect(() => {
-    let live = true;
-    void api<DocumentData>(`/markdown/${id}`)
+    const controller = new AbortController();
+    void api<DocumentData>(`/markdown/${id}`, { signal: controller.signal })
       .then((d) => {
-        if (!live) return;
+        if (controller.signal.aborted) return;
         setData(d);
         setContent(d.content);
         setSaved(d.content);
@@ -81,10 +81,12 @@ export default function Editor({
           /* Cloud document remains available if local draft storage is unavailable. */
         }
       })
-      .catch((e) => setError(e.message));
-    return () => {
-      live = false;
-    };
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) {
+          setError(cause instanceof Error ? cause.message : '读取文档失败');
+        }
+      });
+    return () => controller.abort();
   }, [id]);
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {

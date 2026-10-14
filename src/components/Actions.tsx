@@ -41,12 +41,29 @@ export function Actions({
     [link, setLink] = useState('');
   const [destination, setDestination] = useState<string | null>(null),
     [folders, setFolders] = useState<FolderRecord[]>([]),
+    [foldersLoading, setFoldersLoading] = useState(action.type === 'move'),
     [path, setPath] = useState<FolderRecord[]>([]);
   useEffect(() => {
-    if (action.type === 'move')
-      void api<FolderRecord[]>(`/folders${destination ? `?parent_id=${destination}` : ''}`)
-        .then(setFolders)
-        .catch((e) => setError(e.message));
+    if (action.type !== 'move') return;
+    const controller = new AbortController();
+    setFolders([]);
+    setFoldersLoading(true);
+    setError('');
+    void api<FolderRecord[]>(`/folders${destination ? `?parent_id=${destination}` : ''}`, {
+      signal: controller.signal,
+    })
+      .then((next) => {
+        if (!controller.signal.aborted) setFolders(next);
+      })
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) {
+          setError(cause instanceof Error ? cause.message : '读取文件夹失败');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setFoldersLoading(false);
+      });
+    return () => controller.abort();
   }, [action.type, destination]);
   const titles = {
     folder: '新建文件夹',
@@ -167,7 +184,13 @@ export function Actions({
                   📁 {f.name} →
                 </button>
               ))}
-              {!folders.length && <p className="muted">当前文件夹没有子目录</p>}
+              {foldersLoading ? (
+                <p className="muted" role="status">
+                  加载中…
+                </p>
+              ) : !folders.length && !error ? (
+                <p className="muted">当前文件夹没有子目录</p>
+              ) : null}
             </div>
             <p className="muted">目标：{path.at(-1)?.name ?? '根目录'}</p>
           </>

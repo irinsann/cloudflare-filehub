@@ -1,12 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, Upload, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
-import type { FileRecord, FolderRecord, Settings } from '../shared/types';
-import { api, send } from './lib/api';
+import type { FileRecord, FolderRecord } from '../shared/types';
+import { send } from './lib/api';
 import { Button } from './components/ui/button';
 import { Modal } from './components/ui/dialog';
 import { Actions, type Action } from './components/Actions';
 import { useUploads } from './hooks/useUploads';
 import { useFileBrowser } from './hooks/useFileBrowser';
+import { useTheme } from './hooks/useTheme';
+import { useSettings } from './hooks/useSettings';
 import { sections } from './lib/navigation';
 import { WorkspaceShell } from './components/workspace/WorkspaceShell';
 import { FilesPanel } from './components/workspace/FilesPanel';
@@ -18,20 +20,11 @@ const Editor = lazy(() => import('./pages/Editor')),
   Preview = lazy(() => import('./components/Preview'));
 export default function App() {
   const browser = useFileBrowser();
-  const {
-    view,
-    folder,
-    refresh,
-    reload,
-    navigate,
-    search,
-    searchFiles,
-    setError,
-    error,
-    selected,
-    setSelected,
-  } = browser;
-  const [settings, setSettings] = useState<Settings | null>(null);
+  const { view, folder, refresh, reload, navigate, search, searchFiles, selected, setSelected } =
+    browser;
+  const { settings, error: settingsError } = useSettings(refresh, view);
+  const { theme, toggleTheme } = useTheme();
+  const error = browser.error || settingsError;
   const [action, setAction] = useState<Action | null>(null),
     [menu, setMenu] = useState<{ file?: FileRecord; folder?: FolderRecord } | null>(null),
     [preview, setPreview] = useState<FileRecord | null>(null),
@@ -39,42 +32,15 @@ export default function App() {
     [toast, setToast] = useState(''),
     [bulkDelete, setBulkDelete] = useState(false),
     [bulkBusy, setBulkBusy] = useState(false);
-  const [theme, setTheme] = useState(() => {
-    try {
-      return (
-        localStorage.getItem('theme') ??
-        (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-      );
-    } catch {
-      return 'light';
-    }
-  });
   const fileInput = useRef<HTMLInputElement>(null),
     searchInput = useRef<HTMLInputElement>(null);
   const notify = useCallback((message: string) => setToast(message), []);
   const uploads = useUploads(settings, reload, notify);
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    try {
-      localStorage.setItem('theme', theme);
-    } catch {
-      /* Theme remains in memory. */
-    }
-  }, [theme]);
-  useEffect(() => {
     if (!toast) return;
     const timeout = setTimeout(() => setToast(''), 4500);
     return () => clearTimeout(timeout);
   }, [toast]);
-  useEffect(() => {
-    const controller = new AbortController();
-    void api<Settings>('/settings', { signal: controller.signal })
-      .then(setSettings)
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(e.message);
-      });
-    return () => controller.abort();
-  }, [refresh, view]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -88,7 +54,7 @@ export default function App() {
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, []);
+  }, [setSelected]);
   function openFile(f: FileRecord) {
     if (/\.(md|markdown)$/i.test(f.name)) setEditing(f.id);
     else setPreview(f);
@@ -156,7 +122,7 @@ export default function App() {
       navigate={navigate}
       settings={settings}
       theme={theme}
-      toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+      toggleTheme={toggleTheme}
       search={search}
       onSearch={searchFiles}
       searchInput={searchInput}
@@ -166,10 +132,7 @@ export default function App() {
       <div className="content">
         <div className="page-heading">
           <div>
-            <h1>
-              {heading}
-              <span className="heading-dot">.</span>
-            </h1>
+            <h1>{heading}</h1>
           </div>
           <div className="heading-actions">
             {view === 'trash' && (
@@ -208,16 +171,7 @@ export default function App() {
           <div className="error-banner" role="alert">
             <AlertCircle size={18} />
             <span>{error}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                reload();
-                void api<Settings>('/settings')
-                  .then(setSettings)
-                  .catch((e) => setError(e.message));
-              }}
-            >
+            <Button variant="ghost" size="sm" onClick={reload}>
               重试
             </Button>
           </div>
@@ -235,7 +189,6 @@ export default function App() {
         ) : (
           <FilesPanel
             browser={browser}
-            settings={settings}
             setAction={setAction}
             setMenu={setMenu}
             openFile={openFile}

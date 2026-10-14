@@ -10,7 +10,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 15px 24px;
+  padding: 12px 24px;
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
 }
@@ -23,7 +23,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
 }
 .editor-heading span {
@@ -36,14 +36,15 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 8px 22px;
+  padding: 6px 22px;
   border-bottom: 1px solid var(--line);
+  background: var(--bg);
   flex-shrink: 0;
 }
 .editor-tools-label {
   margin-left: auto;
-  font-size: 10px;
-  letter-spacing: 1px;
+  font: 10px var(--mono);
+  letter-spacing: 0.5px;
   color: var(--muted);
 }
 .mobile-preview-toggle {
@@ -66,14 +67,13 @@
   border-right: 1px solid var(--line);
 }
 .panel-label {
-  padding: 12px 24px;
+  padding: 10px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
-  background: var(--hover);
   border-bottom: 1px solid var(--line);
 }
 .panel-label span {
@@ -84,13 +84,12 @@
 .editor-source > .cm-theme-light {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 .cm-editor {
-  font:
-    14px/1.9 Consolas,
-    'Microsoft YaHei',
-    monospace;
+  font: 13px/1.9 var(--mono);
+  background: var(--surface) !important;
+  color: var(--fg) !important;
 }
 .cm-scroller {
   overflow: auto;
@@ -98,26 +97,30 @@
 .cm-content {
   padding: 16px 0 !important;
 }
+.cm-gutters {
+  border-color: var(--line) !important;
+  background: var(--bg) !important;
+  color: var(--muted) !important;
+}
 .editor-preview-content {
-  padding: 28px clamp(20px, 4vw, 60px);
+  padding: 28px clamp(20px, 4vw, 64px);
   overflow: auto;
   flex: 1;
 }
 .editor-bottom {
   display: flex;
   justify-content: space-between;
-  padding: 10px 24px;
+  padding: 8px 24px max(8px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
-  font-size: 11px;
+  font: 10px var(--mono);
   color: var(--muted);
-  padding-bottom: max(10px, env(safe-area-inset-bottom));
 }
 .editor-message {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 12px 24px;
+  padding: 10px 24px;
   background: var(--hover);
   font-size: 12px;
 }
@@ -130,7 +133,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 24px;
+  padding: 5px 24px;
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 12px;
@@ -139,15 +142,14 @@
   flex: 1;
 }
 .published-banner > a {
-  min-width: 40px;
-  min-height: 36px;
+  min-width: 36px;
+  min-height: 32px;
   display: grid;
   place-items: center;
 }
 @media (max-width: 900px) {
   .editor-columns {
     display: block;
-    min-height: 0;
     overflow: hidden;
   }
   .editor-source,
@@ -176,19 +178,16 @@
 }
 @media (max-width: 540px) {
   .editor-top {
-    padding: 12px 12px;
+    padding: 10px 12px;
     gap: 7px;
     flex-wrap: wrap;
   }
   .editor-top > .button-icon {
-    width: 40px;
-    min-width: 40px;
-  }
-  .editor-heading {
-    flex: 1;
+    width: 36px;
+    min-width: 36px;
   }
   .editor-heading strong {
-    font-size: 14px;
+    font-size: 13px;
   }
   .editor-heading span {
     font-size: 10px;
@@ -201,26 +200,26 @@
     display: none;
   }
   .editor-tools {
-    padding: 7px 8px;
-    gap: 1px;
-    overflow-x: auto;
+    padding: 6px 10px;
+    gap: 2px;
+    flex-wrap: wrap;
   }
   .editor-tools > .button-icon {
-    width: 38px;
-    min-width: 38px;
-    min-height: 42px;
-    height: 42px;
+    width: 34px;
+    min-width: 34px;
+    height: 38px;
+    min-height: 38px;
   }
   .editor-tools > .mobile-preview-toggle {
     font-size: 12px;
     padding: 0 8px;
-    min-height: 42px;
+    min-height: 38px;
   }
   .editor-tools > .mobile-preview-toggle > svg {
     display: none;
   }
   .panel-label {
-    padding: 11px 16px;
+    padding: 9px 16px;
   }
   .panel-label span {
     display: none;
@@ -232,19 +231,12 @@
     padding: 20px;
   }
   .editor-bottom {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-inline: 16px;
   }
   .editor-message {
-    padding: 12px 16px;
+    padding: 10px 16px;
   }
   .published-banner {
-    padding: 6px 16px;
-  }
-  .prose {
-    font-size: 15px;
-  }
-  .prose h1 {
-    font-size: 25px;
+    padding: 5px 16px;
   }
 }

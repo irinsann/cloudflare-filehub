@@ -72,8 +72,8 @@
 }
 .prose pre {
   position: relative;
-  background: #242c27;
-  color: #e4ebe6;
+  background: #20242e;
+  color: #e4e8f3;
   padding: 25px 18px 18px;
   border-radius: 8px;
   overflow: auto;
@@ -117,9 +117,9 @@
   position: absolute;
   right: 7px;
   top: 7px;
-  background: #3a483f;
+  background: #343b4b;
   border: 0;
-  color: #e4ebe6;
+  color: #e4e8f3;
   padding: 3px 8px;
   border-radius: 4px;
   font-size: 9px;
@@ -137,5 +137,5 @@
   color: #e5bf8b;
 }
 .hljs-comment {
-  color: #91a296;
+  color: #a0aabd;
 }

@@ -8,8 +8,7 @@ import { fail } from './errors';
 import { writeOriginAllowed } from './origins';
 import { hashPassword, checkPassword, digest, rateLimit } from './auth-crypto';
 import { htmlPage } from './html';
-import { loginBody, loginCss, loginBrand, themeIcon, loginUiScript } from './login-view';
-import { brandMark } from '../shared/brand';
+import { loginBody, loginCss, loginUiScript } from './login-view';
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const randomToken = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
@@ -257,11 +256,6 @@ siteAuthRoutes.post('/logout', async (c) => {
 export async function loginPage(c: AppContext) {
   const ready = !!(await c.env.DB.prepare('SELECT id FROM admin_account WHERE id=1').first());
   const script = String.raw`const ready=${ready};const form=document.getElementById('auth');const error=document.getElementById('error');let token='';async function post(path,data){const r=await fetch('/api/auth/'+path,{method:'POST',headers:{'Content-Type':'application/json','X-Drive-Request':'1'},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw Error(j.error.message);return j.data;}if(!ready){const invite=new URLSearchParams(location.hash.slice(1)).get('setup');history.replaceState(null,'','/login');if(invite)post('setup/start',{token:invite}).then(d=>{token=d.token;document.getElementById('qr').innerHTML=d.qr;document.getElementById('secret').textContent=d.secret;form.hidden=false;document.getElementById('loading').hidden=true;}).catch(e=>error.textContent=e.message);else error.textContent='请使用管理员提供的一次性设置链接。';}form.onsubmit=async e=>{e.preventDefault();const button=document.getElementById('submit');button.disabled=true;error.textContent='';try{const p=document.getElementById('password').value;const confirm=document.getElementById('confirm');if(!ready&&p!==confirm.value)throw Error('两次密码不一致');const d=await post(ready?'login':'setup/finish',{token,password:p,code:document.getElementById('code').value.trim().toLowerCase()});document.getElementById('password').value='';if(ready)location.replace('/drive/');else{form.hidden=true;document.getElementById('qr').replaceChildren();document.getElementById('secret').textContent='';document.getElementById('recovery').hidden=false;document.getElementById('codes').textContent=d.recovery.join('\n');}}catch(e){error.textContent=e.message;}finally{button.disabled=false;}};`;
-  const page = htmlPage('登录', loginBody(ready), script + loginUiScript);
-  page.html = page.html
-    .replace('</style>', loginCss + '</style>')
-    .replace(brandMark + '<span>RCloud</span>', loginBrand)
-    .replace('>切换主题</button>', '>' + themeIcon + '<span>切换主题</span></button>')
-    .replace('RCloud · 让文件与想法有处安放', 'RCloud');
+  const page = htmlPage('登录', loginBody(ready), script + loginUiScript, '', loginCss);
   return new Response(page.html, { headers: page.headers });
 }

@@ -14,8 +14,8 @@ import {
   Music,
 } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Empty } from '../../pages/Management';
-import type { FileRecord, FolderRecord, Settings } from '../../../shared/types';
+import { EmptyState } from '../EmptyState';
+import type { FileRecord, FolderRecord } from '../../../shared/types';
 import type { Action } from '../Actions';
 import type { useFileBrowser } from '../../hooks/useFileBrowser';
 import { fileUrl, sizeLabel, dateLabel } from '../../lib/api';
@@ -35,14 +35,12 @@ function FileIcon({ file }: { file: FileRecord }) {
 
 export function FilesPanel({
   browser,
-  settings,
   setAction,
   setMenu,
   openFile,
   setBulkDelete,
 }: {
   browser: ReturnType<typeof useFileBrowser>;
-  settings: Settings | null;
   setAction: (action: Action) => void;
   setMenu: (menu: { file?: FileRecord; folder?: FolderRecord }) => void;
   openFile: (file: FileRecord) => void;
@@ -189,7 +187,7 @@ export function FilesPanel({
         </div>
       ) : (
         <>
-          {!grid && (
+          {!grid && (!!listing?.files.length || !!folders.length) && (
             <div className="file-row table-head">
               <span>
                 <input
@@ -316,7 +314,7 @@ export function FilesPanel({
             ))}
           </div>
           {!listing?.files.length && !folders.length && !error && (
-            <Empty
+            <EmptyState
               label={query ? '没有找到匹配文件' : view === 'trash' ? '回收站为空' : '暂无文件'}
             />
           )}
@@ -325,24 +323,29 @@ export function FilesPanel({
       <div className="file-footer">
         <span>
           {listing?.total ?? 0} 个文件
-          {settings
-            ? ` · 已用 ${sizeLabel(settings.storageUsedBytes)} / ${sizeLabel(settings.storageLimitBytes)}`
-            : ''}
+          {folders.length ? ` · ${folders.length} 个文件夹` : ''}
         </span>
-        <div>
-          <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-            上一页
-          </Button>
-          <span>{page}</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!listing || page * listing.limit >= listing.total}
-            onClick={() => setPage(page + 1)}
-          >
-            下一页
-          </Button>
-        </div>
+        {(page > 1 || (!!listing && listing.total > listing.limit)) && (
+          <div>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+            >
+              上一页
+            </Button>
+            <span>{page}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!listing || page * listing.limit >= listing.total}
+              onClick={() => setPage(page + 1)}
+            >
+              下一页
+            </Button>
+          </div>
+        )}
       </div>
     </section>
   );

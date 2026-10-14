@@ -4,6 +4,7 @@ import { api, send, dateLabel } from '../lib/api';
 import { StorageMeter } from '../components/workspace/WorkspaceShell';
 import { Button } from '../components/ui/button';
 import { ApiTokens } from '../components/ApiTokens';
+import { EmptyState } from '../components/EmptyState';
 import type { Settings, ShareRecord } from '../../shared/types';
 interface DocumentRow {
   id: string;
@@ -149,7 +150,7 @@ export function Management({
               </Button>
             </article>
           ))}
-          {!shares.length && <Empty label="暂无文件分享" />}
+          {!shares.length && <EmptyState label="暂无文件分享" />}
         </div>
       ) : (
         <div className="management-list">
@@ -183,19 +184,9 @@ export function Management({
                 </article>
               );
             })}
-          {!docs.some((d) => d.published) && <Empty label="暂无已发布文章" />}
+          {!docs.some((d) => d.published) && <EmptyState label="暂无已发布文章" />}
         </div>
       )}
     </>
-  );
-}
-export function Empty({ label }: { label: string }) {
-  return (
-    <div className="empty-state">
-      <div className="empty-art">
-        <FileText size={36} strokeWidth={1} />
-      </div>
-      <h3>{label}</h3>
-    </div>
   );
 }

@@ -87,7 +87,6 @@ export function WorkspaceShell({
         >
           <s.icon size={19} strokeWidth={1.7} />
           <span>{s.label}</span>
-          {view === s.id && <span className="nav-indicator" />}
         </button>
       ))}
     </nav>
@@ -174,13 +173,9 @@ export function WorkspaceShell({
                 <X size={16} />
               </button>
             )}
-            <kbd>⌘ K</kbd>
+            <kbd>Ctrl / ⌘ K</kbd>
           </div>
           <div className="topbar-right">
-            <span className="workspace-status">
-              <i />
-              私人空间
-            </span>
             <Button variant="ghost" size="icon" aria-label="切换主题" onClick={toggleTheme}>
               {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
             </Button>

@@ -2,7 +2,7 @@
 
 MIT 开源的 Serverless 个人云盘与 Markdown 发布平台。
 
-运行在 Cloudflare Workers + 私有 R2 + D1 上的个人云盘和 Markdown 发布平台。React / TypeScript / Vite / Tailwind 4，shadcn 风格 Radix 组件，Lucide 图标；Hono API；Drizzle Schema 与参数化 D1 查询；CodeMirror 6 编辑器；unified / remark GFM / rehype-sanitize 安全渲染。
+运行在 Cloudflare Workers + 私有 R2 + D1 上的个人云盘和 Markdown 发布平台。React / TypeScript / Vite、原生 CSS 与 Radix 无障碍组件，Lucide 图标；Hono API；Drizzle Schema 与参数化 D1 查询；CodeMirror 6 编辑器；unified / remark GFM / rehype-sanitize 安全渲染。
 
 统一站点 `https://233334.xyz`：首页自动进入 `/drive/` 私人后台，`/p/:slug` 为公开文章，`/s/:token` 为分享页，`/d/:token` 为文件直链。Worker 只绑定 233334.xyz；图床、分享和直链默认生成 https://s.irin.im 链接，由已有 VPS 反代访问。
 
@@ -37,7 +37,7 @@ pnpm dev
 - 独立 R2 发布快照：保存草稿不会更新公开文章；再次发布保持原 Slug。修改 Slug 会使旧地址失效，无隐式重定向。
 - 拖入/选取图片附件；只公开属于该文档且已发布快照实际引用的图片；草稿新图片保持私有；取消发布立即阻断附件。
 - Worker 直接返回安全 HTML 正文、目录、标题锚点、代码高亮/复制、SEO 与 Open Graph。禁止原始 HTML；HTTPS 远程图片由浏览器直连，不代理外部 URL。
-- 中文响应式后台、手机导航与编辑/预览切换、浅色/深色主题、加载/空状态和错误反馈。
+- 中文响应式后台、中性背景与蓝色操作色、桌面侧栏和手机底部导航、编辑/预览切换、浅色/深色主题、加载/空状态和错误反馈。
 - 生产 Access JWT 签名、issuer、audience、过期/必要声明、管理员邮箱白名单；写 API Origin 与自定义请求头校验；安全响应头、保守 no-store 缓存与请求限流。
 - D1/R2 跨存储恢复机制：预先登记待清理对象，D1 提交成功才释放；永久删除和清空回收站原子移除元数据、持久化清理任务，并立即批量删除 R2 文件、附件和快照，R2 失败由每小时 Cron 重试。
 
@@ -56,6 +56,12 @@ docs/                部署、接口、架构及验收指南
 wrangler.jsonc       默认生产配置与显式 local 环境
 ```
 
+## 界面与维护
+
+后台、登录、分享和公开文章采用统一的实色面板与明暗主题。样式使用原生 CSS 和语义类名，按布局、文件、弹窗、管理页面、阅读排版和编辑器拆分；主题、设置读取和空状态分别封装，避免页面间重复实现。
+
+不依赖 Tailwind、运行时工具类合并或外部字体。编辑器、Markdown 渲染与预览按需加载，保留现有代码语言支持。模块职责、响应式断点和界面验收要求见 [UI 架构](docs/ui-architecture.md)。
+
 ## 检查与部署
 
 ```sh
@@ -66,9 +72,10 @@ pnpm build
 pnpm worker:check
 # 完整顺序检查
 pnpm check
+pnpm peers check
 ```
 
-测试使用当前 Cloudflare 官方 `@cloudflare/vitest-plugin`，在 workerd 中执行 SQL 迁移和真实本地 R2 操作，不会访问生产 Bucket 或 D1。详见 [验收与验证](docs/verification.md)。
+测试使用 Cloudflare 官方 `@cloudflare/vitest-plugin`，在 workerd 中执行 SQL 迁移和真实本地 D1/R2 操作，不会访问生产 Bucket 或 D1。覆盖文件生命周期、存储配额与清理、图床、文件/ShareX 上传 API、分享、Markdown 快照、密码/TOTP 和 Access 认证。浏览器检查单独覆盖桌面与移动布局、主题和操作流程，详见 [验收与验证](docs/verification.md)。
 
 生产资源、Access 与域名步骤见 [部署指南](docs/deployment.md)，主要路由见 [API 文档](docs/api.md)，数据与安全边界见 [架构说明](docs/architecture.md)。没有真实资源 ID / Access 配置时，不应运行生产部署命令。
 
