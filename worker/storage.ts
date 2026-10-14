@@ -1,4 +1,4 @@
-import { allocate, deleteObject } from './quota';
+import { allocate, deleteObject, initializeQuota } from './quota';
 import type { Env } from './env';
 import { limit, now, uuid } from './env';
 import { fail } from './errors';
@@ -192,6 +192,47 @@ export async function serveObject(
   const object = await env.BUCKET.get(key, range ? { range } : undefined);
   if (!object) fail(404, '文件对象不存在');
   return new Response(object.body, { status: range ? 206 : 200, headers });
+}
+// Only pass objects captured by a committed purge, never every reservation in the queue.
+export async function cleanupPurgedObjects(env: Env, objectKeys: string[]) {
+  if (!objectKeys.length) return;
+  await initializeQuota(env);
+  for (let offset = 0; offset < objectKeys.length; offset += 100) {
+    const candidates = JSON.stringify(objectKeys.slice(offset, offset + 100));
+    const rows = await env.DB.prepare(
+      `
+      SELECT object_key FROM cleanup_tasks WHERE object_key IN (SELECT value FROM json_each(?))
+      AND NOT EXISTS(SELECT 1 FROM files WHERE files.object_key=cleanup_tasks.object_key)
+      AND NOT EXISTS(SELECT 1 FROM upload_sessions WHERE upload_sessions.object_key=cleanup_tasks.object_key)
+      AND NOT EXISTS(SELECT 1 FROM markdown_pages WHERE snapshot_key=cleanup_tasks.object_key)
+      AND NOT EXISTS(SELECT 1 FROM markdown_attachments WHERE markdown_attachments.object_key=cleanup_tasks.object_key)
+      AND NOT EXISTS(SELECT 1 FROM image_hosts WHERE image_hosts.object_key=cleanup_tasks.object_key)
+    `,
+    )
+      .bind(candidates)
+      .all<{ object_key: string }>();
+    const keys = rows.results.map((row) => row.object_key);
+    if (!keys.length) continue;
+    const encoded = JSON.stringify(keys);
+    try {
+      await env.BUCKET.delete(keys);
+      await env.DB.batch([
+        env.DB.prepare(
+          'DELETE FROM storage_allocations WHERE object_key IN (SELECT value FROM json_each(?))',
+        ).bind(encoded),
+        env.DB.prepare(
+          'DELETE FROM cleanup_tasks WHERE object_key IN (SELECT value FROM json_each(?))',
+        ).bind(encoded),
+      ]);
+    } catch {
+      // Keep both quota and the durable queue until R2 deletion succeeds.
+      await env.DB.prepare(
+        'UPDATE cleanup_tasks SET attempts=attempts+1 WHERE object_key IN (SELECT value FROM json_each(?))',
+      )
+        .bind(encoded)
+        .run();
+    }
+  }
 }
 export async function cleanup(env: Env) {
   const expired = await env.DB.prepare(

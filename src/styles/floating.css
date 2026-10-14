@@ -110,6 +110,32 @@ body {
     backdrop-filter: blur(16px) saturate(125%);
   }
 }
+@media (min-width: 901px) and (max-height: 820px) {
+  .sidebar {
+    padding-top: 18px;
+  }
+  .sidebar .logo {
+    margin-bottom: 20px;
+  }
+  .sidebar .nav-item {
+    min-height: 42px;
+  }
+  .sidebar .workspace-nav {
+    gap: 3px;
+  }
+  .sidebar .nav-divider {
+    margin-top: 12px;
+  }
+  .sidebar-bottom {
+    padding-top: 16px;
+  }
+  .sidebar .storage-meter {
+    padding-block: 10px 14px;
+  }
+  .sidebar .profile {
+    padding-block: 14px;
+  }
+}
 @media (max-width: 900px) {
   .topbar {
     top: 10px;

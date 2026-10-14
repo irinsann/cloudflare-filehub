@@ -175,7 +175,7 @@ html[data-theme='dark'] .button-primary {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 330px;
+  min-height: clamp(190px, calc(100dvh - 450px), 330px);
   padding: 40px 20px;
 }
 .empty-art {

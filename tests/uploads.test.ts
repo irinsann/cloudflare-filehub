@@ -70,7 +70,7 @@ describe('RCloud uploads and direct links', () => {
     await request('/api/admin/shares/' + s.id, 'DELETE');
     expect((await request(path)).status).toBe(410);
   });
-  it('empties all trash atomically, queues objects, keeps active files', async () => {
+  it('empties all trash atomically, deletes objects, keeps active files', async () => {
     const keep = await data<FileRecord>(await upload('keep.txt', 'keep'));
     const gone = await data<FileRecord>(await upload('gone.txt', 'gone'));
     await request('/api/admin/files/' + gone.id, 'DELETE');
@@ -82,6 +82,7 @@ describe('RCloud uploads and direct links', () => {
       await testEnv.DB.prepare('SELECT object_key FROM cleanup_tasks WHERE object_key=?')
         .bind(gone.object_key)
         .first(),
-    ).not.toBeNull();
+    ).toBeNull();
+    expect(await testEnv.BUCKET.head(gone.object_key)).toBeNull();
   });
 });

@@ -229,6 +229,8 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 | POST     | /folders/{id}/restore            | 父目录必须存活                                                                                                           |
 | DELETE   | /folders/{id}/permanent          | 永久删除空回收站目录                                                                                                     |
 
+永久删除与清空回收站会立即尝试删除对应 R2 对象及文档附件、快照；只有对象删除成功才释放容量。存储服务暂时失败时由定时任务重试，容量不会提前归零。
+
 列表响应 `{data:{files,folders,total,page,limit}}`，按文件总数分页。近期、Markdown 视图与文件名搜索是全局查询；搜索中的 %、\_ 视为普通字符。上传 Token 无列目录权限，文件夹 ID 可在已登录的目录 API 中查看。
 
 ### 分享与直链

@@ -1,4 +1,4 @@
-import { storageUsage, deleteObject } from './quota';
+import { storageUsage } from './quota';
 import { Hono } from 'hono';
 import { drizzle } from 'drizzle-orm/d1';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -11,6 +11,7 @@ import type { FileRecord, FolderRecord } from '../shared/types';
 import { filename, filePatch, folderInput, folderPatch, identifier } from '../shared/validation';
 import {
   cleanupStatement,
+  cleanupPurgedObjects,
   releaseStatement,
   reserve,
   serveObject,
@@ -312,7 +313,10 @@ fileRoutes.post('/files/:id/restore', async (c) => {
 fileRoutes.delete('/files/:id/permanent', async (c) => {
   const file = await getFile(c.env, c.req.param('id'), true);
   if (!file.deleted_at) fail(409, '必须先将文件移入回收站');
-  await c.env.DB.batch([
+  const results = await c.env.DB.batch<{ object_key: string }>([
+    c.env.DB.prepare(
+      'SELECT object_key FROM files WHERE id=? UNION SELECT object_key FROM markdown_attachments WHERE file_id=? UNION SELECT snapshot_key AS object_key FROM markdown_pages WHERE file_id=? AND snapshot_key IS NOT NULL',
+    ).bind(file.id, file.id, file.id),
     cleanupStatement(c.env, file.object_key),
     c.env.DB.prepare(
       'INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at) SELECT object_key,? FROM markdown_attachments WHERE file_id=?',
@@ -325,17 +329,22 @@ fileRoutes.delete('/files/:id/permanent', async (c) => {
   ]);
   // Metadata removal revokes access atomically; durable tasks make R2 deletion retryable.
   try {
-    await deleteObject(c.env, file.object_key);
-    await releaseStatement(c.env, file.object_key).run();
+    await cleanupPurgedObjects(
+      c.env,
+      results[0].results.map((row) => String(row.object_key)),
+    );
   } catch {
-    /* Scheduled cleanup retries durable tasks; attachments/snapshots are deferred. */
+    /* Scheduled cleanup retries durable tasks if immediate cleanup fails. */
   }
   return c.json({ data: { id: file.id } });
 });
 
 fileRoutes.delete('/trash', async (c) => {
   const timestamp = now();
-  const results = await c.env.DB.batch([
+  const results = await c.env.DB.batch<{ object_key: string }>([
+    c.env.DB.prepare(`SELECT object_key FROM files WHERE deleted_at IS NOT NULL
+      UNION SELECT a.object_key FROM markdown_attachments a JOIN files f ON f.id=a.file_id WHERE f.deleted_at IS NOT NULL
+      UNION SELECT p.snapshot_key AS object_key FROM markdown_pages p JOIN files f ON f.id=p.file_id WHERE f.deleted_at IS NOT NULL AND p.snapshot_key IS NOT NULL`),
     c.env.DB.prepare(
       'INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at) SELECT object_key,? FROM files WHERE deleted_at IS NOT NULL',
     ).bind(timestamp),
@@ -345,11 +354,19 @@ fileRoutes.delete('/trash', async (c) => {
     c.env.DB.prepare(
       'INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at) SELECT p.snapshot_key,? FROM markdown_pages p JOIN files f ON f.id=p.file_id WHERE f.deleted_at IS NOT NULL AND p.snapshot_key IS NOT NULL',
     ).bind(timestamp),
-    c.env.DB.prepare('DELETE FROM files WHERE deleted_at IS NOT NULL'),
+    c.env.DB.prepare('DELETE FROM files WHERE deleted_at IS NOT NULL RETURNING id'),
     c.env.DB.prepare(
-      'DELETE FROM folders WHERE deleted_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM files WHERE folder_id=folders.id) AND NOT EXISTS(SELECT 1 FROM folders child WHERE child.parent_id=folders.id)',
+      'DELETE FROM folders WHERE deleted_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM files WHERE folder_id=folders.id) AND NOT EXISTS(SELECT 1 FROM folders child WHERE child.parent_id=folders.id) RETURNING id',
     ),
     logStatement(c.env, 'trash.empty', 'trash'),
   ]);
-  return c.json({ data: { files: results[3].meta.changes, folders: results[4].meta.changes } });
+  try {
+    await cleanupPurgedObjects(
+      c.env,
+      results[0].results.map((row) => String(row.object_key)),
+    );
+  } catch {
+    /* Metadata is already removed; scheduled cleanup retries the durable queue. */
+  }
+  return c.json({ data: { files: results[4].results.length, folders: results[5].results.length } });
 });
