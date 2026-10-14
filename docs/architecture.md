@@ -32,7 +32,11 @@ D1 和 R2 没有共享事务。上传和 SQL 异常只能保证可补偿的一�
 
 私人后台与 `/api/admin/*` 验证 Access JWKS RS256 JWT、issuer/AUD、有效期与必要声明，并检查明确邮箱白名单。公开路由独立，不调用后台身份当作授权；公开主机上的后台接口直接拒绝。开发模拟必须 ENVIRONMENT=local、LOCAL_AUTH=true、loopback 主机三者同时成立。
 
-管理员写操作要求同源 Origin 和 X-Drive-Request；没有全局开放 CORS。Markdown 公开正文禁止原始 HTML，链接经过 sanitizer，图片仅 HTTPS 或受控附件。正文和附件响应 no-store；文件响应 CSP sandbox、nosniff、保守 Content-Disposition；HTML/SVG 私有预览仍作文本。HTML/HTM 公开分享由独立 iframe 和响应头同时设置 sandbox allow-scripts，不授予 allow-same-origin；仅允许内联脚本/样式与内嵌资源，禁止外部资源和接口请求、表单、嵌套框架、弹窗与顶层导航。预览、HEAD、Range 和下载每次检查分享权限；下载保持附件。分享页和 Markdown 发布页 CSP 使用每次随机 nonce；没有任意远程抓取或公开 R2 地址。
+管理员写操作要求同源 Origin 和 X-Drive-Request；没有全局开放 CORS。Markdown 公开正文禁止原始 HTML，链接经过 sanitizer，图片仅 HTTPS 或受控附件。正文和附件响应 no-store；文件响应 CSP sandbox、nosniff、保守 Content-Disposition；HTML/SVG 私有预览仍作文本。
+
+HTML/HTM 的 `/s/:token` 在授权后直接流式返回原始文件字节，不添加站点外壳、iframe 或脚本；密码未解锁时仅返回无文件信息的解锁页，成功后重新加载原分享地址。原始 HTML 的响应头设置 `sandbox allow-scripts`，不授予 `allow-same-origin`，从而隔离本站 Cookie、存储和页面权限；`frame-ancestors 'none'` 和 `X-Frame-Options: DENY` 禁止被嵌套。仅允许内联脚本/样式与内嵌资源，禁止外部子资源、fetch/XHR 等连接、表单、嵌套框架、Worker 和弹窗；原网页可以通过链接、location 或 meta refresh 导航自身。此规则同样用于独立预览接口。
+
+分享页、预览、HEAD、Range 和下载每次检查分享权限；下载保持原始附件。完整授权的 HTML 分享 GET 记浏览，HEAD/Range 不计浏览；下载计数仍仅统计完整成功的 GET 下载。普通分享页、解锁页和 Markdown 发布页 CSP 使用每次随机 nonce；不依赖任意远程抓取或公开 R2 地址。
 
 分享密码使用 PBKDF2 100,000 迭代（WebCrypto Workers 兼容范围），应用级原子限流限制猜测；强密码仍很重要。token 256 位随机，数据库只保存 SHA-256，无重新构造原始链接的能力。若遗失链接，可撤销并新建。
 

@@ -15,7 +15,7 @@ import {
 import { getFile, logStatement } from './files';
 import { serveObject, isText, isHtml, textObject } from './storage';
 import { shareInput, sharePatch, identifier } from '../shared/validation';
-import type { ShareRecord } from '../shared/types';
+import type { FileRecord, ShareRecord } from '../shared/types';
 import { htmlPage, readerScript } from './html';
 
 // Uploaded HTML never receives the site's origin, even when the preview is opened directly.
@@ -33,8 +33,35 @@ const htmlPreviewCsp = [
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
-  "frame-ancestors 'self'",
+  "frame-ancestors 'none'",
 ].join('; ');
+
+async function unlocked(c: AppContext, share: ShareRecord) {
+  return (
+    !share.password_hash ||
+    (await validShareSession(
+      getCookie(c, `share_${share.id}`),
+      share.id + ':' + (await digest(share.password_hash)),
+      c.env,
+    ))
+  );
+}
+
+async function htmlDocument(c: AppContext, file: FileRecord) {
+  const response = await serveObject(
+    c.env,
+    c.req.raw,
+    file.object_key,
+    file.name,
+    'text/html; charset=utf-8',
+    true,
+  );
+  response.headers.set('Content-Security-Policy', htmlPreviewCsp);
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+  response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  return response;
+}
 
 export const shareRoutes = new Hono<AppEnv>();
 shareRoutes.get('/shares', async (c) => {
@@ -127,16 +154,7 @@ async function lookup(c: AppContext, requirePassword = true) {
   if (!share.enabled || (share.expires_at && share.expires_at <= now()))
     fail(410, '分享已过期或已撤销');
   await getFile(c.env, share.file_id);
-  if (
-    requirePassword &&
-    share.password_hash &&
-    !(await validShareSession(
-      getCookie(c, `share_${share.id}`),
-      share.id + ':' + (await digest(share.password_hash)),
-      c.env,
-    ))
-  )
-    fail(401, '请输入分享密码');
+  if (requirePassword && !(await unlocked(c, share))) fail(401, '请输入分享密码');
   return share;
 }
 export const publicShareRoutes = new Hono<AppEnv>();
@@ -196,18 +214,16 @@ publicShareRoutes.on(['GET', 'HEAD'], '/:token/:action', async (c) => {
     !/^(image\/|audio\/|video\/|text\/|application\/(pdf|json))/.test(file.mime)
   )
     fail(415, '不支持预览');
-  const response = await serveObject(
-    c.env,
-    c.req.raw,
-    file.object_key,
-    file.name,
-    htmlPreview ? 'text/html; charset=utf-8' : file.mime,
-    action === 'preview',
-  );
-  if (htmlPreview) {
-    response.headers.set('Content-Security-Policy', htmlPreviewCsp);
-    response.headers.set('X-Frame-Options', 'SAMEORIGIN');
-  }
+  const response = htmlPreview
+    ? await htmlDocument(c, file)
+    : await serveObject(
+        c.env,
+        c.req.raw,
+        file.object_key,
+        file.name,
+        file.mime,
+        action === 'preview',
+      );
   if (action === 'download' && c.req.method === 'GET' && response.status === 200)
     await c.env.DB.prepare(
       'UPDATE file_shares SET downloads=downloads+1,last_access_at=? WHERE id=?',
@@ -218,7 +234,17 @@ publicShareRoutes.on(['GET', 'HEAD'], '/:token/:action', async (c) => {
 });
 export async function sharePage(c: AppContext) {
   const token = c.req.param('token') ?? '';
-  if (!/^[0-9a-f]{64}$/.test(token)) fail(404, '分享不存在');
+  const share = await lookup(c, false);
+  const file = await getFile(c.env, share.file_id);
+  const html = isHtml(file.name);
+  if (html && (await unlocked(c, share))) {
+    const response = await htmlDocument(c, file);
+    if (c.req.method === 'GET' && response.status === 200)
+      await c.env.DB.prepare('UPDATE file_shares SET views=views+1,last_access_at=? WHERE id=?')
+        .bind(now(), share.id)
+        .run();
+    return response;
+  }
   // Do not expose file metadata in HTML until password verification completes.
   const script = String.raw`
 const token=${JSON.stringify(token)};
@@ -228,23 +254,16 @@ const message=document.getElementById('message');
 async function load(){
   const r=await fetch(api);
   const j=await r.json();
-  if(r.status===401){document.getElementById('unlock').hidden=false;return}
+  if(r.status===401){document.getElementById('unlock').hidden=false;message.textContent='请输入分享密码';return}
   if(!r.ok){message.textContent=j.error.message;return}
   document.getElementById('unlock').hidden=true;
   const f=j.data;
+  if(f.preview_type==='html'){location.reload();return}
   document.getElementById('name').textContent=f.name;
-  message.textContent=(f.size/1024).toFixed(1)+' KB · '+(f.preview_type==='html'?'HTML':f.mime);
+  message.textContent=(f.size/1024).toFixed(1)+' KB · '+f.mime;
   const url=api+'/preview';
   let e;
-  if(f.preview_type==='html'){
-    e=document.createElement('iframe');
-    e.setAttribute('sandbox','allow-scripts');
-    e.referrerPolicy='no-referrer';
-    e.title=f.name;
-    e.src=url;
-    view.classList.add('html-preview');
-    view.closest('main').classList.add('html-share');
-  }else if(f.mime.startsWith('image/')){
+  if(f.mime.startsWith('image/')){
     e=document.createElement('img');e.src=url;e.alt=f.name;
   }else if(f.mime==='application/pdf'){
     e=document.createElement('iframe');e.src=url;e.title=f.name;
@@ -261,7 +280,7 @@ document.getElementById('unlock').onsubmit=async(e)=>{
   e.preventDefault();
   const r=await fetch(api+'/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('password').value})});
   document.getElementById('password').value='';
-  if(r.ok)load();else message.textContent=(await r.json()).error.message;
+  if(r.ok)${html ? 'location.reload()' : 'load()'};else message.textContent=(await r.json()).error.message;
 };
 load();`;
   const page = htmlPage(
@@ -270,13 +289,7 @@ load();`;
     readerScript + script,
     '<meta name="robots" content="noindex,nofollow">',
   );
-  // Return actual status for revoked / absent links without leaking protected metadata.
-  try {
-    await lookup(c, false);
-  } catch (error) {
-    throw error;
-  }
-  return new Response(page.html, { headers: page.headers });
+  return new Response(c.req.method === 'HEAD' ? null : page.html, { headers: page.headers });
 }
 
 export const directRoutes = new Hono<AppEnv>();

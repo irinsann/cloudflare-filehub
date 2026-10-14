@@ -195,4 +195,7 @@ export const imageHosts = sqliteTable('image_hosts', {
   sha256: text().notNull(),
   enabled: integer().notNull().default(1),
   createdAt: integer('created_at').notNull(),
+  views: integer().notNull().default(0),
+  downloads: integer().notNull().default(0),
+  lastAccessAt: integer('last_access_at'),
 });

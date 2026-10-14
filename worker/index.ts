@@ -83,7 +83,7 @@ app.use('/s/*', async (c, next) => {
   await next();
 });
 app.on(['GET', 'HEAD'], '/p/:slug', (c) => readPage(c));
-app.get('/s/:token', sharePage);
+app.on(['GET', 'HEAD'], '/s/:token', sharePage);
 app.get('/favicon.svg', (c) => c.env.ASSETS.fetch(c.req.raw));
 app.get('/robots.txt', (c) =>
   c.text('User-agent: *\nAllow: /p/\nDisallow: /api/\nDisallow: /s/\nDisallow: /d/\nDisallow: /\n'),

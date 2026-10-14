@@ -10,7 +10,6 @@ import { fail } from './errors';
 import type { FileRecord, FolderRecord } from '../shared/types';
 import { filename, filePatch, folderInput, folderPatch, identifier } from '../shared/validation';
 import {
-  cleanupStatement,
   cleanupPurgedObjects,
   releaseStatement,
   reserve,
@@ -44,6 +43,58 @@ export async function getFile(env: Env, id: string, deleted = false) {
   if (!file || (!deleted && file.deleted_at)) fail(404, '文件不存在');
   if (!deleted) await activeFolder(env, file.folder_id);
   return file;
+}
+// Selection is internal SQL; every statement runs against the same transaction snapshot.
+export async function purgeFiles(
+  env: Env,
+  selection: { where: string; values: (string | number | null)[] },
+  action: string,
+  target: string,
+  pruneFolders = false,
+) {
+  const selected = `SELECT f.id FROM files f WHERE ${selection.where}
+    AND NOT EXISTS(SELECT 1 FROM upload_sessions u WHERE u.file_id=f.id OR u.object_key=f.object_key)`;
+  const objects = `WITH selected AS (${selected}), objects AS (
+    SELECT object_key FROM files WHERE id IN (SELECT id FROM selected)
+    UNION SELECT object_key FROM markdown_attachments WHERE file_id IN (SELECT id FROM selected)
+    UNION SELECT snapshot_key FROM markdown_pages WHERE file_id IN (SELECT id FROM selected) AND snapshot_key IS NOT NULL
+    UNION SELECT object_key FROM image_hosts WHERE file_id IN (SELECT id FROM selected)
+  )`;
+  const timestamp = now();
+  const results = await env.DB.batch<{ object_key: string; id: string }>([
+    env.DB.prepare(`${objects} SELECT object_key FROM objects`).bind(...selection.values),
+    env.DB.prepare(
+      `${objects} INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at)
+      SELECT object_key,? FROM objects`,
+    ).bind(...selection.values, timestamp),
+    env.DB.prepare(
+      `INSERT INTO operations(id,action,target_id,created_at)
+      SELECT ?,?,?,? WHERE EXISTS(${selected})`,
+    ).bind(uuid(), action, target, timestamp, ...selection.values),
+    env.DB.prepare(`DELETE FROM files WHERE id IN (${selected}) RETURNING id`).bind(
+      ...selection.values,
+    ),
+    ...(pruneFolders
+      ? [
+          env.DB.prepare(
+            'DELETE FROM folders WHERE deleted_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM files WHERE folder_id=folders.id) AND NOT EXISTS(SELECT 1 FROM folders child WHERE child.parent_id=folders.id) RETURNING id',
+          ),
+        ]
+      : []),
+  ]);
+  // R2 failures keep both the durable task and allocation for the scheduled retry.
+  try {
+    await cleanupPurgedObjects(
+      env,
+      results[0].results.map((row) => row.object_key),
+    );
+  } catch {
+    /* Metadata is committed; scheduled cleanup retries the durable queue. */
+  }
+  return {
+    files: results[3].results.map((row) => row.id),
+    folders: results[4]?.results.map((row) => row.id) ?? [],
+  };
 }
 export const fileRoutes = new Hono<AppEnv>();
 fileRoutes.get('/settings', async (c) =>
@@ -311,6 +362,7 @@ fileRoutes.delete('/files/:id', async (c) => {
     ),
     c.env.DB.prepare('UPDATE file_shares SET enabled=0 WHERE file_id=?').bind(file.id),
     c.env.DB.prepare('UPDATE markdown_pages SET published=0 WHERE file_id=?').bind(file.id),
+    c.env.DB.prepare('UPDATE image_hosts SET enabled=0 WHERE file_id=?').bind(file.id),
     logStatement(c.env, 'file.trash', file.id),
   ]);
   return c.json({ data: { id: file.id } });
@@ -331,60 +383,26 @@ fileRoutes.post('/files/:id/restore', async (c) => {
 fileRoutes.delete('/files/:id/permanent', async (c) => {
   const file = await getFile(c.env, c.req.param('id'), true);
   if (!file.deleted_at) fail(409, '必须先将文件移入回收站');
-  const results = await c.env.DB.batch<{ object_key: string }>([
-    c.env.DB.prepare(
-      'SELECT object_key FROM files WHERE id=? UNION SELECT object_key FROM markdown_attachments WHERE file_id=? UNION SELECT snapshot_key AS object_key FROM markdown_pages WHERE file_id=? AND snapshot_key IS NOT NULL',
-    ).bind(file.id, file.id, file.id),
-    cleanupStatement(c.env, file.object_key),
-    c.env.DB.prepare(
-      'INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at) SELECT object_key,? FROM markdown_attachments WHERE file_id=?',
-    ).bind(now(), file.id),
-    c.env.DB.prepare(
-      'INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at) SELECT snapshot_key,? FROM markdown_pages WHERE file_id=? AND snapshot_key IS NOT NULL',
-    ).bind(now(), file.id),
-    c.env.DB.prepare('DELETE FROM files WHERE id=?').bind(file.id),
-    logStatement(c.env, 'file.purge', file.id),
-  ]);
-  // Metadata removal revokes access atomically; durable tasks make R2 deletion retryable.
-  try {
-    await cleanupPurgedObjects(
-      c.env,
-      results[0].results.map((row) => String(row.object_key)),
-    );
-  } catch {
-    /* Scheduled cleanup retries durable tasks if immediate cleanup fails. */
-  }
+  const result = await purgeFiles(
+    c.env,
+    {
+      where: "f.id=? AND f.deleted_at IS NOT NULL AND f.status='ready'",
+      values: [file.id],
+    },
+    'file.purge',
+    file.id,
+  );
+  if (!result.files.length) fail(409, '文件状态已改变，请刷新后重试');
   return c.json({ data: { id: file.id } });
 });
 
 fileRoutes.delete('/trash', async (c) => {
-  const timestamp = now();
-  const results = await c.env.DB.batch<{ object_key: string }>([
-    c.env.DB.prepare(`SELECT object_key FROM files WHERE deleted_at IS NOT NULL
-      UNION SELECT a.object_key FROM markdown_attachments a JOIN files f ON f.id=a.file_id WHERE f.deleted_at IS NOT NULL
-      UNION SELECT p.snapshot_key AS object_key FROM markdown_pages p JOIN files f ON f.id=p.file_id WHERE f.deleted_at IS NOT NULL AND p.snapshot_key IS NOT NULL`),
-    c.env.DB.prepare(
-      'INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at) SELECT object_key,? FROM files WHERE deleted_at IS NOT NULL',
-    ).bind(timestamp),
-    c.env.DB.prepare(
-      'INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at) SELECT a.object_key,? FROM markdown_attachments a JOIN files f ON f.id=a.file_id WHERE f.deleted_at IS NOT NULL',
-    ).bind(timestamp),
-    c.env.DB.prepare(
-      'INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at) SELECT p.snapshot_key,? FROM markdown_pages p JOIN files f ON f.id=p.file_id WHERE f.deleted_at IS NOT NULL AND p.snapshot_key IS NOT NULL',
-    ).bind(timestamp),
-    c.env.DB.prepare('DELETE FROM files WHERE deleted_at IS NOT NULL RETURNING id'),
-    c.env.DB.prepare(
-      'DELETE FROM folders WHERE deleted_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM files WHERE folder_id=folders.id) AND NOT EXISTS(SELECT 1 FROM folders child WHERE child.parent_id=folders.id) RETURNING id',
-    ),
-    logStatement(c.env, 'trash.empty', 'trash'),
-  ]);
-  try {
-    await cleanupPurgedObjects(
-      c.env,
-      results[0].results.map((row) => String(row.object_key)),
-    );
-  } catch {
-    /* Metadata is already removed; scheduled cleanup retries the durable queue. */
-  }
-  return c.json({ data: { files: results[4].results.length, folders: results[5].results.length } });
+  const result = await purgeFiles(
+    c.env,
+    { where: 'f.deleted_at IS NOT NULL', values: [] },
+    'trash.empty',
+    'trash',
+    true,
+  );
+  return c.json({ data: { files: result.files.length, folders: result.folders.length } });
 });

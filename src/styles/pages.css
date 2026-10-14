@@ -124,16 +124,8 @@
   color: var(--muted);
   font-size: 11px;
 }
-.image-host-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
-  gap: 18px;
+.image-host-list {
   margin: 24px 0;
-}
-.image-host-grid:empty {
-  display: none;
-}
-.image-host-card {
   border: 1px solid var(--glass-line);
   border-radius: 22px;
   overflow: hidden;
@@ -143,48 +135,77 @@
     var(--panel-shadow);
   min-width: 0;
 }
-.image-host-card > a {
-  display: block;
+.image-host-list table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.image-host-list th,
+.image-host-list td {
+  padding: 14px 12px;
+  text-align: left;
   border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.image-host-list thead th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
   background: var(--hover);
 }
-.image-host-card img {
-  width: 100%;
-  height: 190px;
-  object-fit: contain;
+.image-host-list thead th:first-child {
+  width: 24%;
+}
+.image-host-list thead th:nth-child(2),
+.image-host-list thead th:nth-child(3) {
+  width: 8%;
+}
+.image-host-list thead th:nth-child(4) {
+  width: 12%;
+}
+.image-host-list thead th:nth-child(5),
+.image-host-list thead th:nth-child(6) {
+  width: 6%;
+}
+.image-host-list thead th:last-child {
+  text-align: right;
+}
+.image-host-list tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.image-host-name span {
   display: block;
-}
-.image-host-card > div {
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.image-host-card strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font: 11px var(--mono);
 }
-.image-host-card small {
+.image-host-meta {
   color: var(--muted);
   font-size: 11px;
 }
-.image-host-card input {
-  width: 100%;
-  font: 11px var(--mono);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 9px;
-  background: var(--surface);
+.image-host-mobile-label {
+  display: none;
 }
 .image-host-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
-.image-host-actions > .button:last-child {
-  margin-left: auto;
+.image-host-actions .button {
+  padding-inline: 8px;
+}
+.image-host-preview {
+  display: block;
+  width: 100%;
+  max-height: 65dvh;
+  object-fit: contain;
+  border-radius: 12px;
+}
+.image-delete-name {
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
 }
 .image-pagination {
   display: flex;
@@ -283,26 +304,6 @@
   .management-row > .button-icon {
     flex: 0 0 44px;
   }
-  .image-host-grid {
-    gap: 12px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .image-host-card > div {
-    padding: 12px;
-  }
-  .image-host-card img {
-    height: 150px;
-  }
-  .image-host-actions > .button {
-    flex: 1;
-    padding: 0 8px;
-  }
-  .image-host-actions > .button:last-child {
-    margin: 0;
-  }
-  .image-host-card input {
-    font-size: 16px;
-  }
   .image-host-drop {
     padding: 16px;
     grid-template-columns: 26px 1fr auto;
@@ -320,13 +321,46 @@
     padding: 0 10px;
   }
 }
+@media (max-width: 1000px) {
+  .image-host-list thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .image-host-list table,
+  .image-host-list tbody {
+    display: block;
+  }
+  .image-host-list tbody tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 8px;
+    padding: 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .image-host-list tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .image-host-list tbody th,
+  .image-host-list tbody td {
+    padding: 0;
+    border: 0;
+  }
+  .image-host-name,
+  .image-host-action-cell {
+    grid-column: 1/-1;
+  }
+  .image-host-actions {
+    justify-content: flex-start;
+    margin-top: 2px;
+  }
+  .image-host-mobile-label {
+    display: inline;
+  }
+}
 @media (max-width: 440px) {
-  .image-host-grid {
-    grid-template-columns: 1fr;
-  }
-  .image-host-card img {
-    height: 210px;
-  }
   .api-token-heading {
     align-items: flex-start;
     flex-wrap: wrap;

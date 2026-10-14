@@ -4,9 +4,11 @@ import type { AppEnv, AppContext, Env } from './env';
 import { now, uuid } from './env';
 import { identifier } from '../shared/validation';
 import { fail } from './errors';
-import { getFile, activeFolder, logStatement } from './files';
+import { getFile, activeFolder, logStatement, purgeFiles } from './files';
 import { serveObject, sniff, releaseStatement, cleanupStatement } from './storage';
+import { recordImageAccess } from './image-stats';
 import { z } from 'zod';
+import type { FileRecord } from '../shared/types';
 const extensions: Record<string, string> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
@@ -28,19 +30,60 @@ export async function imageFolder(env: Env) {
 }
 const hex = (b: ArrayBuffer) =>
   Array.from(new Uint8Array(b), (v) => v.toString(16).padStart(2, '0')).join('');
+interface HostedImage {
+  name: string;
+  file_id: string;
+  object_key: string;
+  sha256: string;
+  enabled: number;
+}
+const imageUrl = (c: AppContext, name: string) =>
+  (c.env.FILES_ORIGIN || c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + name;
+async function imageRecord(c: AppContext) {
+  const name = c.req.param('name') ?? '';
+  if (!/^[0-9a-f]{32}\.(png|jpg|gif|webp)$/.test(name)) fail(404, '图片不存在');
+  const row = await c.env.DB.prepare('SELECT * FROM image_hosts WHERE name=?')
+    .bind(name)
+    .first<HostedImage>();
+  if (!row) fail(404, '图片不存在');
+  return row;
+}
+async function enableImage(c: AppContext, image: HostedImage, file: FileRecord) {
+  const result = await c.env.DB.prepare(
+    `UPDATE image_hosts SET enabled=1
+    WHERE name=? AND file_id=? AND object_key=? AND enabled=?
+    AND EXISTS(SELECT 1 FROM files f WHERE f.id=image_hosts.file_id
+      AND f.object_key=image_hosts.object_key AND f.status='ready' AND f.deleted_at IS NULL
+      AND f.folder_id IS ?)
+    AND NOT EXISTS(WITH RECURSIVE chain(id,parent_id,deleted_at) AS (
+      SELECT id,parent_id,deleted_at FROM folders WHERE id=?
+      UNION SELECT f.id,f.parent_id,f.deleted_at FROM folders f JOIN chain c ON f.id=c.parent_id
+    ) SELECT 1 FROM chain WHERE deleted_at IS NOT NULL)`,
+  )
+    .bind(
+      image.name,
+      image.file_id,
+      image.object_key,
+      image.enabled,
+      file.folder_id,
+      file.folder_id,
+    )
+    .run();
+  if (!result.meta.changes) fail(409, '图片状态已改变，请刷新后重试');
+}
 export const imageRoutes = new Hono<AppEnv>();
 imageRoutes.post('/images/folder', async (c) => c.json({ data: { id: await imageFolder(c.env) } }));
 imageRoutes.get('/images', async (c) => {
   const page = Math.max(1, Math.min(100000, Math.floor(Number(c.req.query('page'))) || 1));
   const rows = await c.env.DB.prepare(
-    "SELECT i.name,i.file_id,i.enabled,i.created_at,f.size,f.mime FROM image_hosts i JOIN files f ON f.id=i.file_id WHERE f.deleted_at IS NULL AND f.status='ready' ORDER BY i.created_at DESC LIMIT 40 OFFSET ?",
+    "SELECT i.name,i.file_id,i.enabled,i.created_at,i.views,i.downloads,i.last_access_at,f.size,f.mime FROM image_hosts i JOIN files f ON f.id=i.file_id WHERE f.deleted_at IS NULL AND f.status='ready' ORDER BY i.created_at DESC LIMIT 40 OFFSET ?",
   )
     .bind((page - 1) * 40)
     .all();
   return c.json({
     data: rows.results.map((r) => ({
       ...r,
-      url: (c.env.FILES_ORIGIN || c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + r.name,
+      url: imageUrl(c, String(r.name)),
     })),
     page,
   });
@@ -88,22 +131,25 @@ export async function publishImage(c: AppContext, fileId: string) {
     sha256 = hex(await sha.digest);
   const existing = await c.env.DB.prepare('SELECT * FROM image_hosts WHERE name=?')
     .bind(name)
-    .first<{ name: string; file_id: string; sha256: string; enabled: number }>();
+    .first<HostedImage>();
   if (existing && existing.sha256 !== sha256) fail(409, 'MD5 命名冲突，图片未覆盖');
   if (existing) {
     const old = await c.env.DB.prepare(
-      "SELECT id,folder_id FROM files WHERE id=? AND deleted_at IS NULL AND status='ready'",
+      "SELECT * FROM files WHERE id=? AND deleted_at IS NULL AND status='ready'",
     )
       .bind(existing.file_id)
-      .first<{ id: string; folder_id: string | null }>();
-    if (old) {
+      .first<FileRecord>();
+    if (
+      old &&
+      old.object_key === existing.object_key &&
+      (await c.env.BUCKET.head(existing.object_key))
+    ) {
       await activeFolder(c.env, old.folder_id);
-      if (!existing.enabled)
-        await c.env.DB.prepare('UPDATE image_hosts SET enabled=1 WHERE name=?').bind(name).run();
+      await enableImage(c, existing, old);
       return {
         name,
         file_id: old.id,
-        url: (c.env.FILES_ORIGIN || c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + name,
+        url: imageUrl(c, name),
         duplicate: old.id !== file.id,
       };
     }
@@ -118,7 +164,7 @@ export async function publishImage(c: AppContext, fileId: string) {
   if (!copy) fail(500, '图片保存失败');
   const results = await c.env.DB.batch([
     c.env.DB.prepare(
-      'UPDATE files SET name=?,folder_id=?,object_key=?,mime=?,updated_at=? WHERE id=? AND object_key=? AND deleted_at IS NULL',
+      "UPDATE files SET name=?,folder_id=?,object_key=?,mime=?,updated_at=? WHERE id=? AND object_key=? AND deleted_at IS NULL AND status='ready'",
     ).bind(name, folderId, key, mime, now(), file.id, file.object_key),
     c.env.DB.prepare(
       'INSERT INTO image_hosts(name,file_id,object_key,sha256,created_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM files WHERE id=? AND object_key=?) ON CONFLICT(name) DO UPDATE SET file_id=excluded.file_id,object_key=excluded.object_key,sha256=excluded.sha256,enabled=1,created_at=excluded.created_at WHERE image_hosts.sha256=excluded.sha256',
@@ -131,7 +177,7 @@ export async function publishImage(c: AppContext, fileId: string) {
   return {
     name,
     file_id: file.id,
-    url: (c.env.FILES_ORIGIN || c.env.ADMIN_ORIGIN || new URL(c.req.url).origin) + '/i/' + name,
+    url: imageUrl(c, name),
     duplicate: false,
   };
 }
@@ -140,6 +186,52 @@ imageRoutes.delete('/images/:name', async (c) => {
     .bind(c.req.param('name'))
     .run();
   return c.json({ data: { ok: true } });
+});
+imageRoutes.post('/images/:name/restore', async (c) => {
+  const image = await imageRecord(c);
+  const file = await getFile(c.env, image.file_id);
+  if (file.object_key !== image.object_key) fail(409, '图片已修改，无法恢复原直链');
+  if (!(await c.env.BUCKET.head(image.object_key))) fail(404, '图片对象不存在，无法恢复');
+  await enableImage(c, image, file);
+  await logStatement(c.env, 'image.restore', file.id).run();
+  return c.json({
+    data: { name: image.name, file_id: file.id, url: imageUrl(c, image.name), enabled: 1 },
+  });
+});
+imageRoutes.delete('/images/:name/permanent', async (c) => {
+  const image = await imageRecord(c);
+  if (image.enabled) fail(409, '请先撤销图片直链');
+  const file = await c.env.DB.prepare('SELECT object_key FROM files WHERE id=?')
+    .bind(image.file_id)
+    .first<{ object_key: string }>();
+  if (!file) fail(404, '图片文件不存在');
+  const result = await purgeFiles(
+    c.env,
+    {
+      where: `f.id=? AND f.object_key=? AND f.status='ready'
+      AND EXISTS(SELECT 1 FROM image_hosts i WHERE i.name=? AND i.file_id=f.id AND i.object_key=? AND i.enabled=0)`,
+      values: [image.file_id, file.object_key, image.name, image.object_key],
+    },
+    'image.purge',
+    image.file_id,
+  );
+  if (!result.files.length) fail(409, '图片状态已改变，请刷新后重试');
+  return c.json({ data: { name: image.name, file_id: image.file_id, deleted: true } });
+});
+imageRoutes.on(['GET', 'HEAD'], '/images/:name/download', async (c) => {
+  const image = await imageRecord(c);
+  const file = await getFile(c.env, image.file_id);
+  if (file.object_key !== image.object_key) fail(410, '图片已修改，原直链失效');
+  const response = await serveObject(
+    c.env,
+    c.req.raw,
+    image.object_key,
+    image.name,
+    file.mime,
+    false,
+  );
+  await recordImageAccess(c.env, image.name, 'download', c.req.raw, response, image.object_key);
+  return response;
 });
 export async function imagePage(c: AppContext) {
   const name = c.req.param('name');
@@ -152,5 +244,15 @@ export async function imagePage(c: AppContext) {
   if (!row || !row.enabled) fail(404, '图片不存在或直链已撤销');
   const file = await getFile(c.env, row.file_id);
   if (file.object_key !== row.object_key) fail(410, '图片已修改，原直链失效');
-  return serveObject(c.env, c.req.raw, row.object_key, name!, file.mime, true);
+  const download = c.req.query('download') === '1';
+  const response = await serveObject(c.env, c.req.raw, row.object_key, name!, file.mime, !download);
+  await recordImageAccess(
+    c.env,
+    name!,
+    download ? 'download' : 'reference',
+    c.req.raw,
+    response,
+    row.object_key,
+  );
+  return response;
 }

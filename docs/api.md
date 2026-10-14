@@ -241,7 +241,7 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 | POST     | /api/admin/shares                  | {file_id,password?,expires_at?,allow_download?}；到期可为 null，默认允许下载；返回 {id,url,directUrl} |
 | PATCH    | /api/admin/shares/{id}             | {enabled?,allow_download?,expires_at?,password?}；password=null 移除密码                              |
 | DELETE   | /api/admin/shares/{id}             | 撤销                                                                                                  |
-| GET      | /s/{token}                         | 公开分享页                                                                                            |
+| GET/HEAD | /s/{token}                         | 公开分享页；已授权 HTML 直接返回原网页，支持 Range                                                    |
 | GET/HEAD | /d/{token}                         | 直接下载，仍校验密码、下载许可、有效期和撤销                                                          |
 | GET      | /api/public/share/{token}          | 授权后元数据，计浏览次数；HTML 的 preview_type 为 html，其他文件为 null                               |
 | POST     | /api/public/share/{token}/unlock   | {password}，返回 HttpOnly 分享 Cookie                                                                 |
@@ -249,29 +249,49 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 | GET/HEAD | /api/public/share/{token}/preview  | 可预览格式                                                                                            |
 | GET/HEAD | /api/public/share/{token}/download | 受控下载                                                                                              |
 
-分享明文 Token 只在创建时的 URL 中返回，不是上传 Token。默认链接来源为 s.irin.im。密码 Cookie 每个分享独立，最长一小时。无效链接 404，撤销/到期 410，未解锁 401，禁止下载 403。
+分享明文 Token 只在创建时的 URL 中返回，不是上传 Token。默认链接来源为 s.irin.im。密码 Cookie 每个分享独立，最长一小时。无效链接 404，撤销/到期 410，未解锁 API 返回 401，禁止下载返回 403；分享页面可返回不含文件信息的解锁界面。
 
 #### HTML 分享
 
-上传 `.html` 或 `.htm` 文件后按普通文件创建分享即可，无需额外发布接口。分享页按 HTML 渲染；文件仍以 `text/plain` 保存，旧 MIME 为 `application/octet-stream` 的 `.htm` 文件也支持预览。允许关闭下载，密码、有效期、撤销和回收站权限与普通分享一致。
+上传 `.html` 或 `.htm` 文件后按普通文件创建分享即可，无需额外发布接口。授权通过的 `GET /s/{token}` 直接返回原始文件字节，以 `Content-Type: text/html; charset=utf-8` 和 `Content-Disposition: inline` 显示；不注入导航、容器、脚本或 iframe。文件仍以 `text/plain` 保存，旧 MIME 为 `application/octet-stream` 的 `.htm` 文件也支持。允许关闭下载，密码、有效期、撤销和回收站权限与普通分享一致。
 
-`GET/HEAD /api/public/share/{token}/preview` 对 HTML 返回 `Content-Type: text/html; charset=utf-8`。分享页通过 `sandbox="allow-scripts"` iframe 显示，响应同时带 `Content-Security-Policy: sandbox allow-scripts`；不授予 `allow-same-origin`，即使直接打开预览地址也不能获得本站的 Cookie、存储或父页面访问权限。[CSP sandbox 说明](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/sandbox)
+密码未解锁时，`/s/{token}` 返回简短的解锁页（200），不包含文件名或正文。`POST /api/public/share/{token}/unlock` 成功后设置 HttpOnly Cookie，页面重新加载同一 `/s/{token}` 地址并显示原网页。密码修改后旧 Cookie 失效，下次访问重新显示解锁页。
 
-支持内联 CSS、内联 JavaScript 和 `data:` / `blob:` 内嵌图片、音视频，适合单文件页面与简单交互。CSP 禁止外部脚本、样式和图片等资源、网络请求、嵌套框架、Worker、表单提交与修改 base URL；不授予弹窗、顶层导航、同源或下载权限。依赖 CDN、远程接口、相对路径资源或浏览器持久存储的页面需要改为自包含文件。iframe 中的限制不影响分享页按授权提供原始文件下载；`/download` 和 `/d/{token}` 始终返回附件，保留原始字节。
+`GET/HEAD /api/public/share/{token}/preview` 同样返回隔离的原始 HTML。两个地址均带 `Content-Security-Policy: sandbox allow-scripts`，不授予 `allow-same-origin`，因此上传的脚本不能访问本站 Cookie、浏览器存储或管理页面；`frame-ancestors 'none'` 与 `X-Frame-Options: DENY` 禁止其他页面嵌套。[CSP sandbox 说明](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/sandbox)
+
+支持内联 CSS、内联 JavaScript 和 `data:` / `blob:` 内嵌图片、音视频，适合单文件页面与简单交互。CSP 禁止外部脚本、样式和图片等子资源，以及 fetch/XHR/WebSocket 等连接、嵌套框架、Worker、表单提交与修改 base URL；不授予弹窗、同源或下载权限。网页仍可通过链接、`location` 或 meta refresh 导航自身。依赖 CDN、远程接口、相对路径资源或浏览器持久存储的页面需要改为自包含文件。
+
+完整授权的 200 GET `/s/{token}` 记一次浏览；HEAD、Range、失败或未解锁请求不计浏览，`/preview` 不计浏览。元数据 GET 保留原有浏览计数行为。显示 HTML 不增加下载计数；需要下载时使用创建分享返回的 `directUrl`（`/d/{token}`）或 `/api/public/share/{token}/download`，两者按下载权限返回原始附件，HEAD 和 Range 不增加下载计数。
 
 ### 图床
 
-| Method   | 路径                     | 参数/行为                                                                 |
-| -------- | ------------------------ | ------------------------------------------------------------------------- |
-| POST     | /api/admin/images/folder | 获取或创建 Image-hosting，返回 {id}                                       |
-| POST     | /api/admin/images        | {file_id}，将已有图片按 MD5 命名并公开；返回 {name,file_id,url,duplicate} |
-| GET      | /api/admin/images?page=1 | 每页 40 条，响应 {data:[…],page}                                          |
-| DELETE   | /api/admin/images/{name} | 撤销直链                                                                  |
-| GET/HEAD | /i/{name}                | 公开内联图片，支持 Range                                                  |
+| Method   | 路径                               | 参数/行为                                                                 |
+| -------- | ---------------------------------- | ------------------------------------------------------------------------- |
+| POST     | /api/admin/images/folder           | 获取或创建 Image-hosting，返回 {id}                                       |
+| POST     | /api/admin/images                  | {file_id}，将已有图片按 MD5 命名并公开；返回 {name,file_id,url,duplicate} |
+| GET      | /api/admin/images?page=1           | 每页 40 条，响应 {data:[…],page}                                          |
+| DELETE   | /api/admin/images/{name}           | 撤销直链                                                                  |
+| POST     | /api/admin/images/{name}/restore   | 恢复直链，返回 {data:{name,file_id,url,enabled:1}}                        |
+| DELETE   | /api/admin/images/{name}/permanent | 永久删除已撤销的图片及源文件，返回 {data:{name,file_id,deleted:true}}     |
+| GET/HEAD | /api/admin/images/{name}/download  | 管理员下载；已撤销图片仍可下载，支持 Range                                |
+| GET/HEAD | /i/{name}                          | 公开内联图片，支持 Range                                                  |
+| GET/HEAD | /i/{name}?download=1               | 公开附件下载，仍检查直链有效性，支持 Range                                |
 
 获取目录 → 管理员分片上传至目录 → 调用 /images 公开。支持 PNG/JPEG/GIF/WebP，通过文件头识别，另用 SHA-256 检查 MD5 命名冲突。保存到 Image-hosting，名称为 32位md5.ext，链接默认 s.irin.im。重复图片可能复用已有文件，应使用返回的 file_id；单独调用 POST /images 不会自动删除重复源文件，网页共用上传流程会继续清理重复源。
 
 网页图床与 Markdown 编辑器的新图片上传共用上述管理员流程；编辑器支持选取、拖入和粘贴，将返回的 `url` 插入正文。该流程使用网页管理员会话，不要求用户提供上传 Token，也不调用旧文档附件接口。图床图片上传成功后独立公开，与文章的草稿、发布状态和生命周期无关。
+
+恢复接口要求源文件处于 ready 状态、不在回收站、所在目录及祖先目录有效，且对象 Key 与图床记录一致、R2 对象存在。图片、文件或对象不存在以及文件在回收站时返回 404，对象 Key 已改变或并发状态冲突返回 409。普通文件移入回收站会撤销直链，恢复文件不会自动重新公开；需再调用图床恢复接口。管理员图床下载同样检查文件和目录有效性、对象 Key 一致性，但允许下载已撤销的图片。
+
+永久删除接口要求 `enabled=0`，仍公开或发生并发冲突时返回 409。该操作删除图床记录、源文件及关联分享、文档附件和快照等数据；R2 清理失败保留持久队列重试，仅对象实际删除成功后释放对应容量。
+
+图床列表包含 `views`（引用次数）、`downloads`（下载次数）与 `last_access_at`（最近一次计入统计的时间，Unix 毫秒；尚无记录时为 null）：
+
+- 引用：`GET /i/{name}` 成功开始返回完整 200 图片响应，包括页面嵌入和直接打开。
+- 下载：`GET /i/{name}?download=1` 或管理员 `GET /api/admin/images/{name}/download` 成功开始返回完整 200 附件响应。浏览器对普通图片另存为不会自动归为下载。
+- HEAD、206 部分响应、失败请求、列表查询和 `/api/admin/files/{id}/download?preview=1` 私有预览不计数。若 Range 请求最终返回完整 200 响应，仍按完整响应计数。
+
+统计从迁移 `0009_image_stats.sql` 上线后累加，既有图片从 0 开始，不补历史数据。撤销、恢复、重复上传去重保留计数；永久删除会移除统计记录。同一访客的重复请求及自动请求可能多次计入，统计不代表唯一访客或传输完成。记录采用尽力写入：统计写入失败不影响图片响应，可能少计；最近访问时间也仅随成功记录更新。
 
 ### Markdown
 
@@ -320,4 +340,4 @@ Slug 1–100 字符，仅小写字母、数字和连字符，不能是系统保�
 - 任务 24 小时后失效，定时任务分批清理，容量到实际删除对象才释放。撤销 Token 不等于取消任务。
 - 上传不覆盖同名文件。直接上传和初始化不是幂等操作，不应自动重试整个 POST；分片 PUT 可重试。
 - 文件类型判断不代表病毒扫描或完整解码；图床 Token 上传会直接公开图片；普通文件上传仍为私有。
-- 部署新增功能先应用 0007_api_tokens.sql 和 0008_image_api_scope.sql，再发布 Worker（启用 nodejs_compat）；无需新增 Cloudflare Secret。现有网页认证和上传继续可用。
+- 部署前先应用所有待执行迁移，包括 0007_api_tokens.sql、0008_image_api_scope.sql 和 0009_image_stats.sql，再发布 Worker（启用 nodejs_compat）；无需新增 Cloudflare Secret。现有网页认证和上传继续可用。
