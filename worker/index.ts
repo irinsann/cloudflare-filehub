@@ -16,6 +16,7 @@ import { fail } from './errors';
 import { siteOriginAllowed } from './origins';
 import { htmlPage } from './html';
 import { escapeHtml } from '../shared/markdown';
+import { identifier } from '../shared/validation';
 const app = new Hono<AppEnv>();
 app.use('*', async (c, next) => {
   c.set('requestId', crypto.randomUUID());
@@ -43,7 +44,16 @@ app.use('*', async (c, next) => {
 app.use('/api/admin/*', adminAuth);
 app.use('/api/v1/*', uploadTokenAuth);
 app.use('/api/admin/*', async (c, next) => {
-  await rateLimit(c.env, 'admin', c.get('email'), 240);
+  const url = new URL(c.req.url);
+  const previewFile = /^\/api\/admin\/files\/([^/]+)\/download$/.exec(url.pathname);
+  const privatePreview =
+    ['GET', 'HEAD'].includes(c.req.method) &&
+    previewFile !== null &&
+    identifier.safeParse(previewFile[1]).success &&
+    url.searchParams.size === 1 &&
+    url.searchParams.get('preview') === '1';
+  // Authentication still runs first; eager private previews must not exhaust the operation budget.
+  if (!privatePreview) await rateLimit(c.env, 'admin', c.get('email'), 240);
   await next();
 });
 app.use('/api/*', enforceJsonLimit);

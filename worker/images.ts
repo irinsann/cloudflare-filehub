@@ -76,7 +76,7 @@ imageRoutes.post('/images/folder', async (c) => c.json({ data: { id: await image
 imageRoutes.get('/images', async (c) => {
   const page = Math.max(1, Math.min(100000, Math.floor(Number(c.req.query('page'))) || 1));
   const rows = await c.env.DB.prepare(
-    "SELECT i.name,i.file_id,i.enabled,i.created_at,i.views,i.downloads,i.last_access_at,f.size,f.mime FROM image_hosts i JOIN files f ON f.id=i.file_id WHERE f.deleted_at IS NULL AND f.status='ready' ORDER BY i.created_at DESC LIMIT 40 OFFSET ?",
+    "SELECT i.name,i.file_id,i.enabled,i.created_at,i.views,i.downloads,i.last_access_at,f.size,f.mime FROM image_hosts i JOIN files f ON f.id=i.file_id WHERE f.deleted_at IS NULL AND f.status='ready' ORDER BY i.created_at DESC,i.name ASC LIMIT 40 OFFSET ?",
   )
     .bind((page - 1) * 40)
     .all();
