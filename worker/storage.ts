@@ -237,6 +237,8 @@ export async function cleanup(env: Env) {
   }
   await env.DB.batch([
     env.DB.prepare('DELETE FROM rate_limits WHERE reset_at<?').bind(now()),
+    env.DB.prepare('DELETE FROM admin_sessions WHERE expires_at<?').bind(now()),
+    env.DB.prepare('DELETE FROM admin_setup WHERE expires_at<?').bind(now()),
     env.DB.prepare('DELETE FROM operations WHERE created_at<?').bind(now() - 90 * 86400000),
   ]);
 }

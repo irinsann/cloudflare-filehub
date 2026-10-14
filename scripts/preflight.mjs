@@ -20,7 +20,9 @@ if (
   /REPLACE|local-only/.test(config.d1_databases[0].database_id)
 )
   missing.push('真实 D1 database_id');
-for (const key of ['ACCESS_TEAM_DOMAIN', 'ACCESS_AUD', 'ADMIN_EMAILS'])
+for (const key of vars.AUTH_MODE === 'password_totp'
+  ? ['ADMIN_EMAILS']
+  : ['ACCESS_TEAM_DOMAIN', 'ACCESS_AUD', 'ADMIN_EMAILS'])
   if (!vars[key] || /YOUR_|REPLACE/.test(vars[key])) missing.push(key);
 for (const key of ['ADMIN_ORIGIN', 'FILES_ORIGIN', 'MARKDOWN_ORIGIN'])
   if (vars[key]) {

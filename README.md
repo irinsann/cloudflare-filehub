@@ -95,3 +95,5 @@ pnpm check
 ## 开源协议
 
 本项目采用 [MIT License](LICENSE)。第三方依赖保留各自的开源协议。
+
+站内认证可选择 AUTH_MODE=password_totp：密码＋验证器验证码，首次扫码绑定、一次性恢复码、24 小时可撤销会话。详见部署文档；默认 Access 模式仍可选择。

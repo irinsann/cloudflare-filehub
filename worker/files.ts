@@ -49,6 +49,7 @@ fileRoutes.get('/settings', (c) =>
       maxUploadBytes: limit(c.env.MAX_UPLOAD_BYTES, 1073741824),
       maxTextBytes: limit(c.env.MAX_TEXT_BYTES, 1048576),
       environment: c.env.ENVIRONMENT,
+      authMode: c.env.AUTH_MODE || 'access',
       email: c.get('email'),
       filesOrigin: c.env.FILES_ORIGIN,
       markdownOrigin: c.env.MARKDOWN_ORIGIN,

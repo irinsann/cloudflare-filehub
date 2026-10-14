@@ -12,6 +12,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (options.body && typeof options.body === 'string')
     headers.set('Content-Type', 'application/json');
   const response = await fetch(`/api/admin${path}`, { ...options, headers });
+  if (response.status === 401) location.assign('/login');
   const result = (await response.json()) as { data: T; error?: { message: string } };
   if (!response.ok) throw new ApiError(response.status, result.error?.message ?? '请求失败');
   return result.data;

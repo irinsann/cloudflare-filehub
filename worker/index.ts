@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import type { AppEnv, Env } from './env';
 import { adminAuth, isLocalAuth, rateLimit } from './security';
 import { fileRoutes } from './files';
+import { siteAuthRoutes, loginPage, siteIdentity } from './site-auth';
 import { uploadRoutes } from './uploads';
 import { markdownRoutes, publicPageRoutes, readPage, enforceJsonLimit } from './markdown';
 import { shareRoutes, publicShareRoutes, sharePage, directRoutes } from './shares';
@@ -45,6 +46,10 @@ app.use('/api/public/*', async (c, next) => {
   await rateLimit(c.env, 'public', c.req.header('CF-Connecting-IP') || 'local', 240);
   await next();
 });
+app.route('/api/auth', siteAuthRoutes);
+app.get('/login', (c) =>
+  c.env.AUTH_MODE === 'password_totp' ? loginPage(c) : c.redirect('/drive/'),
+);
 app.route('/api/admin', fileRoutes);
 app.route('/api/admin', uploadRoutes);
 app.route('/api/admin', shareRoutes);
@@ -72,6 +77,12 @@ app.get('/robots.txt', (c) =>
 app.get('*', async (c) => {
   if (c.req.path === '/' && !isLocalAuth(c.env, new URL(c.req.url)))
     return c.redirect('/drive/', 302);
+  if (
+    c.env.AUTH_MODE === 'password_totp' &&
+    !isLocalAuth(c.env, new URL(c.req.url)) &&
+    !(await siteIdentity(c))
+  )
+    return c.redirect('/login', 302);
   // Frontend shell is harmless, but on production protect it with the same JWT verification as API.
   if (!isLocalAuth(c.env, new URL(c.req.url))) {
     let allowed = false;

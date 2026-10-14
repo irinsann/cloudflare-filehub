@@ -33,6 +33,7 @@
     "hono": "^4.10.0",
     "jose": "^6.1.0",
     "lucide-react": "^0.468.0",
+    "qrcode-generator": "^2.0.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "rehype-highlight": "^7.0.2",

@@ -163,3 +163,24 @@ export const uploadParts = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.sessionId, t.partNumber] })],
 );
+
+export const adminAccount = sqliteTable('admin_account', {
+  id: integer().primaryKey(),
+  passwordHash: text('password_hash').notNull(),
+  totpCipher: text('totp_cipher').notNull(),
+  lastCounter: integer('last_counter').notNull().default(-1),
+  createdAt: integer('created_at').notNull(),
+});
+export const adminSessions = sqliteTable(
+  'admin_sessions',
+  { tokenHash: text('token_hash').primaryKey(), expiresAt: integer('expires_at').notNull() },
+  (t) => [index('admin_session_expiry').on(t.expiresAt)],
+);
+export const adminSetup = sqliteTable('admin_setup', {
+  tokenHash: text('token_hash').primaryKey(),
+  totpCipher: text('totp_cipher').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+});
+export const adminRecovery = sqliteTable('admin_recovery', {
+  codeHash: text('code_hash').primaryKey(),
+});

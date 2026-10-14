@@ -33,3 +33,11 @@ pnpm run deploy:production
 首页会跳转 /drive/；/drive/ 和 /api/admin/files 未登录应进入 Access 登录；登录后检查上传与列表。匿名 /p/:slug、/s/:token、/d/:token 和 /api/public/* 无需管理员登录，但仍受发布、令牌、有效期和密码约束。未创建内容时公开路径返回 404。测试直链 Range/HEAD，撤销链接后不可下载。清空回收站必须由用户在界面确认，正常文件不受影响。
 
 默认上限 1GB；分片失败自动重试，24 小时未完成任务自动清理。文本在线编辑上限仍为 1MiB。发布后可在 Cloudflare 查看用量，实际消耗取决于文件与访问量。
+
+## 站内密码与验证器登录
+
+设置 AUTH_MODE=password_totp 后，/login 提供站内登录与首次绑定，认证接口位于 /api/auth/*。准备独立 AUTH_ENCRYPTION_KEY 随机密钥作为 Worker Secret，用于 AES-GCM 加密验证器密钥。不要旋转此密钥，否则已有验证器将无法解密。AUTH_SETUP_SECRET 是独立随机一次性邀请令牌；AUTH_SETUP_EXPIRES 是邀请有效期的毫秒时间戳。首次设置链接格式为 /login#setup=令牌，页面读入后立即移除 URL 片段。令牌不提交公开仓库，不对外分享。
+
+用户亲自设置至少 12 字符密码，并扫描站内二维码输入验证码完成绑定，保存显示一次的 8 个恢复码。密码用独立随机盐 PBKDF2 保存；TOTP 为 SHA1 / 6 位 / 30 秒，接受前后一个窗口且原子拒绝已用验证码。恢复码只存哈希并只能使用一次，仍须提供密码。登录 Cookie 为 Secure、HttpOnly、SameSite=Strict 的随机会话，服务端存哈希，24 小时过期，退出立即撤销。
+
+迁移时先部署并完成账户绑定，再移除 RCloud Access 应用；不要在账户未建立时移除现有保护。绑定成功后 /setup/start 会永久拒绝初始化，随后删除 AUTH_SETUP_SECRET。密码或验证器凭据更新必须由用户本人操作；遗失密码时由 Cloudflare 账户所有者进行受控离线重置，平台无公开绕过或重置接口。

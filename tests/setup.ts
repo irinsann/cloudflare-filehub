@@ -22,6 +22,10 @@ beforeEach(async () => {
       'operations',
       'cleanup_tasks',
       'rate_limits',
+      'admin_sessions',
+      'admin_setup',
+      'admin_recovery',
+      'admin_account',
     ].map((table) => testEnv.DB.prepare(`DELETE FROM ${table}`)),
   );
 });

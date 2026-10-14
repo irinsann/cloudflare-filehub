@@ -65,10 +65,31 @@ export function Management({
         <section className="settings-card">
           <ShieldCheck />
           <h3>身份与访问</h3>
+          {settings?.authMode === 'password_totp' && (
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  const r = await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: { 'X-Drive-Request': '1' },
+                  });
+                  if (!r.ok) throw Error('退出失败');
+                  location.assign('/login');
+                } catch {
+                  notify('退出失败，请稍后重试');
+                }
+              }}
+            >
+              退出登录
+            </Button>
+          )}
           <p>当前身份：{settings?.email ?? '正在读取'}</p>
           <p>环境：{settings?.environment ?? '—'}</p>
           <p className="muted">
-            生产环境由 Cloudflare Access 验证身份，后台只允许配置的管理员邮箱。
+            {settings?.authMode === 'password_totp'
+              ? '使用密码与验证器验证码登录，会话有效期为 24 小时。'
+              : '后台仅允许配置的管理员身份登录。'}
           </p>
         </section>
         <section className="settings-card">

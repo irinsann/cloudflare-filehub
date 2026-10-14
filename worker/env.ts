@@ -1,5 +1,9 @@
 import type { Context } from 'hono';
 export interface Env {
+  AUTH_MODE?: string;
+  AUTH_ENCRYPTION_KEY?: string;
+  AUTH_SETUP_SECRET?: string;
+  AUTH_SETUP_EXPIRES?: string;
   DB: D1Database;
   BUCKET: R2Bucket;
   ASSETS: Fetcher;

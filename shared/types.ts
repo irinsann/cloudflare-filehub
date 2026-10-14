@@ -65,6 +65,7 @@ export interface Listing {
   limit: number;
 }
 export interface Settings {
+  authMode?: string;
   maxUploadBytes: number;
   maxTextBytes: number;
   environment: string;
