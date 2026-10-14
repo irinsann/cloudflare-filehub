@@ -414,20 +414,6 @@ export default function App() {
               )}
             </div>
           </div>
-          {!management && view !== 'trash' && (
-            <div className="quick-cards">
-              <button onClick={() => fileInput.current?.click()}>
-                <span className="quick-icon beige">
-                  <Upload size={22} />
-                </span>
-                <span>
-                  <strong>上传文件</strong>
-                  <small>拖入或选择文件上传</small>
-                </span>
-                <ChevronRight size={17} />
-              </button>
-            </div>
-          )}
           <input
             type="file"
             ref={fileInput}
