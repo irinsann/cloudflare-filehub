@@ -167,6 +167,42 @@ html[data-theme='dark'] .button-danger {
   min-height: 36px;
   padding: 0;
 }
+.public-links-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+.public-link-origin,
+.form-stack label.public-link-origin {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}
+.public-link-origin > span:not(.sr-only) {
+  flex-shrink: 0;
+}
+.public-link-origin select,
+.form-stack .public-link-origin select {
+  width: auto;
+  min-height: 36px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 12px;
+  background: var(--glass-strong);
+}
+.public-link-origin-compact select,
+.form-stack .public-link-origin-compact select {
+  min-height: 32px;
+}
 .spin {
   animation: spin 1s linear infinite;
 }
@@ -263,6 +299,11 @@ progress::-moz-progress-bar {
   .button-icon {
     width: 44px;
     height: 44px;
+  }
+  .public-link-origin select,
+  .form-stack .public-link-origin select {
+    min-height: 44px;
+    font-size: 16px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

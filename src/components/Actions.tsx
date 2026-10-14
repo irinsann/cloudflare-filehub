@@ -3,6 +3,7 @@ import type { FileRecord, FolderRecord } from '../../shared/types';
 import { Modal } from './ui/dialog';
 import { Button } from './ui/button';
 import { api, copy, send } from '../lib/api';
+import { LinkOriginSelect, usePublicLinks } from './PublicLinks';
 export type Action = {
   type:
     | 'folder'
@@ -30,6 +31,7 @@ export function Actions({
   onDone: (id?: string) => void;
   notify: (message: string) => void;
 }) {
+  const { link: publicLink } = usePublicLinks();
   const [name, setName] = useState(
     action.file?.name ?? action.folder?.name ?? (action.type === 'markdown' ? '未命名.md' : ''),
   );
@@ -43,6 +45,7 @@ export function Actions({
     [folders, setFolders] = useState<FolderRecord[]>([]),
     [foldersLoading, setFoldersLoading] = useState(action.type === 'move'),
     [path, setPath] = useState<FolderRecord[]>([]);
+  const selectedLink = publicLink(link);
   useEffect(() => {
     if (action.type !== 'move') return;
     const controller = new AbortController();
@@ -232,15 +235,16 @@ export function Actions({
         {action.type === 'emptyTrash' && <p>清空回收站？此操作无法恢复。</p>}
         {link && (
           <>
+            <LinkOriginSelect />
             <label>
               {action.type === 'direct' ? '文件直链' : '公开链接'}
-              <input readOnly value={link} onFocus={(e) => e.target.select()} />
+              <input readOnly value={selectedLink} onFocus={(e) => e.target.select()} />
             </label>
             <div className="dialog-footer">
               <Button
                 type="button"
                 onClick={() =>
-                  void copy(link)
+                  void copy(selectedLink)
                     .then(() => notify('链接已复制'))
                     .catch(() => setError('无法访问剪贴板，请手动复制'))
                 }
@@ -248,7 +252,7 @@ export function Actions({
                 复制链接
               </Button>
               <Button asChild variant="outline">
-                <a href={link} target="_blank" rel="noreferrer">
+                <a href={selectedLink} target="_blank" rel="noreferrer">
                   {action.type === 'direct' ? '下载文件' : '打开分享'}
                 </a>
               </Button>

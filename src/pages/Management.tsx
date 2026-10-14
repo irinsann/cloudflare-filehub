@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ExternalLink, FileText, Link2, ShieldCheck } from 'lucide-react';
-import { api, send, dateLabel } from '../lib/api';
+import { Copy, ExternalLink, FileText, Link2, ShieldCheck } from 'lucide-react';
+import { api, copy, send, dateLabel } from '../lib/api';
 import { StorageMeter } from '../components/workspace/WorkspaceShell';
 import { Button } from '../components/ui/button';
 import { ApiTokens } from '../components/ApiTokens';
 import { EmptyState } from '../components/EmptyState';
+import { LinkOriginSelect, usePublicLinks } from '../components/PublicLinks';
 import type { Settings, ShareRecord } from '../../shared/types';
 interface DocumentRow {
   id: string;
@@ -30,6 +31,7 @@ export function Management({
   onEdit: (id: string) => void;
   notify: (s: string) => void;
 }) {
+  const publicLinks = usePublicLinks();
   const [shares, setShares] = useState<(ShareRecord & { password_protected: number })[]>([]),
     [docs, setDocs] = useState<DocumentRow[]>([]),
     [error, setError] = useState(''),
@@ -154,10 +156,15 @@ export function Management({
         </div>
       ) : (
         <div className="management-list">
+          <div className="file-toolbar">
+            <LinkOriginSelect compact />
+          </div>
           {docs
             .filter((d) => d.published)
             .map((d) => {
-              const url = `${settings?.markdownOrigin || location.origin}/p/${d.slug}`;
+              const url = publicLinks.link(
+                `${settings?.markdownOrigin || location.origin}/p/${d.slug}`,
+              );
               return (
                 <article key={d.id} className="management-row">
                   <div className="type-icon">
@@ -170,6 +177,19 @@ export function Management({
                       {d.version !== d.published_version ? ' · 有新草稿' : ''}
                     </p>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="复制文章链接"
+                    title="复制文章链接"
+                    onClick={() =>
+                      void copy(url)
+                        .then(() => notify('阅读链接已复制'))
+                        .catch(() => setError('复制失败，请打开文章后复制地址'))
+                    }
+                  >
+                    <Copy size={16} />
+                  </Button>
                   <Button variant="ghost" size="icon" asChild>
                     <a href={url} target="_blank" rel="noreferrer" aria-label="打开文章">
                       <ExternalLink size={16} />

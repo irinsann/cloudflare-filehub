@@ -5,6 +5,7 @@ import { imageMarkdown, uploadHostedImage } from '../lib/image-upload';
 import { EmptyState } from '../components/EmptyState';
 import { Button } from '../components/ui/button';
 import { Modal } from '../components/ui/dialog';
+import { LinkOriginSelect, usePublicLinks } from '../components/PublicLinks';
 import type { Settings } from '../../shared/types';
 interface Row {
   name: string;
@@ -27,6 +28,7 @@ export function ImageHosting({
   notify: (s: string) => void;
   onComplete: () => void;
 }) {
+  const { link: publicLink } = usePublicLinks();
   const [rows, setRows] = useState<Row[]>([]),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
@@ -177,6 +179,9 @@ export function ImageHosting({
           {error}
         </p>
       )}
+      <div className="public-links-toolbar">
+        <LinkOriginSelect />
+      </div>
       {loading ? (
         <div className="skeleton-list" aria-label="加载图片">
           <div className="skeleton" />
@@ -242,14 +247,14 @@ export function ImageHosting({
                           下载
                         </a>
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => copied(r.url)}>
+                      <Button size="sm" variant="ghost" onClick={() => copied(publicLink(r.url))}>
                         <Link2 size={14} />
                         直链
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => copied(imageMarkdown('图片', r.url))}
+                        onClick={() => copied(imageMarkdown('图片', publicLink(r.url)))}
                       >
                         <Copy size={14} />
                         Markdown

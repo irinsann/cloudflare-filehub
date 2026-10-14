@@ -205,7 +205,7 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 
 | Method   | 路径                             | 参数/行为                                                                                                                |
 | -------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| GET      | /settings                        | 身份、认证模式、文本限制、存储容量与链接来源                                                                             |
+| GET      | /settings                        | 身份、认证模式、文本限制、存储容量与链接来源（adminOrigin、filesOrigin、markdownOrigin）                                 |
 | GET      | /files                           | folder_id、view=files/recent/markdown/trash、search、page、limit（1–100）、sort=name/size/updated_at、direction=asc/desc |
 | POST     | /files/upload?name=…&folder_id=… | 原始 Body 与 X-File-Size，最多 32MiB，支持空文件                                                                         |
 | POST     | /uploads                         | 创建分片任务，参数同外部上传 API                                                                                         |
@@ -230,6 +230,8 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 | DELETE   | /folders/{id}/permanent          | 永久删除空回收站目录                                                                                                     |
 
 永久删除与清空回收站会立即尝试删除对应 R2 对象及文档附件、快照；只有对象删除成功才释放容量。存储服务暂时失败时由定时任务重试，容量不会提前归零。
+
+`GET /api/admin/settings` 返回的 `adminOrigin` 和 `filesOrigin` 分别用于网页的全球 CDN、香港反代链接选项，`markdownOrigin` 保留为文章默认链接来源。网页复制时只切换可信链接的域名，保留路径、参数和片段；选择不改变 API 返回的默认 URL 或 ShareX 上传配置。其他部署可使用自己的域名，若两个配置相同则网页仅显示一个选项。
 
 列表响应 `{data:{files,folders,total,page,limit}}`，按文件总数分页。近期、Markdown 视图与文件名搜索是全局查询；搜索中的 %、\_ 视为普通字符。上传 Token 无列目录权限，文件夹 ID 可在已登录的目录 API 中查看。
 

@@ -16,6 +16,7 @@ import { FileMenu } from './components/workspace/FileMenu';
 import { UploadQueue } from './components/workspace/UploadQueue';
 import { Management } from './pages/Management';
 import { ImageHosting } from './pages/ImageHosting';
+import { PublicLinksProvider } from './components/PublicLinks';
 const Editor = lazy(() => import('./pages/Editor')),
   Preview = lazy(() => import('./components/Preview'));
 export default function App() {
@@ -90,167 +91,171 @@ export default function App() {
     view === 'published' || view === 'shares' || view === 'settings' || view === 'images';
   if (editing)
     return (
-      <Suspense
-        fallback={
-          <div className="full-loading">
-            <Loader2 className="spin" />
-            加载编辑器…
-          </div>
-        }
+      <PublicLinksProvider settings={settings}>
+        <Suspense
+          fallback={
+            <div className="full-loading">
+              <Loader2 className="spin" />
+              加载编辑器…
+            </div>
+          }
+        >
+          <Editor
+            id={editing}
+            theme={theme}
+            settings={settings}
+            notify={notify}
+            onClose={() => {
+              setEditing(null);
+              reload();
+            }}
+          />
+          {toast && (
+            <div className="toast" role="status">
+              <CheckCircle2 size={17} />
+              {toast}
+            </div>
+          )}
+        </Suspense>
+      </PublicLinksProvider>
+    );
+  return (
+    <PublicLinksProvider settings={settings}>
+      <WorkspaceShell
+        view={view}
+        navigate={navigate}
+        settings={settings}
+        theme={theme}
+        toggleTheme={toggleTheme}
+        search={search}
+        onSearch={searchFiles}
+        searchInput={searchInput}
+        allowDrop={!management && view !== 'trash'}
+        onFiles={(files) => uploads.add(files, folder)}
       >
-        <Editor
-          id={editing}
-          theme={theme}
-          settings={settings}
-          notify={notify}
-          onClose={() => {
-            setEditing(null);
-            reload();
-          }}
-        />
+        <div className="content">
+          <div className="page-heading">
+            <div>
+              <h1>{heading}</h1>
+            </div>
+            <div className="heading-actions">
+              {view === 'trash' && (
+                <Button variant="danger" onClick={() => setAction({ type: 'emptyTrash' })}>
+                  <Trash2 size={16} />
+                  清空回收站
+                </Button>
+              )}
+              {!management && view !== 'trash' && (
+                <>
+                  {view === 'markdown' && (
+                    <Button variant="outline" onClick={() => setAction({ type: 'markdown' })}>
+                      <Plus size={16} />
+                      新建文档
+                    </Button>
+                  )}
+                  <Button onClick={() => fileInput.current?.click()} disabled={!settings}>
+                    <Upload size={16} />
+                    上传文件
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+          <input
+            type="file"
+            ref={fileInput}
+            hidden
+            multiple
+            onChange={(e) => {
+              uploads.add(Array.from(e.target.files ?? []), folder);
+              e.target.value = '';
+            }}
+          />
+          {error && (
+            <div className="error-banner" role="alert">
+              <AlertCircle size={18} />
+              <span>{error}</span>
+              <Button variant="ghost" size="sm" onClick={reload}>
+                重试
+              </Button>
+            </div>
+          )}
+          {view === 'images' ? (
+            <ImageHosting settings={settings} notify={notify} onComplete={reload} />
+          ) : management ? (
+            <Management
+              view={view}
+              refresh={refresh}
+              settings={settings}
+              onEdit={setEditing}
+              notify={notify}
+            />
+          ) : (
+            <FilesPanel
+              browser={browser}
+              setAction={setAction}
+              setMenu={setMenu}
+              openFile={openFile}
+              setBulkDelete={setBulkDelete}
+            />
+          )}
+        </div>
+
+        <UploadQueue uploads={uploads} />
         {toast && (
           <div className="toast" role="status">
             <CheckCircle2 size={17} />
             {toast}
           </div>
         )}
-      </Suspense>
-    );
-  return (
-    <WorkspaceShell
-      view={view}
-      navigate={navigate}
-      settings={settings}
-      theme={theme}
-      toggleTheme={toggleTheme}
-      search={search}
-      onSearch={searchFiles}
-      searchInput={searchInput}
-      allowDrop={!management && view !== 'trash'}
-      onFiles={(files) => uploads.add(files, folder)}
-    >
-      <div className="content">
-        <div className="page-heading">
-          <div>
-            <h1>{heading}</h1>
-          </div>
-          <div className="heading-actions">
-            {view === 'trash' && (
-              <Button variant="danger" onClick={() => setAction({ type: 'emptyTrash' })}>
-                <Trash2 size={16} />
-                清空回收站
-              </Button>
-            )}
-            {!management && view !== 'trash' && (
-              <>
-                {view === 'markdown' && (
-                  <Button variant="outline" onClick={() => setAction({ type: 'markdown' })}>
-                    <Plus size={16} />
-                    新建文档
-                  </Button>
-                )}
-                <Button onClick={() => fileInput.current?.click()} disabled={!settings}>
-                  <Upload size={16} />
-                  上传文件
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-        <input
-          type="file"
-          ref={fileInput}
-          hidden
-          multiple
-          onChange={(e) => {
-            uploads.add(Array.from(e.target.files ?? []), folder);
-            e.target.value = '';
-          }}
-        />
-        {error && (
-          <div className="error-banner" role="alert">
-            <AlertCircle size={18} />
-            <span>{error}</span>
-            <Button variant="ghost" size="sm" onClick={reload}>
-              重试
-            </Button>
-          </div>
-        )}
-        {view === 'images' ? (
-          <ImageHosting settings={settings} notify={notify} onComplete={reload} />
-        ) : management ? (
-          <Management
-            view={view}
-            refresh={refresh}
-            settings={settings}
-            onEdit={setEditing}
+        {action && (
+          <Actions
+            key={`${action.type}${action.file?.id ?? action.folder?.id ?? ''}`}
+            action={action}
+            currentFolder={folder}
+            onClose={() => setAction(null)}
+            onDone={(id) => {
+              reload();
+              notify('操作已完成');
+              if (id) setEditing(id);
+            }}
             notify={notify}
           />
-        ) : (
-          <FilesPanel
-            browser={browser}
-            setAction={setAction}
+        )}
+        {preview && (
+          <Suspense fallback={<div className="full-loading">加载预览…</div>}>
+            <Preview file={preview} onClose={() => setPreview(null)} />
+          </Suspense>
+        )}
+        {menu && (
+          <FileMenu
+            menu={menu}
+            view={view}
             setMenu={setMenu}
+            setAction={setAction}
             openFile={openFile}
-            setBulkDelete={setBulkDelete}
+            restore={restore}
           />
         )}
-      </div>
-
-      <UploadQueue uploads={uploads} />
-      {toast && (
-        <div className="toast" role="status">
-          <CheckCircle2 size={17} />
-          {toast}
-        </div>
-      )}
-      {action && (
-        <Actions
-          key={`${action.type}${action.file?.id ?? action.folder?.id ?? ''}`}
-          action={action}
-          currentFolder={folder}
-          onClose={() => setAction(null)}
-          onDone={(id) => {
-            reload();
-            notify('操作已完成');
-            if (id) setEditing(id);
-          }}
-          notify={notify}
-        />
-      )}
-      {preview && (
-        <Suspense fallback={<div className="full-loading">加载预览…</div>}>
-          <Preview file={preview} onClose={() => setPreview(null)} />
-        </Suspense>
-      )}
-      {menu && (
-        <FileMenu
-          menu={menu}
-          view={view}
-          setMenu={setMenu}
-          setAction={setAction}
-          openFile={openFile}
-          restore={restore}
-        />
-      )}
-      {bulkDelete && (
-        <Modal
-          title="批量移入回收站"
-          onClose={() => {
-            if (!bulkBusy) setBulkDelete(false);
-          }}
-        >
-          <p>确定删除所选的 {selected.size} 个文件？关联分享和文章会立即失效。</p>
-          <div className="dialog-footer">
-            <Button variant="outline" onClick={() => setBulkDelete(false)} disabled={bulkBusy}>
-              取消
-            </Button>
-            <Button variant="danger" disabled={bulkBusy} onClick={() => void batchDelete()}>
-              {bulkBusy ? '处理中…' : '确认删除'}
-            </Button>
-          </div>
-        </Modal>
-      )}
-    </WorkspaceShell>
+        {bulkDelete && (
+          <Modal
+            title="批量移入回收站"
+            onClose={() => {
+              if (!bulkBusy) setBulkDelete(false);
+            }}
+          >
+            <p>确定删除所选的 {selected.size} 个文件？关联分享和文章会立即失效。</p>
+            <div className="dialog-footer">
+              <Button variant="outline" onClick={() => setBulkDelete(false)} disabled={bulkBusy}>
+                取消
+              </Button>
+              <Button variant="danger" disabled={bulkBusy} onClick={() => void batchDelete()}>
+                {bulkBusy ? '处理中…' : '确认删除'}
+              </Button>
+            </div>
+          </Modal>
+        )}
+      </WorkspaceShell>
+    </PublicLinksProvider>
   );
 }

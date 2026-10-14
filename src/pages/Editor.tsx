@@ -23,6 +23,7 @@ import { clipboardImages, imageMarkdown, uploadHostedImage } from '../lib/image-
 import { Button } from '../components/ui/button';
 import { Modal } from '../components/ui/dialog';
 import { MarkdownView } from '../components/MarkdownView';
+import { LinkOriginSelect, usePublicLinks } from '../components/PublicLinks';
 type DocumentData = { file: FileRecord; content: string; page: PageRecord | null };
 export default function Editor({
   id,
@@ -37,6 +38,7 @@ export default function Editor({
   onClose: () => void;
   notify: (s: string) => void;
 }) {
+  const publicLinks = usePublicLinks();
   const [data, setData] = useState<DocumentData | null>(null),
     [content, setContent] = useState(''),
     [saved, setSaved] = useState(''),
@@ -182,6 +184,7 @@ export default function Editor({
       return;
     }
     const run = ++imageUploadRun.current;
+    const imageLink = publicLinks.link;
     const active = () => mounted.current && imageUploadRun.current === run;
     imageUploadBusy.current = true;
     setImageUploading(true);
@@ -200,7 +203,7 @@ export default function Editor({
             }
           });
           if (!active()) break;
-          insert('\n' + imageMarkdown(file.name, result.url) + '\n');
+          insert('\n' + imageMarkdown(file.name, imageLink(result.url)) + '\n');
           completed++;
           if (result.cleanupWarning) errors.push(file.name + '：' + result.cleanupWarning);
         } catch (cause) {
@@ -351,18 +354,19 @@ export default function Editor({
         <div className="published-banner">
           <Check size={15} />
           <span>已发布</span>
+          <LinkOriginSelect compact className="editor-published-origin" />
           <Button
             size="sm"
             variant="ghost"
             onClick={() =>
-              void copy(link)
+              void copy(publicLinks.link(link))
                 .then(() => notify('阅读链接已复制'))
                 .catch(() => setError('请从发布窗口手动复制链接'))
             }
           >
             复制链接
           </Button>
-          <a href={link} target="_blank" rel="noreferrer" aria-label="打开文章">
+          <a href={publicLinks.link(link)} target="_blank" rel="noreferrer" aria-label="打开文章">
             <ExternalLink size={15} />
           </a>
         </div>
@@ -407,6 +411,7 @@ export default function Editor({
             e.target.value = '';
           }}
         />
+        {!link && <LinkOriginSelect compact className="editor-image-origin" />}
         <span className="editor-tools-label">MARKDOWN / GFM</span>
         <Button
           className="mobile-preview-toggle"
@@ -522,10 +527,18 @@ export default function Editor({
               允许搜索引擎索引
             </label>
             {link && (
-              <label>
-                当前阅读链接
-                <input value={link} readOnly onFocus={(e) => e.target.select()} />
-              </label>
+              <div className="editor-published-link">
+                <div className="editor-link-heading">
+                  <label htmlFor="current-reading-link">当前阅读链接</label>
+                  <LinkOriginSelect compact />
+                </div>
+                <input
+                  id="current-reading-link"
+                  value={publicLinks.link(link)}
+                  readOnly
+                  onFocus={(e) => e.target.select()}
+                />
+              </div>
             )}
             {error && <p className="error-text">{error}</p>}
             <div className="dialog-footer">

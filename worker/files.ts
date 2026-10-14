@@ -106,6 +106,7 @@ fileRoutes.get('/settings', async (c) =>
       environment: c.env.ENVIRONMENT,
       authMode: c.env.AUTH_MODE || 'access',
       email: c.get('email'),
+      adminOrigin: c.env.ADMIN_ORIGIN,
       filesOrigin: c.env.FILES_ORIGIN,
       markdownOrigin: c.env.MARKDOWN_ORIGIN,
     },

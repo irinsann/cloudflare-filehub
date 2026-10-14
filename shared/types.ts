@@ -73,6 +73,7 @@ export interface Settings {
   maxTextBytes: number;
   environment: string;
   email: string;
+  adminOrigin?: string;
   filesOrigin: string;
   markdownOrigin: string;
 }
