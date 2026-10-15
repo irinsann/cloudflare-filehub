@@ -12,6 +12,7 @@ import {
   Image,
   Film,
   Music,
+  ArrowDownUp,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { EmptyState } from '../EmptyState';
@@ -73,8 +74,9 @@ export function FilesPanel({
   return (
     <section className="files-panel">
       <div className="file-toolbar">
-        <div className="breadcrumbs">
+        <nav className="breadcrumbs" aria-label="文件路径">
           <button
+            type="button"
             onClick={() => {
               setFolder(null);
               setCrumbs([]);
@@ -88,6 +90,8 @@ export function FilesPanel({
             <span key={f.id}>
               <ChevronRight size={14} />
               <button
+                type="button"
+                aria-current={i === crumbs.length - 1 ? 'location' : undefined}
                 onClick={() => {
                   setFolder(f.id);
                   setCrumbs(crumbs.slice(0, i + 1));
@@ -115,7 +119,7 @@ export function FilesPanel({
               {selected.size === listing.files.length ? '取消全选' : '全选'}
             </Button>
           )}
-        </div>
+        </nav>
         <div className="file-toolbar-actions">
           {view === 'files' && (
             <Button
@@ -128,25 +132,29 @@ export function FilesPanel({
               <span>新建文件夹</span>
             </Button>
           )}
-          <select
-            aria-label="排序方式"
-            value={sort + ':' + direction}
-            onChange={(e) => {
-              const [key, order] = e.target.value.split(':');
-              setSort(key);
-              setDirection(order);
-              setPage(1);
-            }}
-          >
-            <option value="updated_at:desc">最新修改</option>
-            <option value="updated_at:asc">最早修改</option>
-            <option value="name:asc">名称升序</option>
-            <option value="name:desc">名称降序</option>
-            <option value="size:desc">从大到小</option>
-            <option value="size:asc">从小到大</option>
-          </select>
-          <div className="view-toggle">
+          <div className="file-sort">
+            <ArrowDownUp size={14} aria-hidden="true" />
+            <select
+              aria-label="排序方式"
+              value={sort + ':' + direction}
+              onChange={(e) => {
+                const [key, order] = e.target.value.split(':');
+                setSort(key);
+                setDirection(order);
+                setPage(1);
+              }}
+            >
+              <option value="updated_at:desc">最新修改</option>
+              <option value="updated_at:asc">最早修改</option>
+              <option value="name:asc">名称升序</option>
+              <option value="name:desc">名称降序</option>
+              <option value="size:desc">从大到小</option>
+              <option value="size:asc">从小到大</option>
+            </select>
+          </div>
+          <div className="view-toggle" role="group" aria-label="文件显示方式">
             <button
+              type="button"
               className={!grid ? 'selected' : ''}
               onClick={() => setGrid(false)}
               aria-label="列表视图"
@@ -155,6 +163,7 @@ export function FilesPanel({
               <List size={16} />
             </button>
             <button
+              type="button"
               className={grid ? 'selected' : ''}
               onClick={() => setGrid(true)}
               aria-label="网格视图"
@@ -167,7 +176,9 @@ export function FilesPanel({
       </div>
       {selected.size > 0 && (
         <div className="selection-bar">
-          <span>已选择 {selected.size} 个文件</span>
+          <span className="selection-summary">
+            <strong>{selected.size}</strong> 个文件已选择
+          </span>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
             取消选择
           </Button>
@@ -194,6 +205,12 @@ export function FilesPanel({
                   type="checkbox"
                   aria-label="选择本页全部文件"
                   checked={!!listing?.files.length && selected.size === listing.files.length}
+                  disabled={!listing?.files.length}
+                  ref={(node) => {
+                    if (node)
+                      node.indeterminate =
+                        selected.size > 0 && selected.size < (listing?.files.length ?? 0);
+                  }}
                   onChange={() =>
                     setSelected(
                       selected.size === listing?.files.length
@@ -224,6 +241,7 @@ export function FilesPanel({
               >
                 {!grid && <span />}
                 <button
+                  type="button"
                   className="file-name folder-name"
                   onClick={() => {
                     if (view !== 'trash') openFolder(f);
@@ -271,6 +289,7 @@ export function FilesPanel({
                   />
                 </span>
                 <button
+                  type="button"
                   className="file-name"
                   onClick={() => {
                     if (view !== 'trash') openFile(f);
@@ -326,11 +345,11 @@ export function FilesPanel({
           {folders.length ? ` · ${folders.length} 个文件夹` : ''}
         </span>
         {(page > 1 || (!!listing && listing.total > listing.limit)) && (
-          <div>
+          <nav className="file-pagination" aria-label="文件分页">
             <Button
               variant="ghost"
               size="sm"
-              disabled={page <= 1}
+              disabled={page <= 1 || loading}
               onClick={() => setPage(page - 1)}
             >
               上一页
@@ -339,12 +358,12 @@ export function FilesPanel({
             <Button
               variant="ghost"
               size="sm"
-              disabled={!listing || page * listing.limit >= listing.total}
+              disabled={loading || !listing || page * listing.limit >= listing.total}
               onClick={() => setPage(page + 1)}
             >
               下一页
             </Button>
-          </div>
+          </nav>
         )}
       </div>
     </section>

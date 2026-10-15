@@ -4,57 +4,50 @@
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-synthesis: none;
   color-scheme: light;
-  --bg: #eef3fb;
+  --bg: #f4f5f1;
   --surface: #ffffff;
-  --fg: #23324b;
-  --muted: #62718a;
-  --line: #778ba62b;
-  --accent: #3559e0;
+  --fg: #23352c;
+  --muted: #667168;
+  --line: #23352c1c;
+  --accent: #244b3b;
   --accent-ink: #ffffff;
-  --accent-soft: #edf1ff;
-  --hover: #eef3fb;
-  --danger: #b93642;
-  --shadow: 0 24px 70px #213e6b26;
-  --glass: #ffffffb8;
-  --glass-strong: #ffffffe0;
-  --glass-line: #ffffffd9;
-  --glass-highlight: #ffffffee;
-  --glass-shadow: 0 12px 36px #33578914, 0 2px 8px #33578908;
-  --panel-shadow: 0 14px 40px #3357890d, 0 2px 6px #33578905;
-  --glass-filter: blur(20px) saturate(145%);
-  --canvas-glow:
-    radial-gradient(ellipse at 8% 6%, #cadcf88a, transparent 48%),
-    radial-gradient(ellipse at 88% 28%, #e4daf77a, transparent 42%),
-    radial-gradient(ellipse at 55% 100%, #cfece870, transparent 50%);
-  --radius: 24px;
-  --sidebar-width: 220px;
+  --accent-soft: #e8eee6;
+  --hover: #f1f4ee;
+  --danger: #b24942;
+  --shadow: 0 20px 64px #17291d26;
+  --glass: #ffffffed;
+  --glass-strong: #fffffff5;
+  --glass-line: #23352c1c;
+  --glass-highlight: #ffffffb3;
+  --glass-shadow: 0 8px 26px #2033260c, 0 2px 5px #20332605;
+  --panel-shadow: 0 4px 18px #20332606;
+  --glass-filter: blur(8px) saturate(110%);
+  --canvas-glow: none;
+  --radius: 18px;
+  --sidebar-width: 196px;
   --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   color: var(--fg);
   background: var(--bg);
 }
 html[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #101827;
-  --surface: #1b273b;
-  --fg: #eceef3;
-  --muted: #a7b6ce;
-  --line: #95afd12b;
-  --accent: #95aaff;
-  --accent-ink: #151c36;
-  --accent-soft: #28324e;
-  --hover: #29384e;
-  --danger: #f28b96;
+  --bg: #151b18;
+  --surface: #1d2520;
+  --fg: #e7ece6;
+  --muted: #a0afa4;
+  --line: #c5d2c21d;
+  --accent: #b3d0b8;
+  --accent-ink: #17271d;
+  --accent-soft: #2c3d30;
+  --hover: #253229;
+  --danger: #ef9d94;
   --shadow: 0 16px 48px #0005;
-  --glass: #19273cc7;
-  --glass-strong: #1b293eea;
-  --glass-line: #bcd6ff24;
-  --glass-highlight: #d6e5ff1c;
-  --glass-shadow: 0 16px 44px #03091642, 0 2px 8px #03091626;
-  --panel-shadow: 0 18px 48px #03091633, 0 2px 8px #0309161f;
-  --canvas-glow:
-    radial-gradient(ellipse at 8% 6%, #274b785c, transparent 48%),
-    radial-gradient(ellipse at 88% 28%, #40356047, transparent 42%),
-    radial-gradient(ellipse at 55% 100%, #20463f3d, transparent 50%);
+  --glass: #1d2520ed;
+  --glass-strong: #1d2520f5;
+  --glass-line: #c5d2c21d;
+  --glass-highlight: #d9e9db0a;
+  --glass-shadow: 0 8px 26px #00000026, 0 2px 5px #00000014;
+  --panel-shadow: 0 4px 18px #00000012;
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root,

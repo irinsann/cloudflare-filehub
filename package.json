@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "pnpm build && wrangler dev --env local",
     "dev:ui": "vite --host 127.0.0.1",
+    "preview:check": "wrangler deploy --config wrangler.ui-preview.jsonc --dry-run --outdir .worker-build/preview",
+    "preview:deploy": "pnpm build && wrangler deploy --config wrangler.ui-preview.jsonc",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

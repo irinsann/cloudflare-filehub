@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Search, Sun, Moon, Menu, X, Upload, HardDrive, ArrowUpRight } from 'lucide-react';
+import {
+  Search,
+  Sun,
+  Moon,
+  Menu,
+  X,
+  Upload,
+  HardDrive,
+  ArrowUpRight,
+  ChevronRight,
+} from 'lucide-react';
 import { sections, type View } from '../../lib/navigation';
 import { brandMark } from '../../../shared/brand';
 import type { Settings } from '../../../shared/types';
@@ -76,18 +86,29 @@ export function WorkspaceShell({
   );
   const links = (
     <nav className="workspace-nav" aria-label="工作空间">
-      {sections.map((s, i) => (
-        <button
-          key={s.id}
-          className={
-            'nav-item ' + (view === s.id ? 'active' : '') + (i === 6 ? ' nav-divider' : '')
-          }
-          aria-current={view === s.id ? 'page' : undefined}
-          onClick={() => go(s.id)}
-        >
-          <s.icon size={19} strokeWidth={1.7} />
-          <span>{s.label}</span>
-        </button>
+      {[
+        { label: '文件', items: sections.slice(0, 3) },
+        { label: '发布', items: sections.slice(3, 6) },
+        { label: '管理', items: sections.slice(6) },
+      ].map((group) => (
+        <div className="workspace-nav-group" key={group.label}>
+          <span className="workspace-label">{group.label}</span>
+          {group.items.map((s) => (
+            <button
+              type="button"
+              key={s.id}
+              className={'nav-item ' + (view === s.id ? 'active' : '')}
+              aria-current={view === s.id ? 'page' : undefined}
+              onClick={() => go(s.id)}
+            >
+              <s.icon size={18} strokeWidth={1.7} />
+              <span>{s.label}</span>
+              {view === s.id && (
+                <ChevronRight className="nav-current" size={13} aria-hidden="true" />
+              )}
+            </button>
+          ))}
+        </div>
       ))}
     </nav>
   );
@@ -98,7 +119,7 @@ export function WorkspaceShell({
         <strong>个人账号</strong>
         <span title={settings?.email}>{settings?.email ?? '加载中…'}</span>
       </div>
-      <button aria-label="账号设置" onClick={() => go('settings')}>
+      <button type="button" aria-label="账号设置" onClick={() => go('settings')}>
         <ArrowUpRight size={17} />
       </button>
     </div>
@@ -117,7 +138,6 @@ export function WorkspaceShell({
       </a>
       <aside className="sidebar">
         {logo}
-        <div className="workspace-label">工作空间</div>
         {links}
         <div className="sidebar-bottom">
           <StorageMeter settings={settings} />
@@ -169,14 +189,20 @@ export function WorkspaceShell({
               onChange={(e) => onSearch(e.target.value)}
             />
             {search && (
-              <button aria-label="清空搜索" onClick={() => onSearch('')}>
+              <button type="button" aria-label="清空搜索" onClick={() => onSearch('')}>
                 <X size={16} />
               </button>
             )}
             <kbd>Ctrl / ⌘ K</kbd>
           </div>
           <div className="topbar-right">
-            <Button variant="ghost" size="icon" aria-label="切换主题" onClick={toggleTheme}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="切换主题"
+              onClick={toggleTheme}
+            >
               {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
             </Button>
           </div>
@@ -194,6 +220,7 @@ export function WorkspaceShell({
           const s = sections.find((s) => s.id === id)!;
           return (
             <button
+              type="button"
               key={id}
               aria-current={view === id ? 'page' : undefined}
               onClick={() => go(s.id)}
@@ -204,6 +231,7 @@ export function WorkspaceShell({
           );
         })}
         <button
+          type="button"
           ref={closeButton}
           aria-label="更多导航"
           aria-expanded={open}
@@ -228,7 +256,11 @@ export function WorkspaceShell({
             <Dialog.Title className="sr-only">导航</Dialog.Title>
             <div className="drawer-header">
               {logo}
-              <Dialog.Close className="button button-ghost button-icon" aria-label="关闭导航">
+              <Dialog.Close
+                type="button"
+                className="button button-ghost button-icon"
+                aria-label="关闭导航"
+              >
                 <X size={20} />
               </Dialog.Close>
             </div>
