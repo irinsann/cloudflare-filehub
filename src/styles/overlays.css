@@ -59,7 +59,8 @@
   flex-direction: column;
   gap: 18px;
 }
-.form-stack label {
+.form-stack label,
+.form-field {
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -67,8 +68,7 @@
   font-weight: 500;
 }
 .form-stack input:not([type='checkbox']),
-.form-stack textarea,
-.form-stack select {
+.form-stack textarea {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 10px 12px;
@@ -296,8 +296,7 @@
     border-radius: 24px;
   }
   .form-stack input:not([type='checkbox']),
-  .form-stack textarea,
-  .form-stack select {
+  .form-stack textarea {
     font-size: 16px;
   }
   .dialog-footer .button {

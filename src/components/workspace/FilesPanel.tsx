@@ -14,6 +14,7 @@ import {
   Music,
 } from 'lucide-react';
 import { Button } from '../ui/button';
+import { Select } from '../ui/select';
 import { EmptyState } from '../EmptyState';
 import type { FileRecord, FolderRecord } from '../../../shared/types';
 import type { Action } from '../Actions';
@@ -128,23 +129,26 @@ export function FilesPanel({
               <span>新建文件夹</span>
             </Button>
           )}
-          <select
+          <Select
             aria-label="排序方式"
+            className="file-sort"
+            size="sm"
             value={sort + ':' + direction}
-            onChange={(e) => {
-              const [key, order] = e.target.value.split(':');
+            onValueChange={(value) => {
+              const [key, order] = value.split(':');
               setSort(key);
               setDirection(order);
               setPage(1);
             }}
-          >
-            <option value="updated_at:desc">最新修改</option>
-            <option value="updated_at:asc">最早修改</option>
-            <option value="name:asc">名称升序</option>
-            <option value="name:desc">名称降序</option>
-            <option value="size:desc">从大到小</option>
-            <option value="size:asc">从小到大</option>
-          </select>
+            options={[
+              { value: 'updated_at:desc', label: '最新修改' },
+              { value: 'updated_at:asc', label: '最早修改' },
+              { value: 'name:asc', label: '名称升序' },
+              { value: 'name:desc', label: '名称降序' },
+              { value: 'size:desc', label: '从大到小' },
+              { value: 'size:asc', label: '从小到大' },
+            ]}
+          />
           <div className="view-toggle">
             <button
               className={!grid ? 'selected' : ''}
@@ -189,10 +193,14 @@ export function FilesPanel({
         <>
           {!grid && (!!listing?.files.length || !!folders.length) && (
             <div className="file-row table-head">
-              <span>
+              <span>名称</span>
+              <span>大小</span>
+              <span>修改时间</span>
+              <label className="file-checkbox">
                 <input
                   type="checkbox"
                   aria-label="选择本页全部文件"
+                  disabled={!listing?.files.length}
                   checked={!!listing?.files.length && selected.size === listing.files.length}
                   onChange={() =>
                     setSelected(
@@ -202,10 +210,7 @@ export function FilesPanel({
                     )
                   }
                 />
-              </span>
-              <span>名称</span>
-              <span>大小</span>
-              <span>修改时间</span>
+              </label>
               <span />
             </div>
           )}
@@ -222,7 +227,6 @@ export function FilesPanel({
                   setMenu({ folder: f });
                 }}
               >
-                {!grid && <span />}
                 <button
                   className="file-name folder-name"
                   onClick={() => {
@@ -239,6 +243,7 @@ export function FilesPanel({
                 </button>
                 <span className="file-size muted">—</span>
                 <span className="file-date muted">{dateLabel(f.updated_at)}</span>
+                {!grid && <span aria-hidden="true" />}
                 <Button
                   className="file-more"
                   variant="ghost"
@@ -262,14 +267,6 @@ export function FilesPanel({
                   setMenu({ file: f });
                 }}
               >
-                <span className="file-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(f.id)}
-                    aria-label={`选择 ${f.name}`}
-                    onChange={() => select(f.id)}
-                  />
-                </span>
                 <button
                   className="file-name"
                   onClick={() => {
@@ -301,6 +298,14 @@ export function FilesPanel({
                 </button>
                 <span className="file-size muted">{sizeLabel(f.size)}</span>
                 <span className="file-date muted">{dateLabel(f.updated_at)}</span>
+                <label className="file-checkbox" onDoubleClick={(event) => event.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(f.id)}
+                    aria-label={`选择 ${f.name}`}
+                    onChange={() => select(f.id)}
+                  />
+                </label>
                 <Button
                   className="file-more"
                   variant="ghost"

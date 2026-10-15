@@ -1,4 +1,5 @@
 .files-panel {
+  --file-panel-inset: 18px;
   border: 1px solid var(--glass-line);
   border-radius: 24px;
   background: var(--glass-strong);
@@ -12,7 +13,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 18px;
+  padding: 14px var(--file-panel-inset);
   border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
   background: var(--glass);
@@ -50,13 +51,8 @@
   gap: 8px;
   min-width: 0;
 }
-.file-toolbar-actions select {
-  height: 32px;
-  font-size: 12px;
-  width: 105px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0 8px;
+.file-toolbar-actions .file-sort {
+  width: 124px;
 }
 .view-toggle {
   display: flex;
@@ -79,16 +75,16 @@
   color: var(--muted);
 }
 .view-toggle button.selected {
-  background: var(--surface);
-  color: var(--fg);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .file-row {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) 90px 126px 36px;
+  grid-template-columns: minmax(0, 1fr) 90px 126px 32px 36px;
   gap: 14px;
   align-items: center;
   min-height: 64px;
-  padding: 8px 18px;
+  padding: 8px var(--file-panel-inset);
   border-bottom: 1px solid var(--line);
   font-size: 12px;
 }
@@ -184,12 +180,17 @@ html[data-theme='dark'] .image-icon {
 .file-checkbox {
   display: grid;
   place-items: center;
+  cursor: pointer;
+}
+.file-row .file-checkbox {
+  align-self: stretch;
+  min-height: 28px;
 }
 .file-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px;
-  padding: 18px;
+  padding: var(--file-panel-inset);
 }
 .file-grid:empty {
   display: none;
@@ -258,7 +259,7 @@ html[data-theme='dark'] .image-icon {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 18px;
+  padding: 10px var(--file-panel-inset);
   border-top: 1px solid var(--line);
   font-size: 11px;
   color: var(--muted);
@@ -273,7 +274,7 @@ html[data-theme='dark'] .image-icon {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 10px 18px;
+  padding: 10px var(--file-panel-inset);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 12px;
@@ -287,7 +288,7 @@ html[data-theme='dark'] .image-icon {
 }
 @media (max-width: 1150px) {
   .file-row {
-    grid-template-columns: 20px minmax(0, 1fr) 70px 100px 32px;
+    grid-template-columns: minmax(0, 1fr) 70px 100px 32px 32px;
     gap: 10px;
   }
   .file-date {
@@ -296,10 +297,11 @@ html[data-theme='dark'] .image-icon {
 }
 @media (max-width: 600px) {
   .files-panel {
+    --file-panel-inset: 12px;
     border-radius: 22px;
   }
   .file-toolbar {
-    padding: 10px 12px;
+    padding-block: 10px;
     gap: 8px;
   }
   .breadcrumbs {
@@ -315,31 +317,27 @@ html[data-theme='dark'] .image-icon {
   }
   .file-toolbar-actions {
     width: 100%;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    flex-wrap: wrap;
     gap: 6px;
   }
   .file-toolbar-actions > .button:first-child {
-    margin-right: auto;
-    width: 38px;
+    width: 44px;
     padding: 0;
-    min-height: 38px;
+    min-height: 44px;
   }
   .file-toolbar-actions > .button:first-child > span {
     display: none;
   }
-  .file-toolbar-actions select {
-    height: 38px;
-    font-size: 12px;
-  }
   .view-toggle button {
-    width: 36px;
-    height: 32px;
+    width: 40px;
+    height: 38px;
   }
   .file-row {
-    grid-template-columns: 18px minmax(0, 1fr) 36px;
+    grid-template-columns: minmax(0, 1fr) 44px 44px;
     min-height: 76px;
     gap: 8px;
-    padding: 10px 12px;
+    padding-block: 10px;
   }
   .file-row .file-size,
   .file-row .file-date,
@@ -348,6 +346,11 @@ html[data-theme='dark'] .image-icon {
   }
   .file-name {
     gap: 9px;
+  }
+  .file-row .file-checkbox,
+  .file-row .file-more {
+    width: 44px;
+    min-height: 44px;
   }
   .file-title {
     white-space: normal;
@@ -364,7 +367,6 @@ html[data-theme='dark'] .image-icon {
   .file-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
-    padding: 12px;
   }
   .file-tile {
     padding: 10px;
@@ -382,18 +384,29 @@ html[data-theme='dark'] .image-icon {
     height: 36px;
   }
   .file-footer {
-    padding: 10px 12px;
     flex-wrap: wrap;
   }
   .file-footer > div {
     margin-left: auto;
   }
   .selection-bar {
-    padding: 8px 12px;
+    padding-block: 8px;
     gap: 4px;
   }
   .selection-bar .button {
     padding: 0 8px;
     font-size: 11px;
+  }
+}
+@media (pointer: coarse) {
+  .view-toggle button {
+    width: 44px;
+    height: 44px;
+  }
+  .file-tile .file-checkbox,
+  .file-tile .file-more {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
   }
 }

@@ -5,6 +5,7 @@ import { api, copy, dateLabel, send } from '../lib/api';
 import { LinkOriginSelect, usePublicLinks } from './PublicLinks';
 import { Button } from './ui/button';
 import { Modal } from './ui/dialog';
+import { Select } from './ui/select';
 
 interface Credential {
   id: string;
@@ -61,6 +62,7 @@ function ConnectionField({
 }
 
 export function WebDavSettings({ notify }: { notify: (message: string) => void }) {
+  const daysId = useId();
   const { link } = usePublicLinks();
   const [info, setInfo] = useState<WebDavInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -308,18 +310,21 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
                   disabled={busy}
                 />
               </label>
-              <label>
-                有效期
-                <select
+              <div className="form-field">
+                <label htmlFor={daysId}>有效期</label>
+                <Select
+                  id={daysId}
+                  aria-label="有效期"
                   value={days}
-                  onChange={(event) => setDays(event.target.value)}
+                  onValueChange={setDays}
+                  options={[
+                    { value: '30', label: '30 天' },
+                    { value: '90', label: '90 天' },
+                    { value: '365', label: '365 天' },
+                  ]}
                   disabled={busy}
-                >
-                  <option value="30">30 天</option>
-                  <option value="90">90 天</option>
-                  <option value="365">365 天</option>
-                </select>
-              </label>
+                />
+              </div>
               {actionError && (
                 <div className="error-text" role="alert">
                   {actionError}

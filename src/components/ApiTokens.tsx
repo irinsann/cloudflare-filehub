@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { KeyRound, Plus, Copy, ExternalLink } from 'lucide-react';
 import { api, send, dateLabel } from '../lib/api';
 import { Button } from './ui/button';
 import { Modal } from './ui/dialog';
+import { Select } from './ui/select';
 import { sharexConfig } from '../../shared/sharex';
 
 interface Token {
@@ -21,6 +22,8 @@ export function ApiTokens({
   notify: (text: string) => void;
   uploadOrigin: string;
 }) {
+  const scopeId = useId();
+  const daysId = useId();
   const [tokens, setTokens] = useState<Token[]>([]);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -200,21 +203,35 @@ export function ApiTokens({
                   placeholder="例如：备份脚本"
                 />
               </label>
-              <label>
-                类型
-                <select value={scope} onChange={(e) => setScope(e.target.value as typeof scope)}>
-                  <option value="files:upload">文件上传（私有）</option>
-                  <option value="images:upload">图床上传（公开直链 / ShareX）</option>
-                </select>
-              </label>
-              <label>
-                有效期
-                <select value={days} onChange={(e) => setDays(e.target.value)}>
-                  <option value="30">30 天</option>
-                  <option value="90">90 天</option>
-                  <option value="365">365 天</option>
-                </select>
-              </label>
+              <div className="form-field">
+                <label htmlFor={scopeId}>类型</label>
+                <Select
+                  id={scopeId}
+                  aria-label="类型"
+                  value={scope}
+                  onValueChange={(value) => setScope(value as typeof scope)}
+                  options={[
+                    { value: 'files:upload', label: '文件上传（私有）' },
+                    { value: 'images:upload', label: '图床上传（公开直链 / ShareX）' },
+                  ]}
+                  disabled={busy}
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor={daysId}>有效期</label>
+                <Select
+                  id={daysId}
+                  aria-label="有效期"
+                  value={days}
+                  onValueChange={setDays}
+                  options={[
+                    { value: '30', label: '30 天' },
+                    { value: '90', label: '90 天' },
+                    { value: '365', label: '365 天' },
+                  ]}
+                  disabled={busy}
+                />
+              </div>
               <p>
                 {scope === 'images:upload'
                   ? '图片上传后公开，保存到 Image-hosting。'
