@@ -1,3 +1,4 @@
+import { checkWriteLease } from './write-lease';
 import { Hono } from 'hono';
 import type { AppEnv, AppContext } from './env';
 import { now, uuid, limit } from './env';
@@ -49,6 +50,7 @@ markdownRoutes.post('/markdown', async (c) => {
   await activeFolder(c.env, folder.id);
   const object = await writeText(c.env, input.content),
     id = uuid();
+  await checkWriteLease(c);
   await c.env.DB.batch([
     c.env.DB.prepare(
       "INSERT INTO files(id,name,object_key,folder_id,mime,size,etag,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'ready',?,?)",
@@ -80,6 +82,7 @@ markdownRoutes.put('/markdown/:id', async (c) => {
   const input = markdownUpdate.parse(await c.req.json());
   if (input.version !== file.version) fail(409, '文档已被另一窗口修改，请先另存草稿再重新载入');
   const object = await writeText(c.env, input.content);
+  await checkWriteLease(c);
   const result = await c.env.DB.batch([
     c.env.DB.prepare(
       "UPDATE files SET object_key=?,size=?,etag=?,version=version+1,updated_at=? WHERE id=? AND version=? AND deleted_at IS NULL AND status='ready' RETURNING version",
@@ -100,6 +103,7 @@ markdownRoutes.post('/markdown/:id/attachments', async (c) => {
   const name = filename.parse(c.req.query('name'));
   const key = await reserve(c.env);
   const object = await uploadStream(c.env, c.req.raw, key, name);
+  await checkWriteLease(c);
   if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(object.mime))
     fail(415, '附件仅支持通过签名检查的 PNG、JPEG、GIF、WebP 图片');
   const id = uuid();
@@ -144,6 +148,7 @@ markdownRoutes.post('/markdown/:id/publish', async (c) => {
     .first<PageRecord>();
   const id = existing?.id ?? uuid();
   const object = await writeText(c.env, source);
+  await checkWriteLease(c);
   const results = await c.env.DB.batch([
     c.env.DB.prepare(
       "INSERT INTO markdown_pages(id,file_id,title,slug,description,published,published_at,updated_at,snapshot_key,published_version,allow_source,allow_index) SELECT ?,?,?,?,?,1,?,?,?,?,?,? WHERE EXISTS(SELECT id FROM files WHERE id=? AND version=? AND deleted_at IS NULL AND status='ready') ON CONFLICT(file_id) DO UPDATE SET title=excluded.title,slug=excluded.slug,description=excluded.description,published=1,published_at=COALESCE(markdown_pages.published_at,excluded.published_at),updated_at=excluded.updated_at,snapshot_key=excluded.snapshot_key,published_version=excluded.published_version,allow_source=excluded.allow_source,allow_index=excluded.allow_index",

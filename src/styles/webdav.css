@@ -1,0 +1,64 @@
+.webdav-card {
+  grid-column: 1/-1;
+}
+.webdav-connect-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 4px 0 18px;
+}
+.webdav-connect-heading > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.webdav-connection {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr);
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.webdav-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+}
+.webdav-copy-field {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg);
+}
+.webdav-copy-field input,
+.form-stack .webdav-copy-field input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  font: 12px var(--mono);
+}
+.webdav-copy-field .button {
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+.webdav-copy-field:focus-within {
+  border-color: var(--accent);
+}
+@media (max-width: 600px) {
+  .webdav-connection {
+    grid-template-columns: 1fr;
+  }
+  .webdav-copy-field input,
+  .form-stack .webdav-copy-field input {
+    font-size: 16px;
+  }
+}

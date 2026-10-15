@@ -18,6 +18,10 @@ beforeEach(async () => {
   await testEnv.DB.prepare('UPDATE storage_quota_state SET ready=0,lock_until=0 WHERE id=1').run();
   await testEnv.DB.batch(
     [
+      'webdav_locks',
+      'webdav_properties',
+      'webdav_credentials',
+      'storage_web_writes',
       'storage_allocations',
       'page_attachments',
       'markdown_attachments',
@@ -39,4 +43,7 @@ beforeEach(async () => {
       'admin_account',
     ].map((table) => testEnv.DB.prepare(`DELETE FROM ${table}`)),
   );
+  await testEnv.DB.prepare(
+    'UPDATE storage_write_lease SET owner=NULL,expires_at=0 WHERE id=1',
+  ).run();
 });

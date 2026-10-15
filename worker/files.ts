@@ -1,4 +1,5 @@
 import { storageUsage } from './quota';
+import { checkWriteLease } from './write-lease';
 import { Hono } from 'hono';
 import { drizzle } from 'drizzle-orm/d1';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -287,6 +288,7 @@ export async function uploadSingleFile(c: AppContext) {
       ...uploadOwnerStatements(c, id),
     ]);
     const object = await uploadStream(c.env, c.req.raw, key, name);
+    await checkWriteLease(c);
     await c.env.DB.batch([
       c.env.DB.prepare("UPDATE files SET size=?,mime=?,etag=?,status='ready' WHERE id=?").bind(
         object.size,

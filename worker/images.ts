@@ -1,3 +1,4 @@
+import { checkWriteLease } from './write-lease';
 import { allocate } from './quota';
 import { Hono } from 'hono';
 import type { AppEnv, AppContext, Env } from './env';
@@ -129,6 +130,7 @@ export async function publishImage(c: AppContext, fileId: string) {
   );
   const name = hex(await md5.digest) + '.' + extensions[mime],
     sha256 = hex(await sha.digest);
+  await checkWriteLease(c);
   const existing = await c.env.DB.prepare('SELECT * FROM image_hosts WHERE name=?')
     .bind(name)
     .first<HostedImage>();
@@ -162,6 +164,7 @@ export async function publishImage(c: AppContext, fileId: string) {
   await allocate(c.env, key, source.size);
   const copy = await c.env.BUCKET.put(key, source.body);
   if (!copy) fail(500, '图片保存失败');
+  await checkWriteLease(c);
   const results = await c.env.DB.batch([
     c.env.DB.prepare(
       "UPDATE files SET name=?,folder_id=?,object_key=?,mime=?,updated_at=? WHERE id=? AND object_key=? AND deleted_at IS NULL AND status='ready'",

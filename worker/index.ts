@@ -17,6 +17,9 @@ import { siteOriginAllowed } from './origins';
 import { htmlPage } from './html';
 import { escapeHtml } from '../shared/markdown';
 import { identifier } from '../shared/validation';
+import { webdavRoutes } from './webdav';
+import { webdavCredentials } from './webdav-auth';
+import { storageWriteLease } from './write-lease';
 const app = new Hono<AppEnv>();
 app.use('*', async (c, next) => {
   c.set('requestId', crypto.randomUUID());
@@ -43,6 +46,9 @@ app.use('*', async (c, next) => {
 });
 app.use('/api/admin/*', adminAuth);
 app.use('/api/v1/*', uploadTokenAuth);
+app.use('/api/*', enforceJsonLimit);
+app.use('/api/admin/*', storageWriteLease);
+app.use('/api/v1/*', storageWriteLease);
 app.use('/api/admin/*', async (c, next) => {
   const url = new URL(c.req.url);
   const previewFile = /^\/api\/admin\/files\/([^/]+)\/download$/.exec(url.pathname);
@@ -56,7 +62,6 @@ app.use('/api/admin/*', async (c, next) => {
   if (!privatePreview) await rateLimit(c.env, 'admin', c.get('email'), 240);
   await next();
 });
-app.use('/api/*', enforceJsonLimit);
 app.use('/api/public/*', async (c, next) => {
   await rateLimit(c.env, 'public', c.req.header('CF-Connecting-IP') || 'local', 240);
   await next();
@@ -67,6 +72,8 @@ app.get('/login', (c) =>
 );
 app.route('/api/admin', fileRoutes);
 app.route('/api/admin', tokenRoutes);
+app.route('/api/admin', webdavCredentials);
+app.route('/dav', webdavRoutes);
 app.route('/api/v1', uploadApi);
 app.route('/api/admin', imageRoutes);
 app.use('/i/*', async (c, next) => {

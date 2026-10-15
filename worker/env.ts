@@ -26,6 +26,8 @@ export type AppEnv = {
     requestId: string;
     apiTokenId?: string;
     apiTokenScope?: 'files:upload' | 'images:upload';
+    davCredentialId?: string;
+    writeLease?: string;
   };
 };
 export type AppContext = Context<AppEnv>;

@@ -4,6 +4,7 @@ import { api, copy, send, dateLabel } from '../lib/api';
 import { StorageMeter } from '../components/workspace/WorkspaceShell';
 import { Button } from '../components/ui/button';
 import { ApiTokens } from '../components/ApiTokens';
+import { WebDavSettings } from '../components/WebDavSettings';
 import { EmptyState } from '../components/EmptyState';
 import { LinkOriginSelect, usePublicLinks } from '../components/PublicLinks';
 import type { Settings, ShareRecord } from '../../shared/types';
@@ -106,6 +107,7 @@ export function Management({
           <p>文本编辑上限：{settings ? `${settings.maxTextBytes / 1048576} MB` : '—'}</p>
         </section>
         <ApiTokens notify={notify} uploadOrigin={settings?.filesOrigin || location.origin} />
+        <WebDavSettings notify={notify} />
       </div>
     );
   return (

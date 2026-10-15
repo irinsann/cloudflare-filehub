@@ -1,3 +1,4 @@
+import { checkWriteLease } from './write-lease';
 import { deleteObject } from './quota';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -97,6 +98,7 @@ uploadRoutes.put('/uploads/:id/parts/:part', async (c) => {
   } catch {
     fail(400, '分片上传中断或实际大小不匹配');
   }
+  await checkWriteLease(c);
   await c.env.DB.prepare(
     'INSERT INTO upload_parts(session_id,part_number,etag,size) VALUES(?,?,?,?) ON CONFLICT(session_id,part_number) DO UPDATE SET etag=excluded.etag,size=excluded.size',
   )
@@ -135,6 +137,7 @@ uploadRoutes.post('/uploads/:id/complete', async (c) => {
     if (!head || sniff(new Uint8Array(await head.arrayBuffer())) !== mime)
       mime = 'application/octet-stream';
   }
+  await checkWriteLease(c);
   await c.env.DB.batch([
     c.env.DB.prepare(
       "UPDATE files SET size=?,mime=?,etag=?,status='ready',updated_at=? WHERE id=? AND status='pending'",

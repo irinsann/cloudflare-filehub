@@ -1,3 +1,4 @@
+import { checkWriteLease } from './write-lease';
 import Busboy from '@fastify/busboy';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -137,6 +138,7 @@ export async function uploadImage(c: AppContext) {
     const mime = head ? sniff(new Uint8Array(await head.arrayBuffer())) : null;
     if (!mime || !['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(mime))
       fail(415, '仅支持 PNG、JPEG、GIF 和 WebP 图片');
+    await checkWriteLease(c);
     await c.env.DB.batch([
       c.env.DB.prepare("UPDATE files SET size=?,mime=?,etag=?,status='ready' WHERE id=?").bind(
         object.size,
