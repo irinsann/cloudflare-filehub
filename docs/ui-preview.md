@@ -12,6 +12,8 @@
 
 ## 独立演示
 
+已部署演示：[新 UI](https://rcloud-ui-preview.irin.workers.dev/drive/)。正式站仍使用稳定 UI。
+
 ```sh
 pnpm preview:deploy
 ```
