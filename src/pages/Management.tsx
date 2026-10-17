@@ -3,11 +3,12 @@ import { Copy, ExternalLink, FileText, Link2, ShieldCheck } from 'lucide-react';
 import { api, copy, send, dateLabel } from '../lib/api';
 import { StorageMeter } from '../components/workspace/WorkspaceShell';
 import { Button } from '../components/ui/button';
+import { Modal } from '../components/ui/dialog';
 import { ApiTokens } from '../components/ApiTokens';
 import { WebDavSettings } from '../components/WebDavSettings';
 import { EmptyState } from '../components/EmptyState';
 import { LinkOriginSelect, usePublicLinks } from '../components/PublicLinks';
-import type { Settings, ShareRecord } from '../../shared/types';
+import type { Settings, ShareListItem } from '../../shared/types';
 interface DocumentRow {
   id: string;
   name: string;
@@ -33,11 +34,12 @@ export function Management({
   notify: (s: string) => void;
 }) {
   const publicLinks = usePublicLinks();
-  const [shares, setShares] = useState<(ShareRecord & { password_protected: number })[]>([]),
+  const [shares, setShares] = useState<ShareListItem[]>([]),
     [docs, setDocs] = useState<DocumentRow[]>([]),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(true),
     [revision, setRevision] = useState(0);
+  const [manualCopy, setManualCopy] = useState<{ url: string; name: string } | null>(null);
   useEffect(() => {
     setLoading(true);
     setError('');
@@ -48,7 +50,7 @@ export function Management({
     const controller = new AbortController();
     void (
       view === 'shares'
-        ? api<(ShareRecord & { password_protected: number })[]>('/shares', {
+        ? api<ShareListItem[]>('/shares', {
             signal: controller.signal,
           }).then(setShares)
         : api<DocumentRow[]>('/markdown', { signal: controller.signal }).then(setDocs)
@@ -61,6 +63,11 @@ export function Management({
       });
     return () => controller.abort();
   }, [view, refresh, revision]);
+  function copyShareLink(url: string, name: string) {
+    void copy(publicLinks.link(url))
+      .then(() => notify('链接已复制'))
+      .catch(() => setManualCopy({ url, name }));
+  }
   async function revoke(id: string, article: boolean) {
     try {
       await send(
@@ -125,35 +132,65 @@ export function Management({
         </div>
       ) : view === 'shares' ? (
         <div className="management-list">
-          {shares.map((s) => (
-            <article key={s.id} className="management-row">
-              <div className="type-icon">
-                <Link2 />
-              </div>
-              <div className="management-info">
-                <strong>{s.name}</strong>
-                <p>
-                  {!s.enabled
-                    ? '已撤销'
-                    : s.expires_at && s.expires_at < Date.now()
-                      ? '已过期'
-                      : s.expires_at
-                        ? `有效至 ${dateLabel(s.expires_at)}`
-                        : '永久有效'}{' '}
-                  · {s.password_protected ? '密码保护' : '持链接可访问'} · 访问 {s.views} / 下载{' '}
-                  {s.downloads}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!s.enabled}
-                onClick={() => void revoke(s.id, false)}
-              >
-                撤销分享
-              </Button>
-            </article>
-          ))}
+          {!!shares.length && (
+            <div className="file-toolbar">
+              <LinkOriginSelect compact />
+            </div>
+          )}
+          {shares.map((s) => {
+            const expired = !!s.expires_at && s.expires_at <= Date.now();
+            const available = !!s.enabled && !expired;
+            return (
+              <article key={s.id} className="management-row">
+                <div className="type-icon">
+                  <Link2 />
+                </div>
+                <div className="management-info">
+                  <strong>{s.name}</strong>
+                  <p>
+                    {!s.enabled
+                      ? '已撤销'
+                      : expired
+                        ? '已过期'
+                        : s.expires_at
+                          ? `有效至 ${dateLabel(s.expires_at)}`
+                          : '永久有效'}{' '}
+                    · {s.password_protected ? '密码保护' : '持链接可访问'} · 访问 {s.views} / 下载{' '}
+                    {s.downloads}
+                  </p>
+                </div>
+                <div className="management-actions">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!available}
+                    onClick={() => copyShareLink(s.url, s.name)}
+                  >
+                    <Copy size={15} />
+                    复制链接
+                  </Button>
+                  {!!s.allow_download && !s.password_protected && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!available}
+                      onClick={() => copyShareLink(s.directUrl, s.name)}
+                    >
+                      复制直链
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={!s.enabled}
+                    onClick={() => void revoke(s.id, false)}
+                  >
+                    撤销分享
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
           {!shares.length && <EmptyState label="暂无文件分享" />}
         </div>
       ) : (
@@ -208,6 +245,23 @@ export function Management({
             })}
           {!docs.some((d) => d.published) && <EmptyState label="暂无已发布文章" />}
         </div>
+      )}
+      {manualCopy && (
+        <Modal title="复制链接" description={manualCopy.name} onClose={() => setManualCopy(null)}>
+          <div className="form-stack">
+            <LinkOriginSelect />
+            <label>
+              链接
+              <input
+                autoFocus
+                readOnly
+                value={publicLinks.link(manualCopy.url)}
+                onFocus={(event) => event.target.select()}
+              />
+            </label>
+            <p role="status">无法访问剪贴板，请手动复制。</p>
+          </div>
+        </Modal>
       )}
     </>
   );

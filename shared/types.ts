@@ -34,6 +34,12 @@ export interface ShareRecord {
   last_access_at: number | null;
   name?: string;
 }
+export type ShareListItem = Omit<ShareRecord, 'token_hash' | 'password_hash' | 'name'> & {
+  name: string;
+  password_protected: number;
+  url: string;
+  directUrl: string;
+};
 export interface PageRecord {
   id: string;
   file_id: string;

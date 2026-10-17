@@ -241,7 +241,7 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 
 | Method   | 路径                               | 参数/行为                                                                                             |
 | -------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| GET      | /api/admin/shares                  | 最近 100 条，无明文分享 Token、密码或哈希                                                             |
+| GET      | /api/admin/shares                  | 最近 100 条，包含可重复复制的 url、directUrl；不返回密码或哈希                                         |
 | POST     | /api/admin/shares                  | {file_id,password?,expires_at?,allow_download?}；到期可为 null，默认允许下载；返回 {id,url,directUrl} |
 | PATCH    | /api/admin/shares/{id}             | {enabled?,allow_download?,expires_at?,password?}；password=null 移除密码                              |
 | DELETE   | /api/admin/shares/{id}             | 撤销                                                                                                  |
@@ -253,7 +253,9 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 | GET/HEAD | /api/public/share/{token}/preview  | 可预览格式                                                                                            |
 | GET/HEAD | /api/public/share/{token}/download | 受控下载                                                                                              |
 
-分享明文 Token 只在创建时的 URL 中返回，不是上传 Token。默认链接来源为 s.irin.im。密码 Cookie 每个分享独立，最长一小时。无效链接 404，撤销/到期 410，未解锁 API 返回 401，禁止下载返回 403；分享页面可返回不含文件信息的解锁界面。
+创建分享和管理列表返回同一条分享的稳定 `url`、`directUrl`，可以再次复制；读取列表不会新建分享或重置统计。默认链接来源为 s.irin.im。这些 URL 本身授予分享访问权，管理列表仅向管理员提供，并禁止缓存。密码 Cookie 每个分享独立，最长一小时。无效链接 404，撤销/到期 410，未解锁 API 返回 401，禁止下载返回 403；分享页面可返回不含文件信息的解锁界面。
+
+旧版 64 位十六进制 Token 链接继续有效。旧分享再次复制时返回签名地址，与旧地址共用密码、有效期、下载许可、撤销状态和统计，不需要重建分享。客户端应直接使用返回的 URL，不解析或假定 Token 长度。`directUrl` 仍需要下载许可；密码分享须先在同域名的分享页解锁，网页列表仅为无密码且允许下载的分享提供“复制直链”。
 
 #### HTML 分享
 

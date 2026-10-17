@@ -15,8 +15,9 @@ import {
 import { getFile, logStatement } from './files';
 import { serveObject, isText, isHtml, textObject } from './storage';
 import { shareInput, sharePatch, identifier } from '../shared/validation';
-import type { FileRecord, ShareRecord } from '../shared/types';
+import type { FileRecord, ShareListItem, ShareRecord } from '../shared/types';
 import { htmlPage, readerScript } from './html';
+import { parseShareLinkToken, shareLinkToken, validShareLinkToken } from './share-links';
 
 // Uploaded HTML never receives the site's origin, even when the preview is opened directly.
 const htmlPreviewCsp = [
@@ -64,11 +65,35 @@ async function htmlDocument(c: AppContext, file: FileRecord) {
 }
 
 export const shareRoutes = new Hono<AppEnv>();
+async function shareLinks(c: AppContext, share: Pick<ShareRecord, 'id' | 'token_hash'>) {
+  const token = await shareLinkToken(share, c.env);
+  const origin = c.env.FILES_ORIGIN || new URL(c.req.url).origin;
+  return { url: `${origin}/s/${token}`, directUrl: `${origin}/d/${token}` };
+}
 shareRoutes.get('/shares', async (c) => {
   const rows = await c.env.DB.prepare(
-    'SELECT s.id,s.file_id,s.created_at,s.expires_at,s.enabled,s.allow_download,s.views,s.downloads,s.last_access_at,(s.password_hash IS NOT NULL) AS password_protected,f.name FROM file_shares s JOIN files f ON f.id=s.file_id ORDER BY s.created_at DESC LIMIT 100',
-  ).all();
-  return c.json({ data: rows.results });
+    'SELECT s.id,s.file_id,s.token_hash,s.created_at,s.expires_at,s.enabled,s.allow_download,s.views,s.downloads,s.last_access_at,(s.password_hash IS NOT NULL) AS password_protected,f.name FROM file_shares s JOIN files f ON f.id=s.file_id ORDER BY s.created_at DESC LIMIT 100',
+  ).all<Omit<ShareListItem, 'url' | 'directUrl'> & { token_hash: string }>();
+  const data = await Promise.all(
+    rows.results.map(async (row): Promise<ShareListItem> => {
+      const links = await shareLinks(c, row);
+      return {
+        id: row.id,
+        file_id: row.file_id,
+        name: row.name,
+        created_at: row.created_at,
+        expires_at: row.expires_at,
+        enabled: row.enabled,
+        allow_download: row.allow_download,
+        views: row.views,
+        downloads: row.downloads,
+        last_access_at: row.last_access_at,
+        password_protected: row.password_protected,
+        ...links,
+      };
+    }),
+  );
+  return c.json({ data });
 });
 shareRoutes.post('/shares', async (c) => {
   const input = shareInput.parse(await c.req.json());
@@ -84,13 +109,15 @@ shareRoutes.post('/shares', async (c) => {
     b.toString(16).padStart(2, '0'),
   ).join('');
   const id = uuid();
+  const tokenHash = await digest(token);
+  const links = await shareLinks(c, { id, token_hash: tokenHash });
   await c.env.DB.batch([
     c.env.DB.prepare(
       'INSERT INTO file_shares(id,file_id,token_hash,password_hash,created_at,expires_at,allow_download) VALUES(?,?,?,?,?,?,?)',
     ).bind(
       id,
       file.id,
-      await digest(token),
+      tokenHash,
       input.password ? await hashPassword(input.password) : null,
       now(),
       input.expires_at,
@@ -102,8 +129,7 @@ shareRoutes.post('/shares', async (c) => {
     {
       data: {
         id,
-        url: `${c.env.FILES_ORIGIN || new URL(c.req.url).origin}/s/${token}`,
-        directUrl: `${c.env.FILES_ORIGIN || new URL(c.req.url).origin}/d/${token}`,
+        ...links,
       },
     },
     201,
@@ -146,10 +172,19 @@ shareRoutes.delete('/shares/:id', async (c) => {
 });
 async function lookup(c: AppContext, requirePassword = true) {
   const token = c.req.param('token') ?? '';
-  if (!/^[0-9a-f]{64}$/.test(token)) fail(404, '分享不存在');
-  const share = await c.env.DB.prepare('SELECT * FROM file_shares WHERE token_hash=?')
-    .bind(await digest(token))
-    .first<ShareRecord>();
+  let share: ShareRecord | null;
+  if (/^[0-9a-f]{64}$/.test(token)) {
+    share = await c.env.DB.prepare('SELECT * FROM file_shares WHERE token_hash=?')
+      .bind(await digest(token))
+      .first<ShareRecord>();
+  } else {
+    const parsed = parseShareLinkToken(token);
+    if (!parsed) fail(404, '分享不存在');
+    share = await c.env.DB.prepare('SELECT * FROM file_shares WHERE id=?')
+      .bind(parsed.id)
+      .first<ShareRecord>();
+    if (share && !(await validShareLinkToken(token, share, c.env))) fail(404, '分享不存在');
+  }
   if (!share) fail(404, '分享不存在');
   if (!share.enabled || (share.expires_at && share.expires_at <= now()))
     fail(410, '分享已过期或已撤销');

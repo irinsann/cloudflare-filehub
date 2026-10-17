@@ -23,6 +23,14 @@
   flex: 1;
   min-width: 0;
 }
+.management-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
 .management-info strong {
   font-size: 14px;
   font-weight: 550;
@@ -428,6 +436,13 @@
   }
   .management-row > .button-icon {
     flex: 0 0 44px;
+  }
+  .management-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .management-actions > .button {
+    flex: 1;
   }
   .image-host-drop {
     padding: 16px;
