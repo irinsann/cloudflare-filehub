@@ -16,6 +16,7 @@ import {
   davPath,
   href,
   checkDavPathLength,
+  destinationMime,
   childPath,
   parentPath,
   resolve,
@@ -299,13 +300,15 @@ webdavRoutes.all('*', async (c) => {
     if (method === 'MOVE' && c.req.header('Depth') && c.req.header('Depth') !== 'infinity')
       fail(400, 'MOVE需要Depth infinity');
     const copyDepth = c.req.header('Depth') || 'infinity';
-    if (method === 'COPY' && !['0', 'infinity'].includes(copyDepth))
-      fail(400, 'COPY Depth无效');
+    if (method === 'COPY' && !['0', 'infinity'].includes(copyDepth)) fail(400, 'COPY Depth无效');
     await checkTreeDestinationPaths(c.env, node, target, method === 'MOVE' || copyDepth !== '0');
     const folder = await parent(c.env, target);
     if (method === 'MOVE')
       await checkLocks(c, path, { membership: true, descendants: true }, lockState);
     await checkLocks(c, target, { membership: !existing, descendants: true }, lockState);
+    const targetName = target.slice(target.lastIndexOf('/') + 1);
+    const targetMime =
+      node.kind === 'file' ? await destinationMime(c.env, node.row, targetName) : undefined;
     const replaced = existing ? await tree(c.env, existing) : [];
     const statements = trashStatements(c.env, replaced);
     // Replacing a resource keeps the destination root's existing lock scope.
@@ -313,11 +316,16 @@ webdavRoutes.all('*', async (c) => {
       statements.push(lockStatement(c, lock));
     if (method === 'MOVE') {
       statements.push(
-        c.env.DB.prepare(
-          node.kind === 'file'
-            ? 'UPDATE files SET name=?,folder_id=?,updated_at=? WHERE id=?'
-            : 'UPDATE folders SET name=?,parent_id=?,updated_at=? WHERE id=?',
-        ).bind(target.slice(target.lastIndexOf('/') + 1), folder, now(), node.row.id),
+        node.kind === 'file'
+          ? c.env.DB.prepare(
+              'UPDATE files SET name=?,folder_id=?,mime=?,updated_at=? WHERE id=?',
+            ).bind(targetName, folder, targetMime!, now(), node.row.id)
+          : c.env.DB.prepare('UPDATE folders SET name=?,parent_id=?,updated_at=? WHERE id=?').bind(
+              targetName,
+              folder,
+              now(),
+              node.row.id,
+            ),
       );
       // RFC4918 removes locks rooted in the moved subtree; parent locks remain.
       statements.push(
@@ -339,7 +347,7 @@ webdavRoutes.all('*', async (c) => {
       const preparation = 21 + (c.req.header('If')?.match(/>\s*\(/g)?.length || 0);
       if (statements.length + copyStatements + files * 2 + preparation > 50)
         fail(507, '复制目标目录过深或内容过多，请分批复制');
-      statements.push(...(await prepareCopy(c, nodes, path, target, folder)));
+      statements.push(...(await prepareCopy(c, nodes, path, target, folder, targetMime)));
     }
     if (statements.length + 21 > 50) fail(507, '目标目录层级过深，请分批操作');
     await checkWriteLease(c);

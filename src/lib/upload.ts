@@ -1,4 +1,4 @@
-import { api, send } from './api';
+import { api, ApiError, send } from './api';
 import type { FileRecord } from '../../shared/types';
 // Drive and image hosting use the same multipart transport and cleanup rules.
 export async function uploadFile(
@@ -7,7 +7,7 @@ export async function uploadFile(
   onProgress: (percent: number) => void = () => {},
 ) {
   const session = file.size
-    ? await send<{ id: string; partSize: number }>('/uploads', 'POST', {
+    ? await send<{ id: string; fileId: string; partSize: number }>('/uploads', 'POST', {
         name: file.name,
         size: file.size,
         folder_id: folderId,
@@ -69,7 +69,38 @@ export async function uploadFile(
         }
       }
     }
-    const result = await send<FileRecord>('/uploads/' + session.id + '/complete', 'POST');
+    let result: FileRecord | undefined;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        result = await send<FileRecord>('/uploads/' + session.id + '/complete', 'POST');
+        break;
+      } catch (error) {
+        // A lost response may hide a successful commit. Check its allocated file ID
+        // before retrying completion; never re-send the already uploaded parts here.
+        const uncertain =
+          !(error instanceof ApiError) ||
+          error.status >= 500 ||
+          [408, 410, 423, 429].includes(error.status);
+        if (!uncertain) throw error;
+        try {
+          const saved = await api<FileRecord>('/files/' + session.fileId);
+          if (
+            saved.id === session.fileId &&
+            saved.status === 'ready' &&
+            saved.size === file.size &&
+            saved.version === 1
+          ) {
+            result = saved;
+            break;
+          }
+        } catch {
+          /* Still pending or temporarily unavailable; retry the same completion. */
+        }
+        if (attempt >= 2) throw error;
+        const delay = error instanceof ApiError && error.status === 423 ? 2000 : 250 * 2 ** attempt;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
     onProgress(100);
     return result;
   } catch (error) {

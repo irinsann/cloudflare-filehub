@@ -804,6 +804,11 @@
             "type": "string",
             "enum": ["ready"]
           },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "初始版本为 1；内容被改写后增加。完成响应丢失时用于确认原上传结果。"
+          },
           "created_at": {
             "type": "integer",
             "format": "int64"
@@ -820,6 +825,7 @@
           "mime",
           "folder_id",
           "status",
+          "version",
           "created_at",
           "updated_at"
         ]

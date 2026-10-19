@@ -32,6 +32,7 @@ export function uploadMetadata(c: AppContext, file: FileRecord) {
     mime: file.mime,
     folder_id: file.folder_id,
     status: file.status,
+    version: file.version,
     created_at: file.created_at,
     updated_at: file.updated_at,
   };

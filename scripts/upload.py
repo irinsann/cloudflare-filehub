@@ -51,7 +51,7 @@ def main():
                 with opener.open(req, timeout=300) as response:
                     return json.load(response)["data"]
             except HTTPError as error:
-                if retry and attempt < 2 and (error.code == 429 or error.code >= 500):
+                if retry and attempt < 2 and (error.code in (423, 429) or error.code >= 500):
                     error.close()
                     time.sleep(2 ** (attempt + 1))
                     continue
@@ -93,10 +93,17 @@ def main():
                 if current.st_mtime_ns != stat.st_mtime_ns or current.st_size != size:
                     raise RuntimeError("The source file changed during upload")
                 try:
-                    result = call(f'/uploads/{session["id"]}/complete', "POST")
+                    result = call(f'/uploads/{session["id"]}/complete', "POST", retry=True)
                 except (ApiError, RuntimeError):
                     # Completion can succeed even if its response is lost.
                     result = call(f'/files/{session["fileId"]}', retry=True)
+                    if not isinstance(result, dict) or (
+                        result.get("id") != session["fileId"]
+                        or result.get("status") != "ready"
+                        or result.get("size") != size
+                        or result.get("version") != 1
+                    ):
+                        raise RuntimeError("Cannot confirm completion: the file no longer matches this upload")
                 session = None
                 print(file=sys.stderr)
         print(json.dumps(result, ensure_ascii=False, indent=2))

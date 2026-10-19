@@ -67,6 +67,20 @@ export const href = (path: string, folder = false) =>
 export function checkDavPathLength(path: string, folder = false) {
   if (href(path, folder).length > DAV_MAX_PATH_LENGTH) fail(414, '路径过长');
 }
+export async function destinationMime(env: Env, file: FileRecord, name: string) {
+  // Desktop editors often upload an opaque .tmp name and then rename it. Retain
+  // established content types (including immutable hosted images); infer only an
+  // unknown type when the new extension is one already supported by uploads.
+  if (file.mime !== 'application/octet-stream' || file.name === name) return file.mime;
+  const mime = mimeFor(name);
+  if (mime === 'application/octet-stream' || isText(mime)) return mime;
+  if (!file.size) return file.mime;
+  const head = await env.BUCKET.get(file.object_key, {
+    range: { offset: 0, length: Math.min(32, file.size) },
+  });
+  if (!head) fail(404, '源文件对象不存在');
+  return sniff(new Uint8Array(await head.arrayBuffer())) === mime ? mime : file.mime;
+}
 export const parentPath = (path: string) => {
   const p = path.slice(0, path.lastIndexOf('/'));
   return p === '/dav' || !p ? '/dav/' : p;

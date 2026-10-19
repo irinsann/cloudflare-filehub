@@ -14,6 +14,7 @@ export async function prepareCopy(
   sourcePath: string,
   targetPath: string,
   targetParent: string | null,
+  targetMime?: string,
 ): Promise<D1PreparedStatement[]> {
   if (!nodes.length || nodes.length > DAV_COPY_LIMIT)
     fail(507, `单次COPY最多${DAV_COPY_LIMIT}项，请分批复制`);
@@ -58,7 +59,10 @@ export async function prepareCopy(
         object_key: `objects/${uuid()}`,
         source_key: entry.node.row.object_key,
         size: entry.node.row.size,
-        mime: entry.node.row.mime,
+        mime:
+          entry.node.path === sourcePath
+            ? (targetMime ?? entry.node.row.mime)
+            : entry.node.row.mime,
         etag: '',
       };
     });

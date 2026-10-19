@@ -44,5 +44,7 @@ export const dateLabel = (n: number) =>
     minute: '2-digit',
   }).format(n);
 export async function copy(text: string) {
-  await navigator.clipboard.writeText(text);
+  const clipboard = navigator.clipboard;
+  if (typeof clipboard?.writeText !== 'function') throw new Error('当前浏览器无法自动复制');
+  await clipboard.writeText(text);
 }

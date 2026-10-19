@@ -19,6 +19,30 @@ interface Session {
   size: number;
   expires_at: number;
 }
+function missingMultipart(error: unknown) {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : null;
+  return (
+    code === 10024 ||
+    code === '10024' ||
+    code === 'NoSuchUpload' ||
+    (error instanceof Error && /\(10024\)$/.test(error.message))
+  );
+}
+async function recoverCompletedObject(c: AppContext, s: Session) {
+  // Workers multipart part ETags are opaque tokens, not content hashes. The metadata set
+  // when creating this exact multipart upload proves which session produced the object.
+  const object = await c.env.BUCKET.head(s.object_key);
+  if (!object) fail(410, '上传对象不存在，请重新上传');
+  if (
+    object.key !== s.object_key ||
+    object.size !== s.size ||
+    object.customMetadata?.rcloud_upload !== s.id ||
+    object.customMetadata?.rcloud_file !== s.file_id ||
+    object.customMetadata?.rcloud_size !== String(s.size)
+  )
+    fail(409, '无法确认上传对象所属任务，请取消任务后重新上传');
+  return object;
+}
 async function session(c: AppContext, id: string) {
   identifier.parse(id);
   const row = await c.env.DB.prepare('SELECT * FROM upload_sessions WHERE id=?')
@@ -41,7 +65,13 @@ uploadRoutes.post('/uploads', async (c) => {
   const id = uuid(),
     fileId = uuid(),
     key = await reserve(c.env, input.size);
-  const mpu = await c.env.BUCKET.createMultipartUpload(key);
+  const mpu = await c.env.BUCKET.createMultipartUpload(key, {
+    customMetadata: {
+      rcloud_upload: id,
+      rcloud_file: fileId,
+      rcloud_size: String(input.size),
+    },
+  });
   try {
     await c.env.DB.batch([
       c.env.DB.prepare(
@@ -125,9 +155,15 @@ uploadRoutes.post('/uploads/:id/complete', async (c) => {
     )
   )
     fail(409, '分片未上传完整');
-  const object = await c.env.BUCKET.resumeMultipartUpload(s.object_key, s.upload_id).complete(
-    parts.results.map((p) => ({ partNumber: p.part_number, etag: p.etag })),
-  );
+  let object: R2Object;
+  try {
+    object = await c.env.BUCKET.resumeMultipartUpload(s.object_key, s.upload_id).complete(
+      parts.results.map((p) => ({ partNumber: p.part_number, etag: p.etag })),
+    );
+  } catch (error) {
+    if (!missingMultipart(error)) throw error;
+    object = await recoverCompletedObject(c, s);
+  }
   if (object.size !== s.size) fail(400, '文件大小校验失败');
   let mime = mimeFor(file.name);
   if (!isText(mime) && mime !== 'application/octet-stream') {
@@ -138,11 +174,32 @@ uploadRoutes.post('/uploads/:id/complete', async (c) => {
       mime = 'application/octet-stream';
   }
   await checkWriteLease(c);
+  const completedAt = now();
   await c.env.DB.batch([
     c.env.DB.prepare(
-      "UPDATE files SET size=?,mime=?,etag=?,status='ready',updated_at=? WHERE id=? AND status='pending'",
-    ).bind(object.size, mime, object.etag, now(), s.file_id),
-    c.env.DB.prepare('DELETE FROM upload_sessions WHERE id=?').bind(s.id),
+      `UPDATE files SET size=?,mime=?,etag=?,status='ready',updated_at=?
+      WHERE id=? AND object_key=? AND status='pending' AND deleted_at IS NULL
+      AND EXISTS(SELECT 1 FROM upload_sessions WHERE id=? AND file_id=files.id
+        AND upload_id=? AND object_key=files.object_key AND size=? AND expires_at=? AND expires_at>?)`,
+    ).bind(
+      object.size,
+      mime,
+      object.etag,
+      completedAt,
+      s.file_id,
+      s.object_key,
+      s.id,
+      s.upload_id,
+      s.size,
+      s.expires_at,
+      completedAt,
+    ),
+    c.env.DB.prepare(
+      `DELETE FROM upload_sessions WHERE id=? AND file_id=? AND upload_id=?
+      AND object_key=? AND size=? AND expires_at=? AND expires_at>?
+      AND EXISTS(SELECT 1 FROM files WHERE id=upload_sessions.file_id
+        AND object_key=upload_sessions.object_key AND status='ready')`,
+    ).bind(s.id, s.file_id, s.upload_id, s.object_key, s.size, s.expires_at, completedAt),
     // Cancellation may already have removed the pending row. In that case the completed
     // R2 object still needs its cleanup task, especially when cancellation's delete failed.
     c.env.DB.prepare(
@@ -150,22 +207,23 @@ uploadRoutes.post('/uploads/:id/complete', async (c) => {
     ).bind(s.object_key, s.file_id, s.object_key),
     logStatement(c.env, 'file.upload', s.file_id),
   ]);
-  return c.json({ data: uploadMetadata(c, await getFile(c.env, s.file_id)) }, 201);
+  const completed = await getFile(c.env, s.file_id);
+  if (
+    completed.object_key !== s.object_key ||
+    completed.size !== object.size ||
+    completed.etag !== object.etag
+  )
+    fail(409, '上传文件状态已改变，请刷新后重试');
+  return c.json({ data: uploadMetadata(c, completed) }, 201);
 });
 uploadRoutes.delete('/uploads/:id', async (c) => {
   const s = await session(c, c.req.param('id'));
   try {
     await c.env.BUCKET.resumeMultipartUpload(s.object_key, s.upload_id).abort();
   } catch (error) {
-    const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : null;
-    const missing =
-      code === 10024 ||
-      code === '10024' ||
-      code === 'NoSuchUpload' ||
-      (error instanceof Error && /\(10024\)$/.test(error.message));
     // A transient failure is not proof that the multipart parts were removed.
     // Keep the upload ID and capacity reservation so cancellation or cleanup can retry.
-    if (!missing) fail(502, '存储服务暂时无法取消上传，请重试');
+    if (!missingMultipart(error)) fail(502, '存储服务暂时无法取消上传，请重试');
   }
   await checkWriteLease(c);
   const removed = await c.env.DB.prepare(

@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { renderMarkdown, type Heading } from '../../shared/markdown';
+import { copy } from '../lib/api';
+import { ManualCopy } from './ManualCopy';
 export function MarkdownView({ source, fileId }: { source: string; fileId?: string }) {
   const [html, setHtml] = useState(''),
-    [headings, setHeadings] = useState<Heading[]>([]);
+    [headings, setHeadings] = useState<Heading[]>([]),
+    [manualCopy, setManualCopy] = useState<string | null>(null);
   const container = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let active = true;
@@ -26,12 +29,14 @@ export function MarkdownView({ source, fileId }: { source: string; fileId?: stri
       button.className = 'code-copy';
       button.textContent = '复制';
       button.onclick = () => {
-        void navigator.clipboard.writeText(pre.querySelector('code')?.textContent ?? '').then(
+        const value = pre.querySelector('code')?.textContent ?? '';
+        void copy(value).then(
           () => {
             button.textContent = '已复制';
           },
           () => {
-            button.textContent = '复制失败';
+            button.textContent = '手动复制';
+            setManualCopy(value);
           },
         );
       };
@@ -49,6 +54,7 @@ export function MarkdownView({ source, fileId }: { source: string; fileId?: stri
         ))}
       </details>
       <div ref={container} className="prose" dangerouslySetInnerHTML={{ __html: html }} />
+      {manualCopy !== null && <ManualCopy value={manualCopy} onClose={() => setManualCopy(null)} />}
     </>
   );
 }

@@ -139,7 +139,16 @@ describe('upload API tokens', () => {
     const status = await data<{ parts: unknown[] }>(await call(a.token, '/uploads/' + s.id));
     expect(status.parts).toEqual([{ partNumber: 1, size: 3 }]);
     expect((await call(a.token, '/uploads/' + s.id + '/complete', 'POST')).status).toBe(201);
-    expect((await call(a.token, '/files/' + s.fileId)).status).toBe(200);
+    const completed = await call(a.token, '/files/' + s.fileId);
+    expect(completed.status).toBe(200);
+    expect(await data(completed)).toMatchObject({
+      id: s.fileId,
+      status: 'ready',
+      size: 3,
+      version: 1,
+    });
+    await testEnv.DB.prepare('UPDATE files SET version=2 WHERE id=?').bind(s.fileId).run();
+    expect(await data(await call(a.token, '/files/' + s.fileId))).toMatchObject({ version: 2 });
     expect((await call(b.token, '/files/' + s.fileId)).status).toBe(404);
     expect((await call(a.token, '/uploads/' + s.id)).status).toBe(410);
     const web = await data<{ id: string }>(

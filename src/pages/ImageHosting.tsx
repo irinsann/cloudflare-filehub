@@ -18,6 +18,7 @@ import { loadImageGallery } from '../lib/image-gallery';
 import { EmptyState } from '../components/EmptyState';
 import { Button } from '../components/ui/button';
 import { Modal } from '../components/ui/dialog';
+import { ManualCopy } from '../components/ManualCopy';
 import { LinkOriginSelect, usePublicLinks } from '../components/PublicLinks';
 import type { Settings } from '../../shared/types';
 interface Row {
@@ -109,7 +110,8 @@ export function ImageHosting({
     [deleting, setDeleting] = useState<Row | null>(null),
     [preview, setPreview] = useState<Row | null>(null),
     [previewLoading, setPreviewLoading] = useState(false),
-    [previewError, setPreviewError] = useState(false);
+    [previewError, setPreviewError] = useState(false),
+    [manualCopy, setManualCopy] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const listingRequest = useRef<AbortController | null>(null);
   const locked = useRef(false);
@@ -248,7 +250,9 @@ export function ImageHosting({
   const copied = (value: string) =>
     void copy(value)
       .then(() => notify('已复制'))
-      .catch(() => notify('复制失败，请手动复制'));
+      .catch(() => {
+        if (mounted.current) setManualCopy(value);
+      });
   function openPreview(row: Row) {
     setPreviewLoading(true);
     setPreviewError(false);
@@ -533,6 +537,7 @@ export function ImageHosting({
           </Button>
         </div>
       )}
+      {manualCopy !== null && <ManualCopy value={manualCopy} onClose={() => setManualCopy(null)} />}
       {preview && (
         <Modal title="图片预览" description={preview.name} onClose={() => setPreview(null)} wide>
           {previewLoading && (

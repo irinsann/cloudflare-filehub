@@ -43,7 +43,9 @@ WebDAV 与网页使用同一份文件和目录。通过客户端上传、移动�
 | `LOCK`、`UNLOCK` | 独占写锁；支持锁刷新与释放                          |
 | `PROPPATCH`      | 属性修改请求；受保护或不支持的属性通过 XML 状态报告 |
 
-覆盖文件会先写入新对象，成功后更换文件引用并增加版本，避免上传中断破坏原文件。客户端应使用 ETag 和 `If-Match` 防止覆盖其他客户端的新版本。
+覆盖文件会先写入新对象，成功后更换文件引用并增加版本，避免上传中断破坏原文件。客户端应使用 ETag 和 `If-Match` 防止覆盖其他客户端的新版本。仅提供 `If-Unmodified-Since` 时按 HTTP 日期的秒精度检查修改时间，过期的写入、移动或删除条件返回 `412`；`If-Match` 优先于日期条件。
+
+客户端先上传未知类型的临时文件、再通过 MOVE/COPY 改成正式文件名时，会按支持的扩展名重新识别类型。图片等二进制格式同时验证文件头，伪造图片后缀不会获得内联图片预览权限。
 
 网盘旧数据可能含同目录同名文件。WebDAV 按路径访问，遇到歧义返回 `409`，请先在网页中重命名冲突文件。不会随机选择其中一个。
 
@@ -56,7 +58,7 @@ WebDAV 与网页使用同一份文件和目录。通过客户端上传、移动�
 香港反代需要：
 
 - 转发上述 HTTP 方法，不能只允许 `GET`、`POST`。
-- 保留 `Authorization`、`Content-Length`、`Content-Type`、`Depth`、`Destination`、`Overwrite`、`If`、`If-Match`、`If-None-Match`、`Lock-Token`、`Timeout` 和 `Range` 等头。
+- 保留 `Authorization`、`Content-Length`、`Content-Type`、`Depth`、`Destination`、`Overwrite`、`If`、`If-Match`、`If-None-Match`、`If-Unmodified-Since`、`Lock-Token`、`Timeout` 和 `Range` 等头。
 - 保留响应中的 `DAV`、`Allow`、`WWW-Authenticate`、`ETag`、`Lock-Token`、`Timeout` 和 `Content-Range`。
 - `/dav/` 禁止缓存，避免向其他请求提供私有内容或过期目录、锁状态。
 - 不要将 DAV 请求改写到网页登录页；客户端使用 Basic 凭据认证。

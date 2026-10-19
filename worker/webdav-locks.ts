@@ -26,6 +26,75 @@ export async function locks(c: AppContext) {
       .all<DavLock>()
   ).results;
 }
+function httpDate(value: string | undefined): number | null {
+  if (!value) return null;
+  const monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const modern =
+    /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat), (\d{2}) ([A-Z][a-z]{2}) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$/.exec(
+      value,
+    );
+  const obsolete =
+    /^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday), (\d{2})-([A-Z][a-z]{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) GMT$/.exec(
+      value,
+    );
+  const asctime =
+    /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat) ([A-Z][a-z]{2}) ( {1}\d|\d{2}) (\d{2}):(\d{2}):(\d{2}) (\d{4})$/.exec(
+      value,
+    );
+  const parts =
+    modern ||
+    obsolete ||
+    (asctime && [
+      asctime[0],
+      asctime[1],
+      asctime[3],
+      asctime[2],
+      asctime[7],
+      asctime[4],
+      asctime[5],
+      asctime[6],
+    ]);
+  if (!parts) return null;
+  const month = monthNames.indexOf(parts[3]);
+  const day = Number(parts[2]),
+    hour = Number(parts[5]),
+    minute = Number(parts[6]),
+    second = Number(parts[7]);
+  let year = Number(parts[4]);
+  if (month < 0 || day < 1 || hour > 23 || minute > 59 || second > 60) return null;
+  if (obsolete) {
+    const clock = new Date(now());
+    year += Math.floor(clock.getUTCFullYear() / 100) * 100;
+    const futureLimit = new Date(clock);
+    futureLimit.setUTCFullYear(clock.getUTCFullYear() + 50);
+    if (Date.UTC(year, month, day, hour, minute, second) > futureLimit.getTime()) year -= 100;
+  }
+  const date = new Date(0);
+  date.setUTCFullYear(year, month, day);
+  date.setUTCHours(hour, minute, Math.min(second, 59), 0);
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month ||
+    date.getUTCDate() !== day ||
+    days[date.getUTCDay()] !== parts[1].slice(0, 3)
+  )
+    return null;
+  return date.getTime() + (second === 60 ? 1000 : 0);
+}
 export function conditions(c: AppContext, node: DavNode | null) {
   const match = c.req.header('If-Match');
   const none = c.req.header('If-None-Match');
@@ -40,6 +109,11 @@ export function conditions(c: AppContext, node: DavNode | null) {
           .includes(etag(node))
       ))
   )
+    fail(412, '文件已改变');
+  // HTTP dates have one-second precision. If-Match takes precedence, and malformed
+  // or unavailable dates do not turn an unconditional request into a failed write.
+  const unmodified = match === undefined ? httpDate(c.req.header('If-Unmodified-Since')) : null;
+  if (node && unmodified !== null && Math.floor(node.row.updated_at / 1000) * 1000 > unmodified)
     fail(412, '文件已改变');
   if (
     none &&
