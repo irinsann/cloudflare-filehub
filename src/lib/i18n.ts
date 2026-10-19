@@ -22,8 +22,10 @@ const listeners = new Set<() => void>();
 export const getLocale = () => locale;
 export function setLocale(value: Locale) {
   locale = value;
-  if (typeof document !== 'undefined')
+  if (typeof document !== 'undefined') {
     document.documentElement.lang = value === 'zh' ? 'zh-CN' : 'en';
+    document.title = value === 'zh' ? 'RCloud · 私人云盘' : 'RCloud · Private drive';
+  }
   try {
     localStorage.setItem('rcloud-locale', value);
   } catch {
@@ -47,6 +49,7 @@ export function useLocale() {
   );
   useEffect(() => {
     document.documentElement.lang = current === 'zh' ? 'zh-CN' : 'en';
+    document.title = current === 'zh' ? 'RCloud · 私人云盘' : 'RCloud · Private drive';
   }, [current]);
   return { locale: current, setLocale };
 }
