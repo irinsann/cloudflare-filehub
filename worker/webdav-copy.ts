@@ -3,6 +3,7 @@ import { now, uuid } from './env';
 import { fail } from './errors';
 import { initializeQuota, STORAGE_LIMIT } from './quota';
 import { nodeId, parentPath, type DavNode } from './webdav-store';
+import { recoverUploadReservations } from './storage';
 
 // Bound both R2 work and D1 statements within a Free Worker request.
 export const DAV_COPY_LIMIT = 12;
@@ -88,35 +89,42 @@ export async function prepareCopy(
         WHERE used+?<=? RETURNING object_key`,
       ).bind(reservations, total, STORAGE_LIMIT),
       c.env.DB.prepare(
-        `INSERT INTO cleanup_tasks(object_key,created_at)
-        SELECT object_key,? FROM storage_allocations
+        `INSERT INTO cleanup_tasks(object_key,created_at,writer_owner)
+        SELECT object_key,?,? FROM storage_allocations
         WHERE object_key IN (SELECT json_extract(value,'$.key') FROM json_each(?))`,
-      ).bind(timestamp, reservations),
+      ).bind(timestamp, c.get('writeLease') ?? null, reservations),
     ]);
     // D1 meta.changes also includes the quota trigger; count only inserted reservations.
     if (reserved[0].results.length !== files.length) fail(507, '存储容量不足（总容量50GB）');
     // On failure, the durable queue and allocations remain until cleanup confirms R2 deletion.
-    for (const file of files) {
-      let source: R2ObjectBody | null;
-      try {
-        source = await c.env.BUCKET.get(file.source_key);
-      } catch {
-        return fail(502, '存储服务暂时无法读取，请重试');
+    try {
+      for (const file of files) {
+        let source: R2ObjectBody | null;
+        try {
+          source = await c.env.BUCKET.get(file.source_key);
+        } catch {
+          return fail(502, '存储服务暂时无法读取，请重试');
+        }
+        if (!source) fail(404, '源文件对象不存在');
+        if (source.size !== file.size) {
+          await source.body.cancel().catch(() => undefined);
+          fail(502, '源文件大小不符');
+        }
+        let copied: R2Object | null;
+        try {
+          copied = await c.env.BUCKET.put(file.object_key, source.body);
+        } catch {
+          if (!source.body.locked) await source.body.cancel().catch(() => undefined);
+          return fail(502, '存储服务暂时无法写入，请重试');
+        }
+        if (!copied || copied.size !== file.size) fail(502, '复制文件完整性校验失败');
+        file.etag = copied.etag;
       }
-      if (!source) fail(404, '源文件对象不存在');
-      if (source.size !== file.size) {
-        await source.body.cancel().catch(() => undefined);
-        fail(502, '源文件大小不符');
-      }
-      let copied: R2Object | null;
-      try {
-        copied = await c.env.BUCKET.put(file.object_key, source.body);
-      } catch {
-        if (!source.body.locked) await source.body.cancel().catch(() => undefined);
-        return fail(502, '存储服务暂时无法写入，请重试');
-      }
-      if (!copied || copied.size !== file.size) fail(502, '复制文件完整性校验失败');
-      file.etag = copied.etag;
+    } finally {
+      await recoverUploadReservations(
+        c.env,
+        files.map((file) => ({ key: file.object_key, size: file.size })),
+      );
     }
   }
 

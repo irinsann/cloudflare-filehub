@@ -2,12 +2,71 @@ import { tr } from './i18n';
 import { api, ApiError, send } from './api';
 import { getLocale } from './i18n';
 import type { FileRecord } from '../../shared/types';
+export interface UploadReceipt {
+  fileId?: string;
+}
+
+/** Keep the same receipt for every manual retry, including lost completion responses. */
+export async function uploadFileWithReceipt(
+  file: File,
+  folderId: string | null,
+  receipt: UploadReceipt,
+  onProgress: (percent: number) => void = () => {},
+) {
+  if (receipt.fileId) {
+    let saved: FileRecord | undefined;
+    try {
+      saved = await api<FileRecord>('/files/' + receipt.fileId);
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 404) throw error;
+      // Empty uploads can repeat their idempotent POST with the same client ID.
+      // Multipart uploads must never allocate a different file after an uncertain commit.
+      if (file.size)
+        throw new Error(
+          tr(
+            '上传结果尚未确认，请稍后重试或在文件列表核对。',
+            'The upload result is unconfirmed. Try again shortly or check your files.',
+          ),
+        );
+    }
+    if (saved) {
+      if (saved.id !== receipt.fileId || saved.status !== 'ready')
+        throw new Error(
+          tr('文件仍在处理中，请稍后重试', 'The file is still being processed. Try again shortly.'),
+        );
+      if (
+        saved.size !== file.size ||
+        saved.name !== file.name ||
+        saved.folder_id !== folderId ||
+        saved.version !== 1
+      )
+        throw new Error(
+          tr('文件已更改，请在文件列表核对。', 'The file has changed. Check it in your files.'),
+        );
+      onProgress(100);
+      return saved;
+    }
+  }
+  const saved = await uploadFile(
+    file,
+    folderId,
+    onProgress,
+    (id) => {
+      receipt.fileId = id;
+    },
+    file.size ? undefined : receipt.fileId,
+  );
+  receipt.fileId = saved.id;
+  return saved;
+}
+
 // Drive and image hosting use the same multipart transport and cleanup rules.
 export async function uploadFile(
   file: File,
   folderId: string | null,
   onProgress: (percent: number) => void = () => {},
   onAllocatedFile: (id: string | undefined) => void = () => {},
+  emptyFileId?: string,
 ) {
   const session = file.size
     ? await send<{ id: string; fileId: string; partSize: number }>('/uploads', 'POST', {
@@ -52,11 +111,13 @@ export async function uploadFile(
   }
   try {
     if (!session) {
+      const id = emptyFileId ?? crypto.randomUUID();
+      onAllocatedFile(id);
       const params = new URLSearchParams({ name: file.name });
       if (folderId) params.set('folder_id', folderId);
       return await api<FileRecord>('/files/upload?' + params, {
         method: 'POST',
-        headers: { 'X-File-Size': '0' },
+        headers: { 'X-File-Size': '0', 'X-Upload-Id': id },
         body: file,
       });
     }

@@ -316,8 +316,29 @@ export async function uploadSingleFile(c: AppContext) {
   const name = filename.parse(c.req.query('name')),
     folder = c.req.query('folder_id') || null;
   await activeFolder(c.env, folder);
-  const id = uuid(),
-    key = await reserve(c.env);
+  const requestedId = c.req.header('X-Upload-Id');
+  if (requestedId && (size !== 0 || c.get('apiTokenId')))
+    fail(400, '上传任务标识仅适用于网页空文件');
+  const id = requestedId ? identifier.parse(requestedId) : uuid();
+  if (requestedId) {
+    const existing = await c.env.DB.prepare('SELECT * FROM files WHERE id=?')
+      .bind(id)
+      .first<FileRecord>();
+    if (existing) {
+      if (existing.status === 'pending') fail(423, '上传仍在处理中，请稍后重试');
+      if (
+        existing.status !== 'ready' ||
+        existing.deleted_at !== null ||
+        existing.name !== name ||
+        existing.folder_id !== folder ||
+        existing.size !== 0 ||
+        existing.version !== 1
+      )
+        fail(409, '上传任务标识已被使用');
+      return c.json({ data: uploadMetadata(c, existing) });
+    }
+  }
+  const key = await reserve(c.env, undefined, c.get('writeLease'));
   try {
     await c.env.DB.batch([
       c.env.DB.prepare(

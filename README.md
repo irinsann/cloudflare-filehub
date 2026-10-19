@@ -46,7 +46,7 @@ pnpm dev
 - [数据与安全架构](docs/architecture.md) · [UI 维护](docs/ui-architecture.md)
 - [验证与发布检查](docs/verification.md)
 
-升级前备份 D1，先应用全部待执行迁移，再部署新 Worker。迁移 `0013` 移除已退出功能的 Google 连接元数据，`0014` 新增 HTML 上传分享记录，`0015` 建立事务内维护的容量计数。它们不搬移或改名现有 R2 文件。保留现有分享签名密钥和认证加密密钥。
+升级前备份 D1，先应用全部待执行迁移，再部署新 Worker。迁移 `0013` 移除已退出功能的 Google 连接元数据，`0014` 新增 HTML 上传分享记录，`0015` 建立事务内维护的容量计数；`0016–0018` 增强上传清理与图片撤销保护，并优化 WebDAV 路径查询。它们不搬移或改名现有 R2 文件。保留现有分享签名密钥和认证加密密钥。
 
 ## 容量与边界
 
@@ -100,7 +100,7 @@ Use Node.js 22.12+ and pnpm 11. Install dependencies with `pnpm install --frozen
 
 Provision a Worker, a private R2 bucket and a D1 database. Configure your own HTTPS origin, for example `cloud.example.com`, and an optional reverse proxy at `files.example.com`. Keep production resource IDs and secrets out of Git. Follow the [deployment guide](docs/deployment.md).
 
-Back up D1, apply all migrations, then deploy. Migration 0013 removes retired Google connection metadata, 0014 adds HTML hosting records, and 0015 maintains storage usage with transactional triggers. Existing R2 files are not moved or renamed. Preserve existing signing and encryption keys.
+Back up D1, apply all migrations, then deploy. Migration 0013 removes retired Google connection metadata, 0014 adds HTML hosting records, and 0015 maintains storage usage with transactional triggers. Migrations 0016–0018 strengthen upload cleanup and image revocation handling, and optimize WebDAV path queries. Existing R2 files are not moved or renamed. Preserve existing signing and encryption keys.
 
 ### Limits and safety
 

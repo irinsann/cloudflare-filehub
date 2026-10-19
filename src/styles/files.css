@@ -149,8 +149,8 @@
   overflow: hidden;
 }
 .folder-icon {
-  color: var(--peach-ink);
-  background: var(--peach);
+  color: var(--sky-ink);
+  background: var(--sky);
 }
 .image-icon {
   color: var(--mint-ink);

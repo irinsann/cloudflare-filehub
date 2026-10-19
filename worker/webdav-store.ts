@@ -3,7 +3,15 @@ import { now, uuid } from './env';
 import { fail } from './errors';
 import type { FileRecord, FolderRecord } from '../shared/types';
 import { filename } from '../shared/validation';
-import { reserve, releaseStatement, cleanupStatement, mimeFor, sniff, isText } from './storage';
+import {
+  reserve,
+  recoverUploadReservation,
+  releaseStatement,
+  cleanupStatement,
+  mimeFor,
+  sniff,
+  isText,
+} from './storage';
 import { DAV_MAX_UPLOAD } from './webdav-auth';
 import { checkWriteLease } from './write-lease';
 
@@ -122,6 +130,8 @@ export async function children(env: Env, node: DavNode) {
 export async function resolve(env: Env, path: string): Promise<DavNode | null> {
   if (path === '/dav/') return rootNode;
   const parts = path.slice(5).split('/');
+  // Keep the short ancestor chain outside the indexed lookup. An unconstrained JOIN
+  // lets SQLite scan every sibling file despite the case-insensitive path index.
   const rows = await env.DB.prepare(
     `WITH RECURSIVE chain(id,path,depth) AS (
     SELECT NULL,'/dav/',0 UNION ALL
@@ -130,7 +140,7 @@ export async function resolve(env: Env, path: string): Promise<DavNode | null> {
   ) SELECT 'folder' AS kind,c.path,c.depth,json_object('id',f.id,'name',f.name,'parent_id',f.parent_id,'created_at',f.created_at,'updated_at',f.updated_at,'deleted_at',f.deleted_at) AS data
     FROM chain c JOIN folders f ON f.id=c.id
     UNION ALL SELECT 'file',rtrim(c.path,'/')||'/'||f.name,c.depth+1,json_object('id',f.id,'name',f.name,'folder_id',f.folder_id,'object_key',f.object_key,'size',f.size,'mime',f.mime,'etag',f.etag,'version',f.version,'status',f.status,'created_at',f.created_at,'updated_at',f.updated_at,'deleted_at',f.deleted_at)
-    FROM chain c JOIN files f ON f.folder_id IS c.id WHERE f.deleted_at IS NULL AND f.name=json_extract(?,'$['||c.depth||']') COLLATE NOCASE AND c.depth<?`,
+    FROM chain c CROSS JOIN files f ON f.folder_id IS c.id WHERE f.deleted_at IS NULL AND f.name=json_extract(?,'$['||c.depth||']') COLLATE NOCASE AND c.depth<?`,
   )
     .bind(JSON.stringify(parts), parts.length, JSON.stringify(parts), parts.length)
     .all<{ kind: 'file' | 'folder'; path: string; depth: number; data: string }>();
@@ -285,7 +295,7 @@ export async function putObject(
   if (!Number.isSafeInteger(size) || size < 0) fail(400, '文件大小无效');
   if (!source && size > DAV_MAX_UPLOAD)
     fail(413, 'WebDAV单次上传最多100MB；大文件请使用网页分片上传');
-  const key = await reserve(c.env, size);
+  const key = await reserve(c.env, size, c.get('writeLease'));
   let stream: ReadableStream | null = c.req.raw.body;
   if (source) {
     const object = await c.env.BUCKET.get(source.key);
@@ -313,6 +323,9 @@ export async function putObject(
     throw error;
   });
   const [stored, transferred] = await Promise.allSettled([write, pump]);
+  // A timed-out writer can finish after cleanup has released its original reservation.
+  // Restore durable tracking before either reporting a failure or committing the file.
+  await recoverUploadReservation(c.env, key, size);
   if (storageFailed) fail(502, '存储服务暂时无法写入，请重试');
   if (stored.status === 'rejected' || transferred.status === 'rejected')
     fail(400, '上传中断或文件大小不符');

@@ -42,7 +42,7 @@ export const sections = [
   {
     id: 'shares',
     get label() {
-      return tr('文件分享', 'File shares');
+      return tr('分享', 'Shares');
     },
     icon: Link2,
   },

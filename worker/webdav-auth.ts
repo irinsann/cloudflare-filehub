@@ -11,20 +11,30 @@ import { identifier } from '../shared/validation';
 export const DAV_MAX_UPLOAD = 100000000;
 const fields = 'id,name,prefix,created_at,expires_at,last_used_at,revoked_at';
 export const webdavCredentials = new Hono<AppEnv>();
-webdavCredentials.get('/webdav', async (c) =>
-  c.json({
+webdavCredentials.get('/webdav', async (c) => {
+  const timestamp = now();
+  return c.json({
     data: {
       credentials: (
         await c.env.DB.prepare(
-          `SELECT ${fields} FROM webdav_credentials ORDER BY created_at DESC LIMIT 100`,
-        ).all()
+          `WITH history AS (
+            SELECT ${fields} FROM webdav_credentials
+            WHERE revoked_at IS NOT NULL OR expires_at<=? ORDER BY created_at DESC LIMIT 100
+          ) SELECT ${fields} FROM (
+            SELECT ${fields},0 AS inactive FROM webdav_credentials
+            WHERE revoked_at IS NULL AND expires_at>?
+            UNION ALL SELECT ${fields},1 AS inactive FROM history
+          ) ORDER BY inactive,created_at DESC`,
+        )
+          .bind(timestamp, timestamp)
+          .all()
       ).results,
       username: 'rcloud',
       path: '/dav/',
       maxUploadBytes: DAV_MAX_UPLOAD,
     },
-  }),
-);
+  });
+});
 webdavCredentials.post('/webdav', async (c) => {
   const input = z
     .object({

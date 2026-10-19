@@ -1,7 +1,7 @@
 import { tr } from '../lib/i18n';
 import { useState, useRef } from 'react';
 import type { Settings } from '../../shared/types';
-import { uploadFile } from '../lib/upload';
+import { uploadFileWithReceipt, type UploadReceipt } from '../lib/upload';
 export interface UploadItem {
   id: string;
   file: File;
@@ -9,6 +9,7 @@ export interface UploadItem {
   progress: number;
   state: 'queued' | 'uploading' | 'success' | 'error';
   error?: string;
+  receipt: UploadReceipt;
 }
 export function useUploads(
   settings: Settings | null,
@@ -28,7 +29,9 @@ export function useUploads(
       const item = queue.current.shift()!;
       update(item.id, { state: 'uploading' });
       try {
-        await uploadFile(item.file, item.folderId, (progress) => update(item.id, { progress }));
+        await uploadFileWithReceipt(item.file, item.folderId, item.receipt, (progress) =>
+          update(item.id, { progress }),
+        );
         update(item.id, { state: 'success', progress: 100 });
         onComplete();
       } catch (error) {
@@ -55,6 +58,7 @@ export function useUploads(
       folderId,
       progress: 0,
       state: 'queued' as const,
+      receipt: {},
     }));
     setItems((all) => [...all, ...accepted]);
     queue.current.push(...accepted);

@@ -51,6 +51,7 @@ const english: ReadonlyMap<string, string> = new Map(
     'Image-hosting 目录不可用': 'The Image-hosting folder is unavailable',
     图片不存在: 'Image not found',
     '图片状态已改变，请刷新后重试': 'The image state has changed. Refresh and try again.',
+    '图片直链已撤销，请使用恢复操作': 'The image link was revoked. Use Restore to enable it again.',
     'MD5 命名冲突，图片未覆盖':
       'An MD5 name conflict occurred. The existing image was not overwritten.',
     '图片已修改，请重新上传': 'The image has changed. Upload it again.',
@@ -148,6 +149,10 @@ const english: ReadonlyMap<string, string> = new Map(
     上传中断或实际文件大小不匹配:
       'The upload was interrupted or the actual file size does not match',
     上传完整性校验失败: 'Upload integrity verification failed',
+    上传任务标识仅适用于网页空文件:
+      'Upload IDs are only supported for empty files uploaded through the web interface',
+    '上传仍在处理中，请稍后重试': 'The upload is still being processed. Try again shortly.',
+    上传任务标识已被使用: 'This upload ID has already been used',
     文件对象不存在: 'File object not found',
     文本超过在线编辑和预览大小限制:
       'The text exceeds the size limit for online editing and preview',

@@ -32,7 +32,7 @@ import {
   type DavNode,
 } from './webdav-store';
 import { locks, covers, conditions, ifTokens, checkLocks, type DavLock } from './webdav-locks';
-import { serveObject, reserve } from './storage';
+import { serveObject, reserve, recoverUploadReservation } from './storage';
 import { siteOriginAllowed } from './origins';
 import { DAV_COPY_LIMIT, prepareCopy } from './webdav-copy';
 import { STORAGE_LIMIT, storageUsage } from './quota';
@@ -283,7 +283,13 @@ webdavRoutes.all('*', async (c) => {
       fail(502, '仅支持同一站点内复制或移动');
     let target = davPath(destination.pathname);
     const existing = await resolve(c.env, target);
-    target = existing?.path ?? (await canonicalMissingPath(c, target));
+    // Resolution is case-insensitive for Windows clients. Preserve the requested final
+    // component when renaming the same resource, without treating it as an overwrite.
+    const renamingSelf =
+      method === 'MOVE' && existing !== null && nodeId(existing) === nodeId(node);
+    target = renamingSelf
+      ? childPath(parentPath(path), target.slice(target.lastIndexOf('/') + 1))
+      : (existing?.path ?? (await canonicalMissingPath(c, target)));
     if (
       target === '/dav/' ||
       target === path ||
@@ -306,7 +312,7 @@ webdavRoutes.all('*', async (c) => {
     const targetName = target.slice(target.lastIndexOf('/') + 1);
     const targetMime =
       node.kind === 'file' ? await destinationMime(c.env, node.row, targetName) : undefined;
-    const replaced = existing ? await tree(c.env, existing) : [];
+    const replaced = existing && !renamingSelf ? await tree(c.env, existing) : [];
     const statements = trashStatements(c.env, replaced);
     // Replacing a resource keeps the destination root's existing lock scope.
     for (const lock of active.filter((l) => l.path === target))
@@ -341,7 +347,7 @@ webdavRoutes.all('*', async (c) => {
       ).size;
       const copyStatements = folderLevels + (files ? 2 : 0) + 1;
       // Keep headroom for authentication, path/If resolution, quota reservation and lease checks.
-      const preparation = 21 + (c.req.header('If')?.match(/>\s*\(/g)?.length || 0);
+      const preparation = 23 + (c.req.header('If')?.match(/>\s*\(/g)?.length || 0);
       if (statements.length + copyStatements + files * 2 + preparation > 50)
         fail(507, '复制目标目录过深或内容过多，请分批复制');
       statements.push(...(await prepareCopy(c, nodes, path, target, folder, targetMime)));
@@ -391,8 +397,13 @@ webdavRoutes.all('*', async (c) => {
     if (!node) {
       const folder = await parent(c.env, path);
       await checkLocks(c, path, { membership: true }, lockState);
-      const key = await reserve(c.env, 0);
-      const object = await c.env.BUCKET.put(key, new Uint8Array());
+      const key = await reserve(c.env, 0, c.get('writeLease'));
+      let object: R2Object | null;
+      try {
+        object = await c.env.BUCKET.put(key, new Uint8Array());
+      } finally {
+        await recoverUploadReservation(c.env, key, 0);
+      }
       if (!object) fail(500, '创建文件失败');
       statements.push(
         ...fileStatements(

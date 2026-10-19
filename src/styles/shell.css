@@ -2,6 +2,11 @@
 .app-shell {
   min-height: 100dvh;
   display: flow-root;
+  background: radial-gradient(
+    ellipse 760px 400px at 95% 0%,
+    color-mix(in srgb, var(--sky) 55%, transparent),
+    transparent 80%
+  );
 }
 .sidebar {
   position: fixed;
@@ -67,9 +72,9 @@
   color: var(--fg);
 }
 .nav-item.active {
-  background: var(--accent-soft);
+  background: var(--mint);
   border-color: transparent;
-  color: var(--accent);
+  color: var(--mint-ink);
   font-weight: 600;
 }
 .nav-divider {
@@ -431,11 +436,11 @@
   display: grid;
   place-content: center;
   flex-shrink: 0;
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  background: var(--peach);
-  color: var(--peach-ink);
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  background: var(--sky);
+  color: var(--sky-ink);
 }
 .nav-item:nth-child(6) svg {
   color: var(--mint-ink);
@@ -462,8 +467,8 @@
   color: var(--sky-ink);
 }
 .avatar {
-  background: var(--peach);
-  color: var(--peach-ink);
+  background: var(--mint);
+  color: var(--mint-ink);
   border-radius: 10px;
 }
 @media (max-width: 900px) {

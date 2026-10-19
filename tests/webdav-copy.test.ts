@@ -3,6 +3,7 @@ import { app } from '../worker/index';
 import type { Env } from '../worker/env';
 import type { FileRecord, FolderRecord } from '../shared/types';
 import { STORAGE_LIMIT } from '../worker/quota';
+import { cleanup } from '../worker/storage';
 import { data, request, upload } from './helpers';
 import { testEnv } from './setup';
 
@@ -167,4 +168,59 @@ describe('bounded transactional WebDAV copy', () => {
     expect(objectCalls).toBe(0);
     expect(await totals()).toEqual(full);
   });
+
+  it.each([false, true])(
+    'recovers expired copy reservations after a slow R2 write (lost response: %s)',
+    async (lostResponse) => {
+      const { password, files } = await fixture(2);
+      const before = await totals();
+      let resume!: () => void, entered!: () => void;
+      const blocked = new Promise<void>((resolve) => {
+        resume = resolve;
+      });
+      const started = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const bucket = new Proxy(testEnv.BUCKET, {
+        get(target, property) {
+          if (property === 'put')
+            return async (...args: Parameters<R2Bucket['put']>) => {
+              entered();
+              await blocked;
+              const result = await target.put(...args);
+              if (lostResponse) throw new Error('simulated lost copy response');
+              return result;
+            };
+          const value = Reflect.get(target, property, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+      const pending = copy(password, 'slow-copy/', { ...testEnv, BUCKET: bucket });
+      await started;
+      try {
+        await testEnv.DB.batch([
+          testEnv.DB.prepare('UPDATE cleanup_tasks SET created_at=?').bind(Date.now() - 7200000),
+          testEnv.DB.prepare('UPDATE storage_write_lease SET expires_at=0 WHERE id=1'),
+        ]);
+        await cleanup(testEnv);
+      } finally {
+        resume();
+      }
+      expect((await pending).status).toBe(lostResponse ? 502 : 423);
+      expect(await totals()).toEqual({
+        ...before,
+        used: before.used! + files.reduce((sum, file) => sum + file.size, 0),
+        queued: before.queued! + 2,
+      });
+      await testEnv.DB.prepare('UPDATE cleanup_tasks SET created_at=?')
+        .bind(Date.now() - 7200000)
+        .run();
+      await cleanup(testEnv);
+      expect(await totals()).toEqual(before);
+      const objects = await testEnv.BUCKET.list();
+      expect(objects.objects.map((object) => object.key).sort()).toEqual(
+        files.map((file) => file.object_key).sort(),
+      );
+    },
+  );
 });

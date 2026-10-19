@@ -24,8 +24,8 @@ function publishDatabase(before: () => Promise<void>, after: () => Promise<void>
     get(target, key) {
       if (key === 'batch')
         return async (statements: D1PreparedStatement[]) => {
-          // uploadImage batches: pending metadata, ready metadata, image publication.
-          const publishing = ++batches === 3;
+          // uploadImage batches: pending, ready, copy recovery, image publication.
+          const publishing = ++batches === 4;
           if (publishing) await before();
           const result = await target.batch(statements);
           if (publishing) await after();

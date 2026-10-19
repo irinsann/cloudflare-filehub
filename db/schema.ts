@@ -50,6 +50,7 @@ export const files = sqliteTable(
     index('files_folder').on(t.folderId, t.deletedAt, t.status, t.updatedAt),
     index('files_recent').on(t.deletedAt, t.status, t.updatedAt),
     index('files_site_path').on(t.folderId, t.name, t.deletedAt, t.status),
+    index('files_dav_path').on(t.folderId, sql`${t.name} COLLATE NOCASE`, t.deletedAt),
   ],
 );
 export const fileShares = sqliteTable(
@@ -139,8 +140,13 @@ export const cleanupTasks = sqliteTable(
     objectKey: text('object_key').primaryKey(),
     createdAt: integer('created_at').notNull(),
     attempts: integer().notNull().default(0),
+    writerOwner: text('writer_owner'),
+    generation: text().notNull().default(''),
   },
-  (t) => [index('cleanup_created_at').on(t.createdAt)],
+  (t) => [
+    index('cleanup_created_at').on(t.createdAt),
+    index('cleanup_retry_order').on(t.attempts, t.createdAt),
+  ],
 );
 export const storageAllocations = sqliteTable('storage_allocations', {
   objectKey: text('object_key').primaryKey(),
@@ -222,6 +228,7 @@ export const imageHosts = sqliteTable(
     objectKey: text('object_key').notNull(),
     sha256: text().notNull(),
     enabled: integer().notNull().default(1),
+    revokedAt: integer('revoked_at'),
     createdAt: integer('created_at').notNull(),
     views: integer().notNull().default(0),
     downloads: integer().notNull().default(0),

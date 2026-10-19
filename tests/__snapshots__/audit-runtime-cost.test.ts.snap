@@ -1,0 +1,46 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`WebDAV request resource budgets > meters a warm directory refresh with 0 files 1`] = `
+{
+  "files": 0,
+  "rowsRead": 5,
+  "rowsWritten": 0,
+  "statements": 6,
+}
+`;
+
+exports[`WebDAV request resource budgets > meters a warm directory refresh with 100 files 1`] = `
+{
+  "files": 100,
+  "rowsRead": 305,
+  "rowsWritten": 0,
+  "statements": 6,
+}
+`;
+
+exports[`WebDAV request resource budgets > meters a warm directory refresh with 100 files 2`] = `
+{
+  "rowsRead": 11,
+  "rowsWritten": 0,
+  "siblingFiles": 100,
+  "statements": 5,
+}
+`;
+
+exports[`WebDAV request resource budgets > meters a warm directory refresh with 1000 files 1`] = `
+{
+  "files": 1000,
+  "rowsRead": 3005,
+  "rowsWritten": 0,
+  "statements": 6,
+}
+`;
+
+exports[`WebDAV request resource budgets > meters a warm directory refresh with 1000 files 2`] = `
+{
+  "rowsRead": 11,
+  "rowsWritten": 0,
+  "siblingFiles": 1000,
+  "statements": 5,
+}
+`;

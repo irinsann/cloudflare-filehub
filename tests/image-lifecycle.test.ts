@@ -58,6 +58,142 @@ async function putExtra(key: string, content: string) {
 }
 
 describe('图床撤销、恢复与永久删除', () => {
+  it.each([false, true])(
+    'tracks a late image copy after cron reclaimed its expired writer (lost response: %s)',
+    async (lostResponse) => {
+      const source = await data<FileRecord>(await upload('late-image.png', png));
+      let entered!: () => void, resume!: () => void;
+      const started = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const blocked = new Promise<void>((resolve) => {
+        resume = resolve;
+      });
+      const bucket = bucketWith('put', async (...args: Parameters<R2Bucket['put']>) => {
+        entered();
+        await blocked;
+        const result = await testEnv.BUCKET.put(...args);
+        if (lostResponse) throw new Error('Simulated lost copy response');
+        return result;
+      });
+      const publishing = request(
+        '/api/admin/images',
+        'POST',
+        { file_id: source.id },
+        {
+          ...testEnv,
+          BUCKET: bucket,
+        },
+      );
+      await started;
+      try {
+        await testEnv.DB.batch([
+          testEnv.DB.prepare('UPDATE cleanup_tasks SET created_at=0'),
+          testEnv.DB.prepare('UPDATE storage_web_writes SET expires_at=0'),
+        ]);
+        await cleanup(testEnv);
+      } finally {
+        resume();
+      }
+      expect((await publishing).status).toBe(lostResponse ? 500 : 423);
+      const copy = (await testEnv.BUCKET.list()).objects.find((object) =>
+        object.key.startsWith('Image-hosting/'),
+      );
+      expect(copy).toBeDefined();
+      expect(
+        await testEnv.DB.prepare(
+          `SELECT a.size FROM cleanup_tasks c JOIN storage_allocations a
+      ON a.object_key=c.object_key WHERE c.object_key=?`,
+        )
+          .bind(copy!.key)
+          .first<number>('size'),
+      ).toBe(png.length);
+      expect((await request('/api/admin/files/' + source.id)).status).toBe(200);
+      await cleanQueue();
+      expect(await testEnv.BUCKET.head(copy!.key)).toBeNull();
+      expect((await storageUsage(testEnv)).storageUsedBytes).toBe(source.size);
+    },
+  );
+
+  it('rejects a delayed duplicate publication from a source uploaded before revocation', async () => {
+    const { image } = await hosted();
+    const olderSource = await data<FileRecord>(await upload('delayed.png', png));
+    await testEnv.DB.prepare('UPDATE files SET created_at=0 WHERE id=?').bind(olderSource.id).run();
+    await request('/api/admin/images/' + image.name, 'DELETE');
+    expect((await request('/api/admin/images', 'POST', { file_id: olderSource.id })).status).toBe(
+      409,
+    );
+    expect((await request('/i/' + image.name)).status).toBe(404);
+    expect((await request('/api/admin/files/' + olderSource.id)).status).toBe(200);
+  });
+
+  it('does not undo a revocation that races a duplicate publication object check', async () => {
+    const { image, file } = await hosted();
+    let revoked = false;
+    const bucket = bucketWith('head', async (key: string) => {
+      const head = await testEnv.BUCKET.head(key);
+      if (!revoked && key === file.object_key) {
+        revoked = true;
+        expect((await request('/api/admin/images/' + image.name, 'DELETE')).status).toBe(200);
+      }
+      return head;
+    });
+    expect(
+      (
+        await request(
+          '/api/admin/images',
+          'POST',
+          { file_id: file.id },
+          {
+            ...testEnv,
+            BUCKET: bucket,
+          },
+        )
+      ).status,
+    ).toBe(409);
+    expect(revoked).toBe(true);
+    expect((await request('/i/' + image.name)).status).toBe(404);
+  });
+
+  it('does not replace a missing image object after a newer revocation', async () => {
+    const { image, file } = await hosted();
+    const source = await data<FileRecord>(await upload('replacement.png', png));
+    await testEnv.DB.prepare('UPDATE files SET created_at=0 WHERE id=?').bind(source.id).run();
+    await testEnv.BUCKET.delete(file.object_key);
+    const db = beforeBatch(async () => {
+      expect((await request('/api/admin/images/' + image.name, 'DELETE')).status).toBe(200);
+    });
+    expect(
+      (
+        await request(
+          '/api/admin/images',
+          'POST',
+          { file_id: source.id },
+          {
+            ...testEnv,
+            DB: db,
+          },
+        )
+      ).status,
+    ).toBe(409);
+    expect((await request('/i/' + image.name)).status).toBe(404);
+    const saved = await data<FileRecord>(await request('/api/admin/files/' + source.id));
+    expect(saved.object_key).toBe(source.object_key);
+  });
+
+  it('records ordinary file revocation so an old publish cannot enable it after trash restore', async () => {
+    const { image, file } = await hosted();
+    await request('/api/admin/files/' + file.id, 'DELETE');
+    await request('/api/admin/files/' + file.id + '/restore', 'POST');
+    expect((await request('/api/admin/images', 'POST', { file_id: file.id })).status).toBe(409);
+    expect((await request('/i/' + image.name)).status).toBe(404);
+    expect(
+      await testEnv.DB.prepare('SELECT revoked_at FROM image_hosts WHERE name=?')
+        .bind(image.name)
+        .first<number>('revoked_at'),
+    ).toBeGreaterThan(0);
+  });
+
   it('restores the original URL without creating another object or allocation', async () => {
     const { image, file } = await hosted();
     await cleanQueue();

@@ -1,4 +1,4 @@
-import { allocate, deleteObject, initializeQuota } from './quota';
+import { allocate, initializeQuota } from './quota';
 import type { Env } from './env';
 import { limit, now, uuid } from './env';
 import { fail } from './errors';
@@ -62,13 +62,39 @@ export function sniff(bytes: Uint8Array): string | null {
   if (ascii(0, 4) === 'OggS') return 'audio/ogg';
   return null;
 }
-export async function reserve(env: Env, size?: number) {
+export async function reserve(env: Env, size?: number, writerOwner?: string) {
   const key = `objects/${uuid()}`;
-  await env.DB.prepare('INSERT INTO cleanup_tasks(object_key,created_at) VALUES(?,?)')
-    .bind(key, now())
+  await env.DB.prepare(
+    'INSERT INTO cleanup_tasks(object_key,created_at,writer_owner) VALUES(?,?,?)',
+  )
+    .bind(key, now(), writerOwner ?? null)
     .run();
   if (size !== undefined) await allocate(env, key, size);
   return key;
+}
+// A timed-out writer can finish R2 after its expired reservation was reclaimed. Restore
+// durable tracking on both success and failure (R2 may have stored a lost response).
+// This is compensation for already accepted bytes, so quota must not reject it.
+export async function recoverUploadReservation(env: Env, key: string, size: number) {
+  return recoverUploadReservations(env, [{ key, size }]);
+}
+export async function recoverUploadReservations(
+  env: Env,
+  objects: readonly { key: string; size: number }[],
+) {
+  if (!objects.length) return;
+  const encoded = JSON.stringify(objects.map((object) => ({ ...object, generation: uuid() })));
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO cleanup_tasks(object_key,created_at,generation)
+       SELECT json_extract(value,'$.key'),?,json_extract(value,'$.generation') FROM json_each(?) WHERE 1
+       ON CONFLICT(object_key) DO UPDATE SET created_at=excluded.created_at,generation=excluded.generation`,
+    ).bind(now(), encoded),
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO storage_allocations(object_key,size)
+       SELECT json_extract(value,'$.key'),json_extract(value,'$.size') FROM json_each(?)`,
+    ).bind(encoded),
+  ]);
 }
 export const releaseStatement = (env: Env, key: string) =>
   env.DB.prepare('DELETE FROM cleanup_tasks WHERE object_key=?').bind(key);
@@ -86,19 +112,22 @@ export async function uploadStream(env: Env, request: Request, key: string, name
   await allocate(env, key, size);
   if (!request.body && size > 0) fail(400, '上传内容为空');
   const fixed = new FixedLengthStream(size);
+  const controller = new AbortController();
   const pump = request.body
-    ? request.body.pipeTo(fixed.writable)
+    ? request.body.pipeTo(fixed.writable, { signal: controller.signal })
     : (async () => {
         const w = fixed.writable.getWriter();
         await w.close();
       })();
-  let object: R2Object | null;
-  try {
-    const results = await Promise.all([env.BUCKET.put(key, fixed.readable), pump]);
-    object = results[0];
-  } catch {
+  const write = env.BUCKET.put(key, fixed.readable).catch((error) => {
+    controller.abort();
+    throw error;
+  });
+  const [stored, transferred] = await Promise.allSettled([write, pump]);
+  await recoverUploadReservation(env, key, size);
+  if (stored.status === 'rejected' || transferred.status === 'rejected')
     fail(400, '上传中断或实际文件大小不匹配');
-  }
+  const object = stored.value;
   if (!object || object.size !== size) fail(400, '上传完整性校验失败');
   let mime = mimeFor(name);
   if (!isText(mime) && mime !== 'application/octet-stream' && size > 0) {
@@ -121,7 +150,12 @@ export async function writeText(env: Env, text: string) {
   const bytes = new TextEncoder().encode(text);
   if (bytes.byteLength > limit(env.MAX_TEXT_BYTES, 1024 * 1024)) fail(413, 'Markdown 超过大小限制');
   const key = await reserve(env, bytes.byteLength);
-  const object = await env.BUCKET.put(key, bytes);
+  let object: R2Object | null;
+  try {
+    object = await env.BUCKET.put(key, bytes);
+  } finally {
+    await recoverUploadReservation(env, key, bytes.byteLength);
+  }
   if (!object) fail(500, '保存失败');
   return { key, size: object.size, etag: object.etag };
 }
@@ -240,11 +274,20 @@ export async function cleanupPurgedObjects(env: Env, objectKeys: string[]) {
   }
 }
 export async function cleanup(env: Env) {
-  const cutoff = now() - 3600000;
+  const timestamp = now(),
+    cutoff = timestamp - 3600000;
+  // Legacy reservations have no owner: conservatively retain them while any writer
+  // is live. New single-request uploads identify their own writer precisely.
+  const writerIdle = (task: string) => `
+    NOT EXISTS(SELECT 1 FROM storage_web_writes w WHERE w.expires_at>${timestamp}
+      AND (${task}.writer_owner IS NULL OR w.owner=${task}.writer_owner))
+    AND NOT EXISTS(SELECT 1 FROM storage_write_lease w WHERE w.expires_at>${timestamp}
+      AND (${task}.writer_owner IS NULL OR w.owner=${task}.writer_owner))`;
   const expired = await env.DB.prepare(
     `SELECT s.id,s.file_id,s.object_key,s.upload_id FROM upload_sessions s
      LEFT JOIN cleanup_tasks t ON t.object_key=s.object_key
-     WHERE s.expires_at<? ORDER BY COALESCE(t.attempts,0),s.expires_at LIMIT 2`,
+     WHERE s.expires_at<? AND ${writerIdle('t')}
+     ORDER BY COALESCE(t.attempts,0),s.expires_at LIMIT 2`,
   )
     .bind(cutoff)
     .all<{ id: string; file_id: string; object_key: string; upload_id: string }>();
@@ -276,61 +319,110 @@ export async function cleanup(env: Env) {
         `DELETE FROM files WHERE id=? AND object_key=? AND status='pending'
         AND created_at<? AND updated_at<?
         AND NOT EXISTS(SELECT 1 FROM upload_sessions WHERE file_id=files.id)
+        AND NOT EXISTS(SELECT 1 FROM file_shares WHERE file_id=files.id)
         AND NOT EXISTS(SELECT 1 FROM markdown_pages WHERE file_id=files.id)
         AND NOT EXISTS(SELECT 1 FROM markdown_attachments WHERE file_id=files.id)
         AND NOT EXISTS(SELECT 1 FROM image_hosts WHERE file_id=files.id)`,
       ).bind(s.file_id, s.object_key, cutoff, cutoff),
     ]);
   }
+  // A pending row alone is not evidence of a live upload. Reclaim only old rows
+  // whose durable reservation has no live writer, session, or committed reference.
+  await env.DB.prepare(
+    `DELETE FROM files WHERE id IN (
+      SELECT f.id FROM files f JOIN cleanup_tasks t ON t.object_key=f.object_key
+      WHERE f.status='pending' AND f.created_at<? AND f.updated_at<? AND t.created_at<?
+      AND ${writerIdle('t')}
+      AND NOT EXISTS(SELECT 1 FROM upload_sessions WHERE file_id=f.id OR object_key=f.object_key)
+      AND NOT EXISTS(SELECT 1 FROM file_shares WHERE file_id=f.id)
+      AND NOT EXISTS(SELECT 1 FROM markdown_pages WHERE file_id=f.id)
+      AND NOT EXISTS(SELECT 1 FROM markdown_attachments WHERE file_id=f.id)
+      AND NOT EXISTS(SELECT 1 FROM image_hosts WHERE file_id=f.id)
+      ORDER BY t.attempts,t.created_at LIMIT 8
+    )`,
+  )
+    .bind(cutoff, cutoff, cutoff)
+    .run();
   const tasks = await env.DB.prepare(
-    `SELECT object_key FROM cleanup_tasks WHERE created_at<?
-     AND NOT EXISTS(SELECT 1 FROM upload_sessions s WHERE s.object_key=cleanup_tasks.object_key)
-     AND NOT EXISTS(SELECT 1 FROM files f WHERE f.object_key=cleanup_tasks.object_key AND f.status='pending')
-     ORDER BY created_at LIMIT 8`,
+    `SELECT t.object_key,t.generation,EXISTS(
+       SELECT 1 FROM files WHERE object_key=t.object_key
+       UNION ALL SELECT 1 FROM markdown_pages WHERE snapshot_key=t.object_key
+       UNION ALL SELECT 1 FROM markdown_attachments WHERE object_key=t.object_key
+       UNION ALL SELECT 1 FROM image_hosts WHERE object_key=t.object_key
+     ) AS referenced FROM cleanup_tasks t WHERE t.created_at<? AND ${writerIdle('t')}
+     AND NOT EXISTS(SELECT 1 FROM upload_sessions s WHERE s.object_key=t.object_key)
+     AND NOT EXISTS(SELECT 1 FROM files f WHERE f.object_key=t.object_key AND f.status='pending')
+     ORDER BY t.attempts,t.created_at LIMIT 8`,
   )
     .bind(cutoff)
-    .all<{ object_key: string }>();
+    .all<{ object_key: string; generation: string; referenced: number }>();
+  const deleted: { object_key: string; generation: string }[] = [],
+    retained: { object_key: string; generation: string }[] = [],
+    failed: { object_key: string; generation: string }[] = [];
+  if (tasks.results.some((task) => !task.referenced)) await initializeQuota(env);
   for (const task of tasks.results) {
-    // A pending row may be a slow, live single-request upload without a multipart session.
-    const file = await env.DB.prepare('SELECT status FROM files WHERE object_key=?')
-      .bind(task.object_key)
-      .first<{ status: string }>();
-    if (file) {
-      if (file.status !== 'pending') await releaseStatement(env, task.object_key).run();
+    if (task.referenced) {
+      retained.push(task);
       continue;
     }
-    const used = await env.DB.prepare(
-      `SELECT 1 FROM markdown_pages WHERE snapshot_key=?
-       UNION ALL SELECT 1 FROM markdown_attachments WHERE object_key=?
-       UNION ALL SELECT 1 FROM image_hosts WHERE object_key=? LIMIT 1`,
-    )
-      .bind(task.object_key, task.object_key, task.object_key)
-      .first();
-    if (used) {
-      await releaseStatement(env, task.object_key).run();
-      continue;
-    }
-    const active = await env.DB.prepare(
-      `SELECT 1 FROM upload_sessions WHERE object_key=?
-       UNION ALL SELECT 1 FROM files WHERE object_key=? LIMIT 1`,
-    )
-      .bind(task.object_key, task.object_key)
-      .first();
-    if (active) continue;
     try {
-      await deleteObject(env, task.object_key);
-      await releaseStatement(env, task.object_key).run();
+      await env.BUCKET.delete(task.object_key);
+      deleted.push(task);
     } catch {
-      await env.DB.prepare('UPDATE cleanup_tasks SET attempts=attempts+1 WHERE object_key=?')
-        .bind(task.object_key)
-        .run();
+      failed.push(task);
     }
   }
+  const matching = `(object_key,generation) IN (
+    SELECT json_extract(value,'$.object_key'),json_extract(value,'$.generation') FROM json_each(?)
+  )`;
+  // A late upload recovery replaces generation, so an older cleanup acknowledgement
+  // cannot erase its restored reservation. Batch metadata work instead of six queries/key.
   await env.DB.batch([
-    env.DB.prepare('DELETE FROM webdav_locks WHERE expires_at<?').bind(now()),
-    env.DB.prepare('DELETE FROM rate_limits WHERE reset_at<?').bind(now()),
-    env.DB.prepare('DELETE FROM admin_sessions WHERE expires_at<?').bind(now()),
-    env.DB.prepare('DELETE FROM admin_setup WHERE expires_at<?').bind(now()),
-    env.DB.prepare('DELETE FROM operations WHERE created_at<?').bind(now() - 90 * 86400000),
+    ...(deleted.length
+      ? [
+          env.DB.prepare(
+            `DELETE FROM storage_allocations WHERE object_key IN (
+        SELECT object_key FROM cleanup_tasks WHERE ${matching}
+      ) AND NOT EXISTS(SELECT 1 FROM files WHERE object_key=storage_allocations.object_key)
+      AND NOT EXISTS(SELECT 1 FROM upload_sessions WHERE object_key=storage_allocations.object_key)
+      AND NOT EXISTS(SELECT 1 FROM markdown_pages WHERE snapshot_key=storage_allocations.object_key)
+      AND NOT EXISTS(SELECT 1 FROM markdown_attachments WHERE object_key=storage_allocations.object_key)
+      AND NOT EXISTS(SELECT 1 FROM image_hosts WHERE object_key=storage_allocations.object_key)`,
+          ).bind(JSON.stringify(deleted)),
+        ]
+      : []),
+    ...(deleted.length
+      ? [
+          env.DB.prepare(`DELETE FROM cleanup_tasks WHERE ${matching}`).bind(
+            JSON.stringify(deleted),
+          ),
+        ]
+      : []),
+    ...(retained.length
+      ? [
+          // An edit can detach this object and enqueue it again after the read above.
+          // Only discard its old task while a durable reference still protects it.
+          env.DB.prepare(
+            `DELETE FROM cleanup_tasks WHERE ${matching} AND EXISTS(
+            SELECT 1 FROM files WHERE object_key=cleanup_tasks.object_key
+            UNION ALL SELECT 1 FROM markdown_pages WHERE snapshot_key=cleanup_tasks.object_key
+            UNION ALL SELECT 1 FROM markdown_attachments WHERE object_key=cleanup_tasks.object_key
+            UNION ALL SELECT 1 FROM image_hosts WHERE object_key=cleanup_tasks.object_key
+          )`,
+          ).bind(JSON.stringify(retained)),
+        ]
+      : []),
+    ...(failed.length
+      ? [
+          env.DB.prepare(`UPDATE cleanup_tasks SET attempts=attempts+1 WHERE ${matching}`).bind(
+            JSON.stringify(failed),
+          ),
+        ]
+      : []),
+    env.DB.prepare('DELETE FROM webdav_locks WHERE expires_at<?').bind(timestamp),
+    env.DB.prepare('DELETE FROM rate_limits WHERE reset_at<?').bind(timestamp),
+    env.DB.prepare('DELETE FROM admin_sessions WHERE expires_at<?').bind(timestamp),
+    env.DB.prepare('DELETE FROM admin_setup WHERE expires_at<?').bind(timestamp),
+    env.DB.prepare('DELETE FROM operations WHERE created_at<?').bind(timestamp - 90 * 86400000),
   ]);
 }

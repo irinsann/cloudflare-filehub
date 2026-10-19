@@ -61,6 +61,9 @@ pnpm run deploy:production
 - `0013_remove_google_drive.sql`：移除旧 Google 连接、授权、上传元数据；不请求 Google 删除远端文件。
 - `0014_html_hosting.sql`：HTML 上传分享映射与版本触发器，不搬移或改名现有文件，不修改旧分享。
 - `0015_resource_accounting.sql`：回填容量计数，添加事务触发器与引用索引，必须先于新代码部署。
+- `0016_upload_lifecycle.sql`：记录上传写入者与清理代际，增加清理重试索引。
+- `0017_image_revoke.sql`：记录图片撤销时间，阻止旧上传请求重放后重新公开图片；不改变既有图片的启用状态。
+- `0018_webdav_path_lookup.sql`：增加忽略大小写的路径查询索引，降低 WebDAV 定位文件的读取量。
 
 新部署也按顺序执行全部迁移。不要跳过历史迁移或编辑已应用的 SQL。Google Drive 已退出当前功能集；备份并确认不再使用后，可从 Worker 设置移除旧 OAuth Secrets。HTML hosting 和容量优化不新增 Secrets 或 Cloudflare 产品。
 

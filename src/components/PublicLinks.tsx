@@ -124,13 +124,13 @@ export function LinkOriginSelect({
     setFeedback({ origin: option.origin, label, message: `${label}：${option.label}` });
   }
   if (!options.length) return null;
+  const activeOption = options.find((option) => option.origin === origin);
   return (
     <div
       className={['public-link-origin', compact && 'public-link-origin-compact', className]
         .filter(Boolean)
         .join(' ')}
     >
-      {!compact && <span className="public-link-caption">{tr('链接域名', 'Link domain')}</span>}
       <div
         className="public-link-switch"
         role="radiogroup"
@@ -138,7 +138,6 @@ export function LinkOriginSelect({
       >
         {options.map((option, index) => {
           const selected = option.origin === origin;
-          const confirmed = selected && feedback?.origin === option.origin;
           const Icon = option.kind === 'global' ? Globe2 : Server;
           return (
             <button
@@ -151,10 +150,10 @@ export function LinkOriginSelect({
               role="radio"
               aria-checked={selected}
               aria-label={option.label}
+              title={option.label}
               tabIndex={selected ? 0 : -1}
-              className={['public-link-option', confirmed && 'public-link-option-confirmed']
-                .filter(Boolean)
-                .join(' ')}
+              className="public-link-option"
+              data-origin-kind={option.kind}
               onClick={() => choose(option)}
               onKeyDown={(event) => {
                 let next: number;
@@ -171,25 +170,33 @@ export function LinkOriginSelect({
               }}
             >
               <span className="public-link-option-icon" aria-hidden="true">
-                <Icon size={17} />
+                <Icon size={14} />
               </span>
               <span className="public-link-option-copy" aria-hidden="true">
-                <strong>
-                  {option.kind === 'global'
-                    ? tr('全球 CDN', 'Global CDN')
-                    : tr('香港反代', 'Hong Kong proxy')}
-                </strong>
-                <small className={confirmed ? 'public-link-confirmation' : undefined}>
-                  {confirmed ? feedback.label : option.host}
-                </small>
+                {option.kind === 'global'
+                  ? tr('全球 CDN', 'Global CDN')
+                  : tr('香港反代', 'Hong Kong proxy')}
               </span>
               <span className="public-link-check" aria-hidden="true">
-                <Check size={12} strokeWidth={3} />
+                <Check size={11} strokeWidth={2.5} />
               </span>
             </button>
           );
         })}
       </div>
+      <span
+        className={['public-link-detail', feedback && 'public-link-detail-confirmed']
+          .filter(Boolean)
+          .join(' ')}
+        title={activeOption?.origin}
+        aria-hidden="true"
+      >
+        <span className="public-link-host">{activeOption?.host}</span>
+        <span className="public-link-confirmation">
+          <Check size={12} strokeWidth={2.5} />
+          {feedback?.label}
+        </span>
+      </span>
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {feedback?.message ?? ''}
       </span>
