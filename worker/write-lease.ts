@@ -176,6 +176,8 @@ async function webTargets(c: AppContext): Promise<Target[] | null> {
       targets.push({ path: childPath('/dav/Markdown', input.name), membership: true });
     } else if (id) await fileTarget(id);
     else return null;
+  } else if (kind === 'html-hosting' && method === 'POST' && id === 'folder' && !action) {
+    await namedFolder('Html-hosting');
   } else if (kind === 'images') {
     if (method === 'POST' && !id) {
       if (api === 'admin') await fileTarget(identifier.parse((await json()).file_id), true);
@@ -215,7 +217,8 @@ export const storageWriteLease: MiddlewareHandler<AppEnv> = async (c, next) => {
     (!dav &&
       !/^\/api\/(?:admin|v1)\/(?:files|folders|uploads|markdown|images|trash)(?:\/|$)/.test(
         c.req.path,
-      ))
+      ) &&
+      !(c.req.method === 'POST' && c.req.path === '/api/admin/html-hosting/folder'))
   )
     return next();
   const owner = uuid(),

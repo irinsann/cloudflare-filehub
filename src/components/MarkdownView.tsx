@@ -1,8 +1,10 @@
+import { tr, useLocale } from '../lib/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { renderMarkdown, type Heading } from '../../shared/markdown';
 import { copy } from '../lib/api';
 import { ManualCopy } from './ManualCopy';
 export function MarkdownView({ source, fileId }: { source: string; fileId?: string }) {
+  const { locale } = useLocale();
   const [html, setHtml] = useState(''),
     [headings, setHeadings] = useState<Heading[]>([]),
     [manualCopy, setManualCopy] = useState<string | null>(null);
@@ -24,29 +26,37 @@ export function MarkdownView({ source, fileId }: { source: string; fileId?: stri
   useEffect(() => {
     const root = container.current;
     if (!root) return;
+    const buttons: HTMLButtonElement[] = [];
     root.querySelectorAll('pre').forEach((pre) => {
       const button = document.createElement('button');
       button.className = 'code-copy';
-      button.textContent = '复制';
+      button.textContent = tr('复制', 'Copy');
       button.onclick = () => {
         const value = pre.querySelector('code')?.textContent ?? '';
         void copy(value).then(
           () => {
-            button.textContent = '已复制';
+            button.textContent = tr('已复制', 'Copied');
           },
           () => {
-            button.textContent = '手动复制';
+            button.textContent = tr('手动复制', 'Copy manually');
             setManualCopy(value);
           },
         );
       };
       pre.appendChild(button);
+      buttons.push(button);
     });
-  }, [html]);
+    return () => {
+      buttons.forEach((button) => button.remove());
+    };
+  }, [html, locale]);
   return (
     <>
       <details className="preview-toc">
-        <summary>文档目录 · {headings.length}</summary>
+        <summary>
+          {tr('文档目录 ·', 'Contents ·')}
+          {headings.length}
+        </summary>
         {headings.map((h) => (
           <a key={h.id} href={`#${h.id}`}>
             {h.text}

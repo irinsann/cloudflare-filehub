@@ -25,7 +25,7 @@ class ApiError(Exception):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("file", type=Path)
-    parser.add_argument("--url", default="https://s.irin.im", help="RCloud origin")
+    parser.add_argument("--url", required=True, help="RCloud origin")
     parser.add_argument("--folder", help="Existing folder UUID; default: root")
     args = parser.parse_args()
     origin = args.url.rstrip("/")

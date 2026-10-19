@@ -35,7 +35,7 @@ import { locks, covers, conditions, ifTokens, checkLocks, type DavLock } from '.
 import { serveObject, reserve } from './storage';
 import { siteOriginAllowed } from './origins';
 import { DAV_COPY_LIMIT, prepareCopy } from './webdav-copy';
-import { STORAGE_LIMIT } from './quota';
+import { STORAGE_LIMIT, storageUsage } from './quota';
 
 const ALLOW =
   'OPTIONS, PROPFIND, PROPPATCH, GET, HEAD, PUT, MKCOL, DELETE, COPY, MOVE, LOCK, UNLOCK';
@@ -122,10 +122,7 @@ async function propfind(c: AppContext, node: DavNode) {
     depth === '1' && node.kind === 'folder' ? [node, ...(await children(c.env, node))] : [node];
   const active = await locks(c);
   // The whole DAV tree shares the same allocation budget, including trash and in-flight writes.
-  const used =
-    (await c.env.DB.prepare(
-      'SELECT COALESCE(SUM(size),0) AS used FROM storage_allocations',
-    ).first<number>('used')) ?? 0;
+  const used = (await storageUsage(c.env)).storageUsedBytes;
   // One property query for the whole response avoids a database query per listed item.
   const dead = (
     await c.env.DB.prepare(

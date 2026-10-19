@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import { useEffect, useState } from 'react';
 import type { FileRecord } from '../../shared/types';
 import { Modal } from './ui/dialog';
@@ -39,17 +40,17 @@ export default function Preview({ file, onClose }: { file: FileRecord; onClose: 
             <pre>{text}</pre>
           )
         ) : file.mime.startsWith('text/') || file.mime === 'application/json' ? (
-          <p>正在读取文本…</p>
+          <p>{tr('正在读取文本…', 'Loading text…')}</p>
         ) : (
           <div className="empty-state">
-            <h3>这个文件适合下载后打开</h3>
-            <p>暂不支持此格式的在线预览。</p>
+            <h3>{tr('这个文件适合下载后打开', 'Download this file to open it')}</h3>
+            <p>{tr('暂不支持此格式的在线预览。', 'Preview is unavailable for this format.')}</p>
           </div>
         )}
       </div>
       <div className="dialog-footer">
         <Button asChild>
-          <a href={fileUrl(file.id)}>下载文件</a>
+          <a href={fileUrl(file.id)}>{tr('下载文件', 'Download file')}</a>
         </Button>
       </div>
     </Modal>

@@ -1,3 +1,4 @@
+import { tr } from '../../lib/i18n';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Search, Sun, Moon, Menu, X, Upload, HardDrive, ArrowUpRight } from 'lucide-react';
@@ -6,6 +7,7 @@ import { brandMark } from '../../../shared/brand';
 import type { Settings } from '../../../shared/types';
 import { sizeLabel } from '../../lib/api';
 import { Button } from '../ui/button';
+import { LanguageSelect } from '../LanguageSelect';
 export function StorageMeter({ settings }: { settings: Settings | null }) {
   const used = settings?.storageUsedBytes ?? 0,
     total = settings?.storageLimitBytes ?? 50 * 1024 ** 3;
@@ -14,11 +16,11 @@ export function StorageMeter({ settings }: { settings: Settings | null }) {
       <div>
         <span>
           <HardDrive size={15} />
-          存储空间
+          {tr('存储空间', 'Storage')}
         </span>
         <span>{Math.min(100, (used / total) * 100).toFixed(used / total < 0.01 ? 1 : 0)}%</span>
       </div>
-      <progress value={used} max={total} aria-label="已用存储空间" />
+      <progress value={used} max={total} aria-label={tr('已用存储空间', 'Storage used')} />
       <small>
         {sizeLabel(used)}
         <span>/ {sizeLabel(total)}</span>
@@ -75,7 +77,7 @@ export function WorkspaceShell({
     </div>
   );
   const links = (
-    <nav className="workspace-nav" aria-label="工作空间">
+    <nav className="workspace-nav" aria-label={tr('工作空间', 'Workspace')}>
       {sections.map((s) => (
         <button
           key={s.id}
@@ -95,10 +97,10 @@ export function WorkspaceShell({
     <div className="profile">
       <div className="avatar">{settings?.email?.charAt(0).toUpperCase() || 'R'}</div>
       <div>
-        <strong>个人账号</strong>
-        <span title={settings?.email}>{settings?.email ?? '加载中…'}</span>
+        <strong>{tr('个人账号', 'Personal account')}</strong>
+        <span title={settings?.email}>{settings?.email ?? tr('加载中…', 'Loading…')}</span>
       </div>
-      <button aria-label="账号设置" onClick={() => go('settings')}>
+      <button aria-label={tr('账号设置', 'Account settings')} onClick={() => go('settings')}>
         <ArrowUpRight size={17} />
       </button>
     </div>
@@ -113,11 +115,11 @@ export function WorkspaceShell({
           mainRef.current?.focus();
         }}
       >
-        跳到内容
+        {tr('跳到内容', 'Skip to content')}
       </a>
       <aside className="sidebar">
         {logo}
-        <div className="workspace-label">工作空间</div>
+        <div className="workspace-label">{tr('工作空间', 'Workspace')}</div>
         {links}
         <div className="sidebar-bottom">
           <StorageMeter settings={settings} />
@@ -163,20 +165,26 @@ export function WorkspaceShell({
             <input
               ref={searchInput}
               type="search"
-              placeholder="搜索文件"
-              aria-label="搜索文件"
+              placeholder={tr('搜索文件', 'Search files')}
+              aria-label={tr('搜索文件', 'Search files')}
               value={search}
               onChange={(e) => onSearch(e.target.value)}
             />
             {search && (
-              <button aria-label="清空搜索" onClick={() => onSearch('')}>
+              <button aria-label={tr('清空搜索', 'Clear search')} onClick={() => onSearch('')}>
                 <X size={16} />
               </button>
             )}
             <kbd>Ctrl / ⌘ K</kbd>
           </div>
           <div className="topbar-right">
-            <Button variant="ghost" size="icon" aria-label="切换主题" onClick={toggleTheme}>
+            <LanguageSelect />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={tr('切换主题', 'Toggle theme')}
+              onClick={toggleTheme}
+            >
               {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
             </Button>
           </div>
@@ -185,11 +193,11 @@ export function WorkspaceShell({
         {dragging && allowDrop && (
           <div className="drop-zone">
             <Upload size={40} />
-            <h2>松开即可上传</h2>
+            <h2>{tr('松开即可上传', 'Drop to upload')}</h2>
           </div>
         )}
       </main>
-      <nav className="mobile-tabs" aria-label="快捷导航">
+      <nav className="mobile-tabs" aria-label={tr('快捷导航', 'Quick navigation')}>
         {['files', 'images', 'markdown'].map((id) => {
           const s = sections.find((s) => s.id === id)!;
           return (
@@ -199,19 +207,25 @@ export function WorkspaceShell({
               onClick={() => go(s.id)}
             >
               <s.icon size={21} />
-              <span>{id === 'markdown' ? '文档' : id === 'files' ? '文件' : '图床'}</span>
+              <span>
+                {id === 'markdown'
+                  ? tr('文档', 'Docs')
+                  : id === 'files'
+                    ? tr('文件', 'File')
+                    : tr('图床', 'Images')}
+              </span>
             </button>
           );
         })}
         <button
           ref={closeButton}
-          aria-label="更多导航"
+          aria-label={tr('更多导航', 'More navigation')}
           aria-expanded={open}
           onClick={() => setOpen(true)}
           className={!['files', 'images', 'markdown'].includes(view) ? 'active' : ''}
         >
           <Menu size={21} />
-          <span>更多</span>
+          <span>{tr('更多', 'More')}</span>
         </button>
       </nav>
       <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -225,10 +239,13 @@ export function WorkspaceShell({
               closeButton.current?.focus();
             }}
           >
-            <Dialog.Title className="sr-only">导航</Dialog.Title>
+            <Dialog.Title className="sr-only">{tr('导航', 'Navigation')}</Dialog.Title>
             <div className="drawer-header">
               {logo}
-              <Dialog.Close className="button button-ghost button-icon" aria-label="关闭导航">
+              <Dialog.Close
+                className="button button-ghost button-icon"
+                aria-label={tr('关闭导航', 'Close navigation')}
+              >
                 <X size={20} />
               </Dialog.Close>
             </div>

@@ -31,6 +31,39 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('browser upload completion recovery', () => {
+  it('clears the allocated ID only after the server confirms pending-file cancellation', async () => {
+    vi.mocked(send)
+      .mockRejectedValueOnce(new ApiError(400, 'Rejected'))
+      .mockResolvedValueOnce({ cancelled: true });
+    const allocation = vi.fn();
+    await expect(
+      uploadFile(new File(['abc'], 'file.bin'), null, vi.fn(), allocation),
+    ).rejects.toThrow('Rejected');
+    expect(allocation.mock.calls).toEqual([[saved.id], [undefined]]);
+  });
+  it.each([{}, { cancelled: false }])(
+    'retains the ID when cancellation is not confirmed (%j)',
+    async (result) => {
+      vi.mocked(send)
+        .mockRejectedValueOnce(new ApiError(400, 'Rejected'))
+        .mockResolvedValueOnce(result);
+      const allocation = vi.fn();
+      await expect(
+        uploadFile(new File(['abc'], 'file.bin'), null, vi.fn(), allocation),
+      ).rejects.toThrow('Rejected');
+      expect(allocation.mock.calls).toEqual([[saved.id]]);
+    },
+  );
+  it('retains the allocated ID when cancellation cannot be reached', async () => {
+    vi.mocked(send)
+      .mockRejectedValueOnce(new ApiError(400, 'Rejected'))
+      .mockRejectedValueOnce(new TypeError('Offline'));
+    const allocation = vi.fn();
+    await expect(
+      uploadFile(new File(['abc'], 'file.bin'), null, vi.fn(), allocation),
+    ).rejects.toThrow('Rejected');
+    expect(allocation.mock.calls).toEqual([[saved.id]]);
+  });
   it('waits through a temporary WebDAV write lease without cancelling uploaded parts', async () => {
     vi.mocked(send)
       .mockRejectedValueOnce(new ApiError(423, 'Another operation is in progress'))

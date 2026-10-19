@@ -24,7 +24,7 @@ export async function initializeQuota(env: Env) {
             .slice(start, start + 80)
             .map((o) =>
               env.DB.prepare(
-                'INSERT INTO storage_allocations(object_key,size) VALUES(?,?) ON CONFLICT(object_key) DO UPDATE SET size=excluded.size',
+                'INSERT INTO storage_allocations(object_key,size) VALUES(?,?) ON CONFLICT(object_key) DO UPDATE SET size=excluded.size WHERE storage_allocations.size<>excluded.size',
               ).bind(o.key, o.size),
             ),
         );
@@ -44,24 +44,38 @@ export async function initializeQuota(env: Env) {
 }
 export async function allocate(env: Env, key: string, size: number) {
   if (!Number.isSafeInteger(size) || size < 0) fail(400, '文件大小无效');
+  // The counter trigger and this conditional insertion share one SQLite transaction.
+  // The common path needs one indexed statement, independent of the object count.
+  const reserve = () =>
+    env.DB.prepare(
+      'INSERT INTO storage_allocations(object_key,size) SELECT ?,? FROM storage_quota_state WHERE id=1 AND ready=1 AND used_bytes+?<=?',
+    )
+      .bind(key, size, size, STORAGE_LIMIT)
+      .run();
+  if ((await reserve()).meta.changes) return;
+  const ready = await env.DB.prepare(
+    'SELECT ready FROM storage_quota_state WHERE id=1',
+  ).first<number>('ready');
+  if (ready) fail(413, '存储容量不足（总容量 50GB）');
   await initializeQuota(env);
-  // SQLite serializes this statement, so concurrent uploads cannot overbook the quota.
-  const result = await env.DB.prepare(
-    'INSERT INTO storage_allocations(object_key,size) SELECT ?,? WHERE COALESCE((SELECT SUM(size) FROM storage_allocations),0)+?<=?',
-  )
-    .bind(key, size, size, STORAGE_LIMIT)
-    .run();
-  if (!result.meta.changes) fail(413, '存储容量不足（总容量 50GB）');
+  if (!(await reserve()).meta.changes) fail(413, '存储容量不足（总容量 50GB）');
 }
 export async function storageUsage(env: Env) {
-  await initializeQuota(env);
-  const row = await env.DB.prepare(
-    'SELECT COALESCE(SUM(size),0) AS used FROM storage_allocations',
-  ).first<{ used: number }>();
+  const read = () =>
+    env.DB.prepare('SELECT ready,used_bytes FROM storage_quota_state WHERE id=1').first<{
+      ready: number;
+      used_bytes: number;
+    }>();
+  let row = await read();
+  if (!row?.ready) {
+    await initializeQuota(env);
+    row = await read();
+  }
+  if (!row?.ready) fail(503, '正在统计存储容量，请稍后重试');
   return {
-    storageUsedBytes: row!.used,
+    storageUsedBytes: row.used_bytes,
     storageLimitBytes: STORAGE_LIMIT,
-    storageAvailableBytes: Math.max(0, STORAGE_LIMIT - row!.used),
+    storageAvailableBytes: Math.max(0, STORAGE_LIMIT - row.used_bytes),
   };
 }
 export async function deleteObject(env: Env, key: string) {

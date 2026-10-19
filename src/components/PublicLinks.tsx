@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import {
   createContext,
   useCallback,
@@ -10,6 +11,7 @@ import {
 } from 'react';
 import { Check, Globe2, Server } from 'lucide-react';
 import type { Settings } from '../../shared/types';
+import { useLocale } from '../lib/i18n';
 import {
   normalizePublicOrigin,
   preferredPublicOrigin,
@@ -50,10 +52,11 @@ export function PublicLinksProvider({
   children: ReactNode;
 }) {
   const [preferred, setPreferred] = useState(readPreference);
+  const { locale } = useLocale();
   const currentOrigin = typeof location === 'undefined' ? '' : location.origin;
   const options = useMemo(
     () => publicLinkOptions(settings, currentOrigin),
-    [settings, currentOrigin],
+    [settings, currentOrigin, locale],
   );
   const trustedOrigins = useMemo(
     () =>
@@ -116,7 +119,7 @@ export function LinkOriginSelect({
     return () => clearTimeout(timer);
   }, [feedback]);
   function choose(option: PublicLinkOption) {
-    const label = option.origin === origin ? '已选中' : '已切换';
+    const label = option.origin === origin ? tr('已选中', 'Selected') : tr('已切换', 'Switched');
     setOrigin(option.origin);
     setFeedback({ origin: option.origin, label, message: `${label}：${option.label}` });
   }
@@ -127,8 +130,12 @@ export function LinkOriginSelect({
         .filter(Boolean)
         .join(' ')}
     >
-      {!compact && <span className="public-link-caption">链接域名</span>}
-      <div className="public-link-switch" role="radiogroup" aria-label="链接域名">
+      {!compact && <span className="public-link-caption">{tr('链接域名', 'Link domain')}</span>}
+      <div
+        className="public-link-switch"
+        role="radiogroup"
+        aria-label={tr('链接域名', 'Link domain')}
+      >
         {options.map((option, index) => {
           const selected = option.origin === origin;
           const confirmed = selected && feedback?.origin === option.origin;
@@ -167,7 +174,11 @@ export function LinkOriginSelect({
                 <Icon size={17} />
               </span>
               <span className="public-link-option-copy" aria-hidden="true">
-                <strong>{option.kind === 'global' ? '全球 CDN' : '香港反代'}</strong>
+                <strong>
+                  {option.kind === 'global'
+                    ? tr('全球 CDN', 'Global CDN')
+                    : tr('香港反代', 'Hong Kong proxy')}
+                </strong>
                 <small className={confirmed ? 'public-link-confirmation' : undefined}>
                   {confirmed ? feedback.label : option.host}
                 </small>

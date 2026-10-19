@@ -1,10 +1,13 @@
+import { tr } from './i18n';
 import { api, ApiError, send } from './api';
+import { getLocale } from './i18n';
 import type { FileRecord } from '../../shared/types';
 // Drive and image hosting use the same multipart transport and cleanup rules.
 export async function uploadFile(
   file: File,
   folderId: string | null,
   onProgress: (percent: number) => void = () => {},
+  onAllocatedFile: (id: string | undefined) => void = () => {},
 ) {
   const session = file.size
     ? await send<{ id: string; fileId: string; partSize: number }>('/uploads', 'POST', {
@@ -13,11 +16,13 @@ export async function uploadFile(
         folder_id: folderId,
       })
     : null;
+  if (session) onAllocatedFile(session.fileId);
   async function part(path: string, body: Blob, offset: number) {
     return new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open(session ? 'PUT' : 'POST', '/api/admin' + path);
       xhr.setRequestHeader('X-Drive-Request', '1');
+      xhr.setRequestHeader('Accept-Language', getLocale());
       xhr.setRequestHeader('X-File-Size', String(body.size));
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
       xhr.upload.onprogress = (e) => {
@@ -29,7 +34,7 @@ export async function uploadFile(
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) resolve();
         else {
-          let message = '上传失败';
+          let message = tr('上传失败', 'Upload failed');
           try {
             message = JSON.parse(xhr.responseText).error.message;
           } catch {
@@ -38,10 +43,10 @@ export async function uploadFile(
           reject(new Error(message));
         }
       };
-      xhr.onerror = () => reject(new Error('网络连接失败'));
+      xhr.onerror = () => reject(new Error(tr('网络连接失败', 'Network connection failed')));
       xhr.timeout = 300000;
-      xhr.ontimeout = () => reject(new Error('分片上传超时'));
-      xhr.onabort = () => reject(new Error('上传已中断'));
+      xhr.ontimeout = () => reject(new Error(tr('分片上传超时', 'Upload chunk timed out')));
+      xhr.onabort = () => reject(new Error(tr('上传已中断', 'Upload interrupted')));
       xhr.send(body);
     });
   }
@@ -106,7 +111,10 @@ export async function uploadFile(
   } catch (error) {
     if (session)
       try {
-        await send('/uploads/' + session.id, 'DELETE');
+        const cancelled = await send<{ cancelled?: boolean }>('/uploads/' + session.id, 'DELETE');
+        // Only the server's confirmed removal of a pending file permits a fresh
+        // allocation. A missing session may hide a committed file.
+        if (cancelled?.cancelled) onAllocatedFile(undefined);
       } catch {
         /* The scheduled cleanup handles expired sessions. */
       }

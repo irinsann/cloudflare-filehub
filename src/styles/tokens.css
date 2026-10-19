@@ -1,77 +1,61 @@
-/* Shared design primitives. Component files own layout and interaction states. */
+/* Macaron: warm paper, lavender actions, peach, mint and sky accents. */
 :root {
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-synthesis: none;
   color-scheme: light;
-  --bg: #eef3fb;
-  --surface: #ffffff;
-  --fg: #23324b;
-  --muted: #62718a;
-  --line: #778ba62b;
-  --accent: #3559e0;
-  --accent-ink: #ffffff;
-  --accent-soft: #edf1ff;
-  --hover: #eef3fb;
-  --danger: #b93642;
-  --shadow: 0 24px 70px #213e6b26;
-  --glass: #ffffffb8;
-  --glass-strong: #ffffffe0;
-  --glass-line: #ffffffd9;
-  --glass-highlight: #ffffffee;
-  --glass-shadow: 0 12px 36px #33578914, 0 2px 8px #33578908;
-  --panel-shadow: 0 14px 40px #3357890d, 0 2px 6px #33578905;
-  --glass-filter: blur(20px) saturate(145%);
-  --canvas-glow:
-    radial-gradient(ellipse at 8% 6%, #cadcf88a, transparent 48%),
-    radial-gradient(ellipse at 88% 28%, #e4daf77a, transparent 42%),
-    radial-gradient(ellipse at 55% 100%, #cfece870, transparent 50%);
-  --radius: 24px;
-  --sidebar-width: 220px;
+  --bg: #f7f5f2;
+  --surface: #fffeff;
+  --fg: #342f43;
+  --muted: #756e83;
+  --line: #e7e2eb;
+  --accent: #7961ad;
+  --accent-ink: #fff;
+  --accent-soft: #eee7f9;
+  --hover: #f5f1f9;
+  --danger: #ac405b;
+  --peach: #f9e8de;
+  --peach-ink: #a56841;
+  --mint: #e2f0e7;
+  --mint-ink: #427d64;
+  --sky: #e7eef9;
+  --sky-ink: #597da8;
+  --panel: #faf8fc;
+  --panel-strong: #fffeff;
+  --panel-line: #e7e2eb;
+  --panel-highlight: #ffffff;
+  --shadow: 0 16px 48px #3e2e521c;
+  --raised-shadow: 0 5px 18px #4c3f640a;
+  --panel-shadow: 0 3px 12px #4c3f6405;
+  --radius: 18px;
+  --sidebar-width: 224px;
   --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   color: var(--fg);
   background: var(--bg);
 }
 html[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #101827;
-  --surface: #1b273b;
-  --fg: #eceef3;
-  --muted: #a7b6ce;
-  --line: #95afd12b;
-  --accent: #95aaff;
-  --accent-ink: #151c36;
-  --accent-soft: #28324e;
-  --hover: #29384e;
-  --danger: #f28b96;
-  --shadow: 0 16px 48px #0005;
-  --glass: #19273cc7;
-  --glass-strong: #1b293eea;
-  --glass-line: #bcd6ff24;
-  --glass-highlight: #d6e5ff1c;
-  --glass-shadow: 0 16px 44px #03091642, 0 2px 8px #03091626;
-  --panel-shadow: 0 18px 48px #03091633, 0 2px 8px #0309161f;
-  --canvas-glow:
-    radial-gradient(ellipse at 8% 6%, #274b785c, transparent 48%),
-    radial-gradient(ellipse at 88% 28%, #40356047, transparent 42%),
-    radial-gradient(ellipse at 55% 100%, #20463f3d, transparent 50%);
-}
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :root,
-  html[data-theme='dark'] {
-    --glass: var(--surface);
-    --glass-strong: var(--surface);
-    --glass-line: var(--line);
-    --glass-filter: none;
-  }
-}
-@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  :root,
-  html[data-theme='dark'] {
-    --glass: var(--surface);
-    --glass-strong: var(--surface);
-    --glass-line: var(--line);
-    --glass-filter: none;
-    --canvas-glow: none;
-  }
+  --bg: #211f28;
+  --surface: #2c2935;
+  --fg: #f0ebf4;
+  --muted: #b7adc2;
+  --line: #45404f;
+  --accent: #d0b6f0;
+  --accent-ink: #30203f;
+  --accent-soft: #453752;
+  --hover: #393341;
+  --danger: #f2a6b4;
+  --peach: #49392f;
+  --peach-ink: #ebbc96;
+  --mint: #2c4039;
+  --mint-ink: #a5d8bc;
+  --sky: #303d50;
+  --sky-ink: #abc8eb;
+  --panel: #292632;
+  --panel-strong: #2c2935;
+  --panel-line: #45404f;
+  --panel-highlight: #3b3646;
+  --shadow: 0 16px 48px #100d1840;
+  --raised-shadow: 0 5px 18px #100d1818;
+  --panel-shadow: 0 3px 12px #100d1810;
 }

@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
@@ -25,6 +26,7 @@ import { Button } from '../components/ui/button';
 import { Modal } from '../components/ui/dialog';
 import { MarkdownView } from '../components/MarkdownView';
 import { LinkOriginSelect, usePublicLinks } from '../components/PublicLinks';
+import { LanguageSelect } from '../components/LanguageSelect';
 type DocumentData = { file: FileRecord; content: string; page: PageRecord | null };
 export default function Editor({
   id,
@@ -100,7 +102,9 @@ export default function Editor({
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : '读取文档失败');
+          setError(
+            cause instanceof Error ? cause.message : tr('读取文档失败', 'Could not load document'),
+          );
         }
       });
     return () => controller.abort();
@@ -123,7 +127,7 @@ export default function Editor({
   }, [content, dirty, id, version]);
   const save = useCallback(async () => {
     if (imageUploadBusy.current) {
-      setError('请等待图片上传完成后保存');
+      setError(tr('请等待图片上传完成后保存', 'Wait for images to finish uploading before saving'));
       return null;
     }
     if (!data || busy) return null;
@@ -143,10 +147,10 @@ export default function Editor({
       } catch {
         /* Nonessential browser storage. */
       }
-      notify('文档已保存');
+      notify(tr('文档已保存', 'Document saved'));
       return result.version;
     } catch (e) {
-      setError(e instanceof Error ? e.message : '保存失败');
+      setError(e instanceof Error ? e.message : tr('保存失败', 'Could not save'));
       return null;
     } finally {
       setBusy(false);
@@ -177,11 +181,16 @@ export default function Editor({
   async function uploadImages(files: File[]) {
     if (!files.length) return;
     if (!settings || !data) {
-      setError('请等待文档加载完成');
+      setError(tr('请等待文档加载完成', 'Wait for the document to load'));
       return;
     }
     if (busy || imageUploadBusy.current) {
-      setError('请等待当前操作完成后再上传图片');
+      setError(
+        tr(
+          '请等待当前操作完成后再上传图片',
+          'Wait for the current action to finish before uploading images',
+        ),
+      );
       return;
     }
     const run = ++imageUploadRun.current;
@@ -195,12 +204,20 @@ export default function Editor({
     try {
       for (const [index, file] of files.entries()) {
         if (!active()) break;
-        const label = `图片 ${index + 1} / ${files.length} · ${file.name}`;
-        setImageStatus(label + ' · 上传中');
+        const label = tr('图片 {0} / {1} · {2}', 'Image {0} / {1} · {2}', {
+          '0': index + 1,
+          '1': files.length,
+          '2': file.name,
+        });
+        setImageStatus(label + tr(' · 上传中', ' · Uploading'));
         try {
           const result = await uploadHostedImage(file, (percent) => {
             if (active()) {
-              setImageStatus(label + ' · ' + (percent === null ? '生成直链' : percent + '%'));
+              setImageStatus(
+                label +
+                  ' · ' +
+                  (percent === null ? tr('生成直链', 'Create direct link') : percent + '%'),
+              );
             }
           });
           if (!active()) break;
@@ -209,7 +226,11 @@ export default function Editor({
           if (result.cleanupWarning) errors.push(file.name + '：' + result.cleanupWarning);
         } catch (cause) {
           if (!active()) break;
-          errors.push(file.name + '：' + (cause instanceof Error ? cause.message : '上传失败'));
+          errors.push(
+            file.name +
+              '：' +
+              (cause instanceof Error ? cause.message : tr('上传失败', 'Upload failed')),
+          );
         }
         if (errors.length) setError(errors.join('；'));
       }
@@ -217,7 +238,9 @@ export default function Editor({
       if (active()) {
         imageUploadBusy.current = false;
         setImageUploading(false);
-        setImageStatus(completed ? `已插入 ${completed} 张图片` : '');
+        setImageStatus(
+          completed ? tr('已插入 {0} 张图片', 'Inserted {0} images', { '0': completed }) : '',
+        );
       }
     }
   }
@@ -239,9 +262,9 @@ export default function Editor({
       const fresh = await api<DocumentData>(`/markdown/${id}`);
       setData(fresh);
       setPublishing(false);
-      notify('发布成功，公开页面已更新');
+      notify(tr('发布成功，公开页面已更新', 'Published. The public page is up to date.'));
     } catch (e) {
-      setError(e instanceof Error ? e.message : '发布失败');
+      setError(e instanceof Error ? e.message : tr('发布失败', 'Could not publish'));
     } finally {
       setBusy(false);
     }
@@ -254,9 +277,9 @@ export default function Editor({
       setLink('');
       setData(await api<DocumentData>(`/markdown/${id}`));
       setPublishing(false);
-      notify('文章已取消发布');
+      notify(tr('文章已取消发布', 'Article unpublished'));
     } catch (e) {
-      setError(e instanceof Error ? e.message : '操作失败');
+      setError(e instanceof Error ? e.message : tr('操作失败', 'Action failed'));
     } finally {
       setBusy(false);
     }
@@ -267,40 +290,52 @@ export default function Editor({
         <Button
           variant="ghost"
           size="icon"
-          aria-label="返回文件列表"
+          aria-label={tr('返回文件列表', 'Back to files')}
           disabled={imageUploading}
           onClick={() => {
             if (imageUploadBusy.current) return;
-            if (!dirty || window.confirm('有未保存内容，确定返回吗？本地草稿会保留。')) onClose();
+            if (
+              !dirty ||
+              window.confirm(
+                tr(
+                  '有未保存内容，确定返回吗？本地草稿会保留。',
+                  'Leave with unsaved changes? Your local draft will be kept.',
+                ),
+              )
+            )
+              onClose();
           }}
         >
           <ArrowLeft size={20} />
         </Button>
         <div className="editor-heading">
-          <strong>{data?.file.name ?? '加载文档…'}</strong>
+          <strong>{data?.file.name ?? tr('加载文档…', 'Loading document…')}</strong>
           <span>
             {imageUploading
-              ? '正在上传图片…'
+              ? tr('正在上传图片…', 'Uploading images…')
               : busy
-                ? '正在处理…'
+                ? tr('正在处理…', 'Working…')
                 : dirty
-                  ? '有未保存更改'
-                  : '已保存'}{' '}
+                  ? tr('有未保存更改', 'Unsaved changes')
+                  : tr('已保存', 'Saved')}{' '}
             · v{version}
-            {data?.page?.published ? ` · 已发布 v${data.page.published_version}` : ' · 私人草稿'}
+            {data?.page?.published
+              ? tr(' · 已发布 v{0}', ' · Published v{0}', { '0': data.page.published_version ?? 1 })
+              : tr(' · 私人草稿', ' · Private draft')}
           </span>
         </div>
+        <LanguageSelect />
         <Button
           variant="outline"
           onClick={() => void save()}
           disabled={busy || imageUploading || !dirty}
         >
           <Save size={16} />
-          保存
+          {tr('保存', 'Save')}
         </Button>
         <Button onClick={() => setPublishing(true)} disabled={busy || imageUploading || !data}>
           <Globe size={16} />
-          {data?.page?.published ? '更新发布' : '发布'}
+          {data?.page?.published ? tr('更新发布', 'Update publication') : tr('发布', 'Publish')}
         </Button>
       </header>
       {imageStatus && (
@@ -322,13 +357,13 @@ export default function Editor({
               setTimeout(() => URL.revokeObjectURL(url), 1000);
             }}
           >
-            下载本地草稿
+            {tr('下载本地草稿', 'Download local draft')}
           </button>
         </div>
       )}
       {draft !== null && (
         <div className="editor-message">
-          发现未保存的本地草稿。
+          {tr('发现未保存的本地草稿。', 'An unsaved local draft is available.')}
           <Button
             size="sm"
             variant="outline"
@@ -337,7 +372,7 @@ export default function Editor({
               setDraft(null);
             }}
           >
-            恢复草稿
+            {tr('恢复草稿', 'Restore draft')}
           </Button>
           <Button
             size="sm"
@@ -347,38 +382,52 @@ export default function Editor({
               localStorage.removeItem(`draft:${id}`);
             }}
           >
-            忽略
+            {tr('忽略', 'Dismiss')}
           </Button>
         </div>
       )}
       {link && (
         <div className="published-banner">
           <Check size={15} />
-          <span>已发布</span>
+          <span>{tr('已发布', 'Published')}</span>
           <LinkOriginSelect compact className="editor-published-origin" />
           <Button
             size="sm"
             variant="ghost"
             onClick={() =>
               void copy(publicLinks.link(link))
-                .then(() => notify('阅读链接已复制'))
-                .catch(() => setError('请从发布窗口手动复制链接'))
+                .then(() => notify(tr('阅读链接已复制', 'Article link copied')))
+                .catch(() =>
+                  setError(
+                    tr('请从发布窗口手动复制链接', 'Copy the link from the publication dialog'),
+                  ),
+                )
             }
           >
-            复制链接
+            {tr('复制链接', 'Copy link')}
           </Button>
-          <a href={publicLinks.link(link)} target="_blank" rel="noreferrer" aria-label="打开文章">
+          <a
+            href={publicLinks.link(link)}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={tr('打开文章', 'Open article')}
+          >
             <ExternalLink size={15} />
           </a>
         </div>
       )}
       <div className="editor-tools">
         {[
-          { icon: Bold, label: '加粗', before: '**', after: '**' },
-          { icon: Italic, label: '斜体', before: '*', after: '*' },
-          { icon: Link, label: '链接', before: '[', after: '](https://)' },
-          { icon: List, label: '列表', before: '\n- ', after: '' },
-          { icon: Code2, label: '代码块', before: '\n```typescript\n', after: '\n```\n' },
+          { icon: Bold, label: tr('加粗', 'Bold'), before: '**', after: '**' },
+          { icon: Italic, label: tr('斜体', 'Italic'), before: '*', after: '*' },
+          { icon: Link, label: tr('链接', 'Link'), before: '[', after: '](https://)' },
+          { icon: List, label: tr('列表', 'List'), before: '\n- ', after: '' },
+          {
+            icon: Code2,
+            label: tr('代码块', 'Code block'),
+            before: '\n```typescript\n',
+            after: '\n```\n',
+          },
         ].map((t) => (
           <Button
             key={t.label}
@@ -394,8 +443,8 @@ export default function Editor({
         <Button
           variant="ghost"
           size="icon"
-          title="上传图片"
-          aria-label="上传图片"
+          title={tr('上传图片', 'Upload images')}
+          aria-label={tr('上传图片', 'Upload images')}
           disabled={busy || imageUploading || !settings || !data}
           onClick={() => imageInput.current?.click()}
         >
@@ -421,7 +470,7 @@ export default function Editor({
           onClick={() => setMobilePreview(!mobilePreview)}
         >
           {mobilePreview ? <PanelLeft size={16} /> : <Eye size={16} />}{' '}
-          {mobilePreview ? '编辑' : '预览'}
+          {mobilePreview ? tr('编辑', 'Edit') : tr('预览', 'Preview')}
         </Button>
       </div>
       <div className={`editor-columns ${mobilePreview ? 'show-preview' : ''}`}>
@@ -446,7 +495,8 @@ export default function Editor({
           }}
         >
           <div className="panel-label">
-            正文编辑 <span>Ctrl / ⌘ + S 保存</span>
+            {tr('正文编辑', 'Document editor')}
+            <span>{tr('Ctrl / ⌘ + S 保存', 'Ctrl / ⌘ + S to save')}</span>
           </div>
           <CodeMirror
             ref={editor}
@@ -459,20 +509,25 @@ export default function Editor({
           />
         </section>
         <section className="editor-preview">
-          <div className="panel-label">
-            实时预览 <span>安全渲染</span>
-          </div>
+          <div className="panel-label">{tr('实时预览', 'Live preview')}</div>
           <div className="editor-preview-content">
             <MarkdownView source={content} fileId={id} />
           </div>
         </section>
       </div>
       <footer className="editor-bottom">
-        <span>{content.length.toLocaleString()} 字符</span>
+        <span>
+          {content.length.toLocaleString()}
+          {tr('字符', 'characters')}
+        </span>
       </footer>
       {publishing && (
         <Modal
-          title={data?.page?.published ? '更新公开文章' : '发布 Markdown'}
+          title={
+            data?.page?.published
+              ? tr('更新公开文章', 'Update public article')
+              : tr('发布 Markdown', 'Publish Markdown')
+          }
           onClose={() => {
             if (!busy) setPublishing(false);
           }}
@@ -485,7 +540,7 @@ export default function Editor({
             }}
           >
             <label>
-              文章标题
+              {tr('文章标题', 'Article title')}
               <input
                 value={title}
                 required
@@ -504,7 +559,7 @@ export default function Editor({
               />
             </label>
             <label>
-              简介
+              {tr('简介', 'Description')}
               <textarea
                 value={description}
                 maxLength={500}
@@ -517,7 +572,7 @@ export default function Editor({
                 checked={allowSource}
                 onChange={(e) => setAllowSource(e.target.checked)}
               />
-              允许下载 Markdown 原文
+              {tr('允许下载 Markdown 原文', 'Allow downloading Markdown source')}
             </label>
             <label className="check-label">
               <input
@@ -525,12 +580,14 @@ export default function Editor({
                 checked={allowIndex}
                 onChange={(e) => setAllowIndex(e.target.checked)}
               />
-              允许搜索引擎索引
+              {tr('允许搜索引擎索引', 'Allow search engine indexing')}
             </label>
             {link && (
               <div className="editor-published-link">
                 <div className="editor-link-heading">
-                  <label htmlFor="current-reading-link">当前阅读链接</label>
+                  <label htmlFor="current-reading-link">
+                    {tr('当前阅读链接', 'Current article link')}
+                  </label>
                   <LinkOriginSelect compact />
                 </div>
                 <input
@@ -550,10 +607,12 @@ export default function Editor({
                   disabled={busy || imageUploading}
                   onClick={() => void unpublish()}
                 >
-                  取消发布
+                  {tr('取消发布', 'Unpublish')}
                 </Button>
               )}
-              <Button disabled={busy || imageUploading}>{busy ? '处理中…' : '保存并发布'}</Button>
+              <Button disabled={busy || imageUploading}>
+                {busy ? tr('处理中…', 'Working…') : tr('保存并发布', 'Save and publish')}
+              </Button>
             </div>
           </form>
         </Modal>

@@ -1,3 +1,4 @@
+import { tr, getLocale } from '../lib/i18n';
 import { useEffect, useState } from 'react';
 import { Copy, ExternalLink, FileText, Link2, ShieldCheck, Globe2 } from 'lucide-react';
 import { apiPage, copy, send, dateLabel } from '../lib/api';
@@ -11,7 +12,6 @@ import { LinkOriginSelect, usePublicLinks } from '../components/PublicLinks';
 import type { Settings, ShareListItem } from '../../shared/types';
 import type { SiteShareListItem } from '../../shared/site-shares';
 import { Select } from '../components/ui/select';
-import { GoogleDriveSettings } from '../components/GoogleDriveConnection';
 interface DocumentRow {
   id: string;
   name: string;
@@ -29,16 +29,12 @@ export function Management({
   settings,
   onEdit,
   notify,
-  googleUploading = false,
-  stopGoogleUploads,
 }: {
   view: 'published' | 'shares' | 'settings';
   refresh: number;
   settings: Settings | null;
   onEdit: (id: string) => void;
   notify: (s: string) => void;
-  googleUploading?: boolean;
-  stopGoogleUploads?: () => void;
 }) {
   const publicLinks = usePublicLinks();
   const [shares, setShares] = useState<ShareListItem[]>([]),
@@ -96,7 +92,7 @@ export function Management({
   }, [view, refresh, revision, page, shareKind]);
   function copyShareLink(url: string, name: string) {
     void copy(publicLinks.link(url))
-      .then(() => notify('链接已复制'))
+      .then(() => notify(tr('链接已复制', 'Link copied')))
       .catch(() => setManualCopy({ url, name }));
   }
   async function revoke(id: string, article: boolean) {
@@ -110,9 +106,9 @@ export function Management({
         article ? 'POST' : 'DELETE',
       );
       setRevision((r) => r + 1);
-      notify(article ? '已取消发布' : '已撤销分享');
+      notify(article ? tr('已取消发布', 'Unpublished') : tr('已撤销分享', 'Share revoked'));
     } catch (e) {
-      setError(e instanceof Error ? e.message : '操作失败');
+      setError(e instanceof Error ? e.message : tr('操作失败', 'Action failed'));
     }
   }
   if (view === 'settings')
@@ -120,7 +116,7 @@ export function Management({
       <div className="settings-grid">
         <section className="settings-card">
           <ShieldCheck />
-          <h3>账号</h3>
+          <h3>{tr('账号', 'Account')}</h3>
           {settings?.authMode === 'password_totp' && (
             <Button
               variant="outline"
@@ -128,33 +124,31 @@ export function Management({
                 try {
                   const r = await fetch('/api/auth/logout', {
                     method: 'POST',
-                    headers: { 'X-Drive-Request': '1' },
+                    headers: { 'X-Drive-Request': '1', 'Accept-Language': getLocale() },
                   });
-                  if (!r.ok) throw Error('退出失败');
+                  if (!r.ok) throw Error(tr('退出失败', 'Could not sign out'));
                   location.assign('/login');
                 } catch {
-                  notify('退出失败，请稍后重试');
+                  notify(tr('退出失败，请稍后重试', 'Could not sign out. Try again shortly.'));
                 }
               }}
             >
-              退出登录
+              {tr('退出登录', 'Sign out')}
             </Button>
           )}
-          <p className="account-email">{settings?.email ?? '正在读取'}</p>
+          <p className="account-email">{settings?.email ?? tr('正在读取', 'Loading')}</p>
         </section>
         <section className="settings-card">
           <FileText />
-          <h3>存储</h3>
+          <h3>{tr('存储', 'Storage')}</h3>
           <StorageMeter settings={settings} />
-          <p>文本编辑上限：{settings ? `${settings.maxTextBytes / 1048576} MB` : '—'}</p>
+          <p>
+            {tr('文本编辑上限：', 'Text editing limit: ')}
+            {settings ? `${settings.maxTextBytes / 1048576} MB` : '—'}
+          </p>
         </section>
         <ApiTokens notify={notify} uploadOrigin={settings?.filesOrigin || location.origin} />
         <WebDavSettings notify={notify} />
-        <GoogleDriveSettings
-          notify={notify}
-          uploading={googleUploading}
-          onBeforeConnectionChange={stopGoogleUploads}
-        />
       </div>
     );
   return (
@@ -162,15 +156,15 @@ export function Management({
       {view === 'shares' && (
         <div className="share-kind-toolbar">
           <Select
-            aria-label="分享类型"
+            aria-label={tr('分享类型', 'Share type')}
             value={shareKind}
             onValueChange={(value) => {
               setShareKind(value);
               setPagination({ view, page: 1 });
             }}
             options={[
-              { value: 'files', label: '文件分享' },
-              { value: 'sites', label: 'HTML 网站' },
+              { value: 'files', label: tr('文件分享', 'File shares') },
+              { value: 'sites', label: tr('HTML 网站', 'HTML websites') },
             ]}
           />
           <LinkOriginSelect compact />
@@ -201,16 +195,21 @@ export function Management({
                   <strong>{site.name}</strong>
                   <p>
                     {!site.enabled
-                      ? '已撤销'
+                      ? tr('已撤销', 'Revoked')
                       : expired
-                        ? '已过期'
+                        ? tr('已过期', 'Expired')
                         : site.expires_at
-                          ? `有效至 ${dateLabel(site.expires_at)}`
-                          : '永久有效'}{' '}
+                          ? tr('有效至 {0}', 'Expires {0}', { '0': dateLabel(site.expires_at) })
+                          : tr('永久有效', 'No expiry')}{' '}
                     {available && (
-                      <>{site.password_protected ? '· 密码保护 ' : '· 持链接可访问 '}</>
+                      <>
+                        {site.password_protected
+                          ? tr('· 密码保护 ', '· Password protected ')
+                          : tr('· 持链接可访问 ', '· Anyone with the link ')}
+                      </>
                     )}
-                    · 访问 {site.views}
+                    {tr('· 访问', '· Views ')}
+                    {site.views}
                   </p>
                 </div>
                 <div className="management-actions">
@@ -221,13 +220,13 @@ export function Management({
                     onClick={() => copyShareLink(site.url, site.name)}
                   >
                     <Copy size={15} />
-                    复制链接
+                    {tr('复制链接', 'Copy link')}
                   </Button>
                   {available && (
                     <Button variant="ghost" size="sm" asChild>
                       <a href={publicLinks.link(site.url)} target="_blank" rel="noreferrer">
                         <ExternalLink size={15} />
-                        打开网站
+                        {tr('打开网站', 'Open website')}
                       </a>
                     </Button>
                   )}
@@ -237,13 +236,15 @@ export function Management({
                     disabled={!site.enabled}
                     onClick={() => void revoke(site.id, false)}
                   >
-                    撤销分享
+                    {tr('撤销分享', 'Revoke share')}
                   </Button>
                 </div>
               </article>
             );
           })}
-          {!sites.length && <EmptyState label="暂无 HTML 网站分享" />}
+          {!sites.length && (
+            <EmptyState label={tr('暂无 HTML 网站分享', 'No shared HTML websites')} />
+          )}
         </div>
       ) : view === 'shares' ? (
         <div className="management-list">
@@ -259,14 +260,23 @@ export function Management({
                   <strong>{s.name}</strong>
                   <p>
                     {!s.enabled
-                      ? '已撤销'
+                      ? tr('已撤销', 'Revoked')
                       : expired
-                        ? '已过期'
+                        ? tr('已过期', 'Expired')
                         : s.expires_at
-                          ? `有效至 ${dateLabel(s.expires_at)}`
-                          : '永久有效'}{' '}
-                    {available && <>{s.password_protected ? '· 密码保护 ' : '· 持链接可访问 '}</>}·
-                    访问 {s.views} / 下载 {s.downloads}
+                          ? tr('有效至 {0}', 'Expires {0}', { '0': dateLabel(s.expires_at) })
+                          : tr('永久有效', 'No expiry')}{' '}
+                    {available && (
+                      <>
+                        {s.password_protected
+                          ? tr('· 密码保护 ', '· Password protected ')
+                          : tr('· 持链接可访问 ', '· Anyone with the link ')}
+                      </>
+                    )}
+                    {tr('· 访问', '· Views ')}
+                    {s.views}
+                    {tr('/ 下载', '/ Downloads ')}
+                    {s.downloads}
                   </p>
                 </div>
                 <div className="management-actions">
@@ -277,7 +287,7 @@ export function Management({
                     onClick={() => copyShareLink(s.url, s.name)}
                   >
                     <Copy size={15} />
-                    复制链接
+                    {tr('复制链接', 'Copy link')}
                   </Button>
                   {!!s.allow_download && !s.password_protected && (
                     <Button
@@ -286,7 +296,7 @@ export function Management({
                       disabled={!available}
                       onClick={() => copyShareLink(s.directUrl, s.name)}
                     >
-                      复制直链
+                      {tr('复制直链', 'Copy direct link')}
                     </Button>
                   )}
                   <Button
@@ -295,13 +305,13 @@ export function Management({
                     disabled={!s.enabled}
                     onClick={() => void revoke(s.id, false)}
                   >
-                    撤销分享
+                    {tr('撤销分享', 'Revoke share')}
                   </Button>
                 </div>
               </article>
             );
           })}
-          {!shares.length && <EmptyState label="暂无文件分享" />}
+          {!shares.length && <EmptyState label={tr('暂无文件分享', 'No file shares')} />}
         </div>
       ) : (
         <div className="management-list">
@@ -322,43 +332,65 @@ export function Management({
                   <div className="management-info">
                     <strong>{d.title ?? d.name}</strong>
                     <p>
-                      /{d.slug} · {d.views ?? 0} 次阅读 · 已发布 v{d.published_version}
-                      {d.version !== d.published_version ? ' · 有新草稿' : ''}
+                      /{d.slug} · {d.views ?? 0}
+                      {tr('次阅读 · 已发布 v', ' views · Published v')}
+                      {d.published_version}
+                      {d.version !== d.published_version
+                        ? tr(' · 有新草稿', ' · New draft available')
+                        : ''}
                     </p>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label="复制文章链接"
-                    title="复制文章链接"
+                    aria-label={tr('复制文章链接', 'Copy article link')}
+                    title={tr('复制文章链接', 'Copy article link')}
                     onClick={() =>
                       void copy(url)
-                        .then(() => notify('阅读链接已复制'))
-                        .catch(() => setError('复制失败，请打开文章后复制地址'))
+                        .then(() => notify(tr('阅读链接已复制', 'Article link copied')))
+                        .catch(() =>
+                          setError(
+                            tr(
+                              '复制失败，请打开文章后复制地址',
+                              'Could not copy. Open the article and copy its address.',
+                            ),
+                          ),
+                        )
                     }
                   >
                     <Copy size={16} />
                   </Button>
                   <Button variant="ghost" size="icon" asChild>
-                    <a href={url} target="_blank" rel="noreferrer" aria-label="打开文章">
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={tr('打开文章', 'Open article')}
+                    >
                       <ExternalLink size={16} />
                     </a>
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => onEdit(d.id)}>
-                    编辑
+                    {tr('编辑', 'Edit')}
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => void revoke(d.id, true)}>
-                    取消发布
+                    {tr('取消发布', 'Unpublish')}
                   </Button>
                 </article>
               );
             })}
-          {!docs.some((d) => d.published) && <EmptyState label="暂无已发布文章" />}
+          {!docs.some((d) => d.published) && (
+            <EmptyState label={tr('暂无已发布文章', 'No published articles')} />
+          )}
         </div>
       )}
       {!loading && !error && total > pageSize && (
         <div className="file-footer">
-          <span>共 {total} 项</span>
+          <span>
+            {tr('共', 'Total ')}
+            {total}
+            {tr('项', ' items')}
+          </span>
           <div>
             <Button
               variant="ghost"
@@ -366,7 +398,7 @@ export function Management({
               disabled={page <= 1}
               onClick={() => setPagination({ view, page: page - 1 })}
             >
-              上一页
+              {tr('上一页', 'Previous')}
             </Button>
             <span>
               {page} / {Math.ceil(total / pageSize)}
@@ -377,17 +409,21 @@ export function Management({
               disabled={page * pageSize >= total}
               onClick={() => setPagination({ view, page: page + 1 })}
             >
-              下一页
+              {tr('下一页', 'Next')}
             </Button>
           </div>
         </div>
       )}
       {manualCopy && (
-        <Modal title="复制链接" description={manualCopy.name} onClose={() => setManualCopy(null)}>
+        <Modal
+          title={tr('复制链接', 'Copy link')}
+          description={manualCopy.name}
+          onClose={() => setManualCopy(null)}
+        >
           <div className="form-stack">
             <LinkOriginSelect />
             <label>
-              链接
+              {tr('链接', 'Link')}
               <input
                 autoFocus
                 readOnly
@@ -395,7 +431,9 @@ export function Management({
                 onFocus={(event) => event.target.select()}
               />
             </label>
-            <p role="status">无法访问剪贴板，请手动复制。</p>
+            <p role="status">
+              {tr('无法访问剪贴板，请手动复制。', 'Clipboard unavailable. Copy manually.')}
+            </p>
           </div>
         </Modal>
       )}

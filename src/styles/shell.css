@@ -5,17 +5,11 @@
 }
 .sidebar {
   position: fixed;
-  inset: 20px auto 20px 20px;
+  inset: 0 auto 0 0;
   width: var(--sidebar-width);
-  background: var(--glass);
-  border: 1px solid var(--glass-line);
-  border-radius: 26px;
-  box-shadow:
-    var(--glass-shadow),
-    inset 0 1px 0 var(--glass-highlight);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
-  padding: 24px 12px 0;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  padding: 32px 16px 0;
   display: flex;
   flex-direction: column;
   z-index: 30;
@@ -25,11 +19,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 10px 30px;
+  margin: 0 10px 36px;
   flex-shrink: 0;
 }
 .logo strong {
-  font-size: 20px;
+  font-size: 22px;
   letter-spacing: -0.7px;
   font-weight: 700;
 }
@@ -52,13 +46,13 @@
 .workspace-nav {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 5px;
 }
 .nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 40px;
+  min-height: 43px;
   padding: 0 12px;
   background: transparent;
   border: 1px solid transparent;
@@ -73,16 +67,13 @@
   color: var(--fg);
 }
 .nav-item.active {
-  background: var(--glass-strong);
-  border-color: var(--glass-line);
-  box-shadow:
-    0 3px 12px #2545780a,
-    inset 0 1px 0 var(--glass-highlight);
+  background: var(--accent-soft);
+  border-color: transparent;
   color: var(--accent);
   font-weight: 600;
 }
 .nav-divider {
-  margin-top: 18px;
+  margin-top: 22px;
 }
 .sidebar-bottom {
   margin-top: auto;
@@ -107,7 +98,7 @@
 }
 .storage-meter progress {
   width: 100%;
-  height: 3px;
+  height: 5px;
   margin: 10px 0;
 }
 .storage-meter small {
@@ -161,27 +152,21 @@
   flex-shrink: 0;
 }
 .main {
-  margin-left: calc(var(--sidebar-width) + 40px);
+  margin-left: var(--sidebar-width);
   min-width: 0;
 }
 .topbar {
-  min-height: 62px;
-  margin: 20px clamp(20px, 3vw, 40px) 0;
-  padding: 10px 14px;
+  min-height: 82px;
+  margin: 0;
+  padding: 18px clamp(24px, 4vw, 60px);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  border: 1px solid var(--glass-line);
-  border-radius: 22px;
-  background: var(--glass);
-  box-shadow:
-    var(--glass-shadow),
-    inset 0 1px 0 var(--glass-highlight);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
   position: sticky;
-  top: 20px;
+  top: 0;
   z-index: 20;
 }
 .search-box {
@@ -191,7 +176,7 @@
   width: min(420px, 100%);
   min-width: 0;
   color: var(--muted);
-  background: var(--glass-strong);
+  background: var(--panel-strong);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 0 10px;
@@ -200,7 +185,7 @@
   border-color: var(--accent);
 }
 .search-box input {
-  height: 34px;
+  height: 40px;
   flex: 1;
   width: 100%;
   background: transparent;
@@ -228,9 +213,9 @@
   gap: 14px;
 }
 .content {
-  max-width: 1560px;
+  max-width: 1480px;
   margin: 0 auto;
-  padding: 28px clamp(20px, 3vw, 40px) 36px;
+  padding: 34px clamp(24px, 4vw, 60px) 48px;
 }
 .page-heading {
   display: flex;
@@ -241,9 +226,9 @@
   min-height: 40px;
 }
 .page-heading h1 {
-  font-size: 27px;
+  font-size: 28px;
   font-weight: 650;
-  letter-spacing: -1px;
+  letter-spacing: -0.8px;
   margin: 0;
 }
 .heading-actions {
@@ -258,20 +243,18 @@
   position: fixed;
   inset: 12px 12px max(12px, env(safe-area-inset-bottom)) auto;
   width: min(320px, calc(100vw - 24px));
-  background: var(--glass-strong);
+  background: var(--panel-strong);
   color: var(--fg);
   z-index: 81;
   display: flex;
   flex-direction: column;
   padding: 24px 20px 12px;
   overflow-y: auto;
-  border: 1px solid var(--glass-line);
-  border-radius: 24px;
+  border: 1px solid var(--panel-line);
+  border-radius: var(--radius);
   box-shadow:
     var(--shadow),
-    inset 0 1px 0 var(--glass-highlight);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
+    inset 0 1px 0 var(--panel-highlight);
 }
 .drawer-header {
   display: flex;
@@ -307,7 +290,6 @@
 }
 @media (min-width: 901px) and (max-height: 700px) {
   .sidebar {
-    inset-block: 12px;
     padding-top: 18px;
   }
   .sidebar .logo {
@@ -331,12 +313,11 @@
     margin-left: 0;
   }
   .topbar {
-    min-height: 60px;
-    margin: 12px 20px 0;
-    padding: 8px 12px;
-    top: 12px;
-    gap: 14px;
-    border-radius: 20px;
+    min-height: 72px;
+    margin: 0;
+    padding: 14px 20px;
+    top: 0;
+    gap: 12px;
   }
   .mobile-brand {
     display: flex;
@@ -348,7 +329,7 @@
   .search-box {
     flex: 1;
     width: auto;
-    background: var(--glass-strong);
+    background: var(--panel-strong);
   }
   .search-box kbd {
     display: none;
@@ -369,20 +350,16 @@
     margin-inline: auto;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    padding: 5px;
-    background: var(--glass);
-    border: 1px solid var(--glass-line);
-    border-radius: 24px;
-    box-shadow:
-      var(--glass-shadow),
-      inset 0 1px 0 var(--glass-highlight);
-    -webkit-backdrop-filter: var(--glass-filter);
-    backdrop-filter: var(--glass-filter);
+    padding: 6px;
+    background: var(--surface);
+    border: 1px solid var(--panel-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
     z-index: 40;
   }
   .mobile-tabs button {
     border: 0;
-    border-radius: 19px;
+    border-radius: 14px;
     background: none;
     color: var(--muted);
     min-height: 54px;
@@ -396,10 +373,7 @@
   .mobile-tabs button[aria-current='page'],
   .mobile-tabs button.active {
     color: var(--accent);
-    background: var(--glass-strong);
-    box-shadow:
-      0 2px 8px #33578910,
-      inset 0 1px 0 var(--glass-highlight);
+    background: var(--accent-soft);
   }
   .drop-zone {
     inset: 88px 16px calc(90px + max(12px, env(safe-area-inset-bottom)));
@@ -410,8 +384,7 @@
 }
 @media (max-width: 540px) {
   .topbar {
-    margin-inline: 12px;
-    padding: 8px 10px;
+    padding: 12px 14px;
     gap: 9px;
   }
   .search-box input {
@@ -426,10 +399,104 @@
     flex-wrap: wrap;
   }
   .page-heading h1 {
-    font-size: 23px;
+    font-size: 24px;
   }
   .heading-actions .button {
     padding: 0 12px;
     font-size: 12px;
+  }
+}
+
+.language-select {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.language-select .select-trigger {
+  width: 100px;
+  min-height: 38px;
+  padding: 7px 10px;
+  font-size: 12px;
+  background: var(--surface);
+}
+.page-heading > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+}
+.page-heading-icon {
+  display: grid;
+  place-content: center;
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--peach);
+  color: var(--peach-ink);
+}
+.nav-item:nth-child(6) svg {
+  color: var(--mint-ink);
+}
+.content[data-view='images'] .page-heading-icon {
+  color: var(--mint-ink);
+  background: var(--mint);
+}
+.content[data-view='html'] .page-heading-icon {
+  color: var(--sky-ink);
+  background: var(--sky);
+}
+.content[data-view='markdown'] .page-heading-icon,
+.content[data-view='published'] .page-heading-icon {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+@media (pointer: coarse) {
+  .language-select .select-trigger {
+    min-height: 44px;
+  }
+}
+.nav-item:nth-child(7) svg {
+  color: var(--sky-ink);
+}
+.avatar {
+  background: var(--peach);
+  color: var(--peach-ink);
+  border-radius: 10px;
+}
+@media (max-width: 900px) {
+  .topbar-right {
+    gap: 5px;
+  }
+  .language-select > svg {
+    display: none;
+  }
+  .language-select .select-trigger {
+    width: 83px;
+    min-height: 38px;
+    padding: 5px 7px;
+  }
+}
+@media (max-width: 540px) {
+  .page-heading-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+  }
+  .language-select .select-trigger {
+    width: 76px;
+    font-size: 11px;
+    gap: 4px;
+  }
+  .topbar .mobile-brand {
+    display: none;
+  }
+  .search-box {
+    padding-inline: 8px;
+  }
+  .search-box input {
+    min-width: 0;
   }
 }

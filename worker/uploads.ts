@@ -235,5 +235,5 @@ uploadRoutes.delete('/uploads/:id', async (c) => {
     await deleteObject(c.env, s.object_key);
     await releaseStatement(c.env, s.object_key).run();
   }
-  return c.json({ data: { id: s.id } });
+  return c.json({ data: { id: s.id, cancelled: !!removed } });
 });

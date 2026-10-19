@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import { useState, useRef } from 'react';
 import type { Settings } from '../../shared/types';
 import { uploadFile } from '../lib/upload';
@@ -33,19 +34,19 @@ export function useUploads(
       } catch (error) {
         update(item.id, {
           state: 'error',
-          error: error instanceof Error ? error.message : '上传失败',
+          error: error instanceof Error ? error.message : tr('上传失败', 'Upload failed'),
         });
       } finally {
         retrying.current.delete(item.id);
       }
     }
     working.current = false;
-    notify('上传队列已完成');
+    notify(tr('上传队列已完成', 'Uploads complete'));
   }
   function add(files: File[], folderId: string | null) {
     if (!files.length) return;
     if (!settings) {
-      notify('请等待配置加载完成');
+      notify(tr('请等待配置加载完成', 'Wait for settings to load'));
       return;
     }
     const accepted = files.map((file) => ({

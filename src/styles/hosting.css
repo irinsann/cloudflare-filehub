@@ -1,0 +1,163 @@
+.hosting-page {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+.hosting-drop {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 28px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  transition:
+    border-color 120ms,
+    background 120ms;
+}
+.hosting-drop.is-dragging {
+  border-color: var(--accent);
+  background: var(--mint);
+}
+.hosting-emblem {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 66px;
+  border-radius: 16px;
+  color: var(--accent);
+  background: var(--surface);
+  flex-shrink: 0;
+  transform: rotate(-4deg);
+}
+.hosting-drop > div {
+  flex: 1;
+  min-width: 0;
+}
+.hosting-drop h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.hosting-drop p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+.hosting-tasks {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+}
+.hosting-tasks header,
+.hosting-tasks article > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.hosting-tasks header {
+  justify-content: space-between;
+}
+.hosting-tasks article {
+  display: grid;
+  gap: 7px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.hosting-tasks article strong {
+  overflow-wrap: anywhere;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+}
+.hosting-tasks article > div > span:last-child {
+  color: var(--muted);
+  font-size: 11px;
+}
+.hosting-tasks progress {
+  width: 100%;
+  height: 4px;
+}
+.hosting-tasks .hosting-task-status {
+  justify-content: space-between;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.hosting-task-status > span {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.hosting-list-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.hosting-list-title > span {
+  display: inline-grid;
+  place-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding-inline: 7px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+}
+.hosting-page .file-toolbar {
+  padding: 16px 20px;
+}
+.hosting-page .file-footer {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 20px;
+}
+.hosting-page .file-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hosting-page .type-icon {
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 10px;
+  border-radius: 12px;
+}
+.hosting-page .management-actions {
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .hosting-drop {
+    gap: 14px;
+    padding: 22px 18px;
+    flex-wrap: wrap;
+  }
+  .hosting-emblem {
+    width: 46px;
+    height: 52px;
+  }
+  .hosting-drop h2 {
+    font-size: 16px;
+  }
+  .hosting-drop > .button {
+    width: 100%;
+    margin-top: 4px;
+  }
+  .hosting-page .management-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .hosting-page .management-row {
+    flex-wrap: wrap;
+  }
+  .hosting-tasks {
+    padding: 14px;
+  }
+}

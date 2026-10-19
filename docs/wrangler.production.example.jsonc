@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
-  "name": "irin-drive",
+  "name": "cloudflare-filehub",
   "main": "../worker/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -8,43 +8,41 @@
     "directory": "../dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": true
+    "run_worker_first": true,
   },
   "routes": [
     {
-      "pattern": "233334.xyz",
-      "custom_domain": true
-    }
+      "pattern": "cloud.example.com",
+      "custom_domain": true,
+    },
   ],
   "r2_buckets": [
     {
       "binding": "BUCKET",
-      "bucket_name": "irin-drive-private"
-    }
+      "bucket_name": "filehub-storage",
+    },
   ],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "irin-drive",
+      "database_name": "filehub-db",
       "database_id": "REPLACE_WITH_D1_DATABASE_ID",
-      "migrations_dir": "../db/migrations"
-    }
+      "migrations_dir": "../db/migrations",
+    },
   ],
   "vars": {
     "ENVIRONMENT": "production",
     "LOCAL_AUTH": "false",
     "MAX_TEXT_BYTES": "1048576",
-    "ADMIN_ORIGIN": "https://233334.xyz",
-    "MARKDOWN_ORIGIN": "https://233334.xyz",
-    "FILES_ORIGIN": "https://s.irin.im",
-    "TRUSTED_PROXY_ORIGINS": "https://s.irin.im",
+    "ADMIN_ORIGIN": "https://cloud.example.com",
+    "MARKDOWN_ORIGIN": "https://cloud.example.com",
+    "FILES_ORIGIN": "https://files.example.com",
+    "TRUSTED_PROXY_ORIGINS": "https://files.example.com",
     "ACCESS_TEAM_DOMAIN": "YOUR_TEAM.cloudflareaccess.com",
     "ACCESS_AUD": "REPLACE_WITH_APPLICATION_AUD",
-    "ADMIN_EMAILS": "YOUR_ADMIN_EMAIL"
+    "ADMIN_EMAILS": "YOUR_ADMIN_EMAIL",
   },
   "triggers": {
-    "crons": [
-      "17 * * * *"
-    ]
-  }
+    "crons": ["17 * * * *"],
+  },
 }

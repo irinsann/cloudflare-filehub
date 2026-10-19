@@ -1,3 +1,4 @@
+import { tr } from '../../lib/i18n';
 import { RotateCcw, Trash2, FileText, Download, Link2, Pencil, Move, Globe2 } from 'lucide-react';
 import { Modal } from '../ui/dialog';
 import { fileUrl } from '../../lib/api';
@@ -30,7 +31,7 @@ export function FileMenu({
               }}
             >
               <RotateCcw size={17} />
-              恢复
+              {tr('恢复', 'Restore')}
             </button>
             <button
               className="danger-text"
@@ -40,7 +41,7 @@ export function FileMenu({
               }}
             >
               <Trash2 size={17} />
-              永久删除
+              {tr('永久删除', 'Delete permanently')}
             </button>
           </>
         ) : (
@@ -53,7 +54,7 @@ export function FileMenu({
                 }}
               >
                 <Globe2 size={17} />
-                发布 HTML 网站
+                {tr('发布 HTML 网站', 'Publish HTML website')}
               </button>
             )}
             {menu.file && (
@@ -65,11 +66,11 @@ export function FileMenu({
                   }}
                 >
                   <FileText size={17} />
-                  打开 / 预览
+                  {tr('打开 / 预览', 'Open / Preview')}
                 </button>
                 <a href={fileUrl(menu.file.id)} onClick={() => setMenu(null)}>
                   <Download size={17} />
-                  下载文件
+                  {tr('下载文件', 'Download file')}
                 </a>
                 <button
                   onClick={() => {
@@ -78,7 +79,7 @@ export function FileMenu({
                   }}
                 >
                   <Link2 size={17} />
-                  创建分享
+                  {tr('创建分享', 'Create share')}
                 </button>
                 <button
                   onClick={() => {
@@ -87,7 +88,7 @@ export function FileMenu({
                   }}
                 >
                   <Link2 size={17} />
-                  生成文件直链
+                  {tr('生成文件直链', 'Create direct link')}
                 </button>
               </>
             )}
@@ -98,7 +99,7 @@ export function FileMenu({
               }}
             >
               <Pencil size={17} />
-              重命名
+              {tr('重命名', 'Rename')}
             </button>
             <button
               onClick={() => {
@@ -107,7 +108,7 @@ export function FileMenu({
               }}
             >
               <Move size={17} />
-              移动
+              {tr('移动', 'Move')}
             </button>
             <button
               className="danger-text"
@@ -117,7 +118,7 @@ export function FileMenu({
               }}
             >
               <Trash2 size={17} />
-              移入回收站
+              {tr('移入回收站', 'Move to trash')}
             </button>
           </>
         )}

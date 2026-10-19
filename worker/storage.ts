@@ -109,12 +109,12 @@ export async function uploadStream(env: Env, request: Request, key: string, name
   return { size: object.size, etag: object.etag, mime };
 }
 export async function textObject(env: Env, key: string) {
-  const head = await env.BUCKET.head(key);
-  if (!head) fail(404, '文件对象不存在');
-  if (head.size > limit(env.MAX_TEXT_BYTES, 1024 * 1024))
-    fail(413, '文本超过在线编辑和预览大小限制');
   const object = await env.BUCKET.get(key);
   if (!object) fail(404, '文件对象不存在');
+  if (object.size > limit(env.MAX_TEXT_BYTES, 1024 * 1024)) {
+    await object.body.cancel();
+    fail(413, '文本超过在线编辑和预览大小限制');
+  }
   return object.text();
 }
 export async function writeText(env: Env, text: string) {
@@ -159,7 +159,11 @@ export async function serveObject(
   mime: string,
   inline: boolean,
 ) {
-  const head = await env.BUCKET.head(key);
+  const rangeHeader = request.headers.get('Range');
+  // A normal GET already includes metadata; do not bill a separate HEAD for it.
+  const direct = request.method !== 'HEAD' && !rangeHeader;
+  const loaded = direct ? await env.BUCKET.get(key) : null;
+  const head = direct ? loaded : await env.BUCKET.head(key);
   if (!head) fail(404, '文件对象不存在');
   const headers = new Headers({
     'Content-Type': mime,
@@ -173,7 +177,6 @@ export async function serveObject(
     'Referrer-Policy': 'no-referrer',
   });
   let range;
-  const rangeHeader = request.headers.get('Range');
   if (
     rangeHeader &&
     (!request.headers.get('If-Range') || request.headers.get('If-Range') === head.httpEtag)
@@ -191,7 +194,7 @@ export async function serveObject(
     );
   }
   if (request.method === 'HEAD') return new Response(null, { status: range ? 206 : 200, headers });
-  const object = await env.BUCKET.get(key, range ? { range } : undefined);
+  const object = loaded ?? (await env.BUCKET.get(key, range ? { range } : undefined));
   if (!object) fail(404, '文件对象不存在');
   return new Response(object.body, { status: range ? 206 : 200, headers });
 }

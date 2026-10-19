@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import { useRef } from 'react';
 import { Button } from './ui/button';
 import { Modal } from './ui/dialog';
@@ -9,12 +10,12 @@ export function ManualCopy({ value, onClose }: { value: string; onClose: () => v
     input.current?.select();
   }
   return (
-    <Modal title="手动复制" onClose={onClose}>
+    <Modal title={tr('手动复制', 'Copy manually')} onClose={onClose}>
       <div className="form-stack">
         <textarea
           ref={input}
           className="manual-copy-text"
-          aria-label="待复制内容"
+          aria-label={tr('待复制内容', 'Content to copy')}
           value={value}
           readOnly
           autoFocus
@@ -22,13 +23,13 @@ export function ManualCopy({ value, onClose }: { value: string; onClose: () => v
           rows={6}
           onFocus={(event) => event.currentTarget.select()}
         />
-        <p>长按文本复制</p>
+        <p>{tr('长按文本复制', 'Press and hold the text to copy')}</p>
         <div className="dialog-footer">
           <Button type="button" variant="outline" onClick={selectAll}>
-            全选
+            {tr('全选', 'Select all')}
           </Button>
           <Button type="button" onClick={onClose}>
-            关闭
+            {tr('关闭', 'Close')}
           </Button>
         </div>
       </div>

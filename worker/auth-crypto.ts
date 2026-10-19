@@ -69,9 +69,9 @@ export async function rateLimit(env: Env, scope: string, ip: string, max: number
   const bucket = Math.floor(Date.now() / (seconds * 1000));
   const key = `${scope}:${await digest(ip)}:${bucket}`;
   const row = await env.DB.prepare(
-    'INSERT INTO rate_limits(key,count,reset_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count',
+    'INSERT INTO rate_limits(key,count,reset_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 WHERE rate_limits.count<? RETURNING count',
   )
-    .bind(key, (bucket + 1) * seconds * 1000)
+    .bind(key, (bucket + 1) * seconds * 1000, max)
     .first<{ count: number }>();
   if (!row || row.count > max) fail(429, '请求过于频繁，请稍后重试');
 }

@@ -1,3 +1,4 @@
+import { tr } from './i18n';
 export interface PublicLinkOption {
   origin: string;
   host: string;
@@ -43,11 +44,21 @@ export function publicLinkOptions(
   const options: PublicLinkOption[] = [];
   if (global) {
     const host = new URL(global).host;
-    options.push({ origin: global, host, label: '全球 CDN · ' + host, kind: 'global' });
+    options.push({
+      origin: global,
+      host,
+      label: tr('全球 CDN · ', 'Global CDN · ') + host,
+      kind: 'global',
+    });
   }
   if (hongKong && hongKong !== global) {
     const host = new URL(hongKong).host;
-    options.push({ origin: hongKong, host, label: '香港反代 · ' + host, kind: 'hong-kong' });
+    options.push({
+      origin: hongKong,
+      host,
+      label: tr('香港反代 · ', 'Hong Kong proxy · ') + host,
+      kind: 'hong-kong',
+    });
   }
   return options;
 }

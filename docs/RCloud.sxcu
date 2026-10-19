@@ -3,7 +3,7 @@
   "Name": "RCloud 图床",
   "DestinationType": "ImageUploader",
   "RequestMethod": "POST",
-  "RequestURL": "https://s.irin.im/api/v1/images",
+  "RequestURL": "https://files.example.com/api/v1/images",
   "Headers": { "Authorization": "Bearer REPLACE_WITH_IMAGE_UPLOAD_TOKEN" },
   "Body": "MultipartFormData",
   "FileFormName": "file",

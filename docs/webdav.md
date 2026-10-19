@@ -9,8 +9,8 @@ WebDAV 与网页使用同一份文件和目录。通过客户端上传、移动�
 | 配置          | 值                        |
 | ------------- | ------------------------- |
 | 协议          | WebDAV，启用 HTTPS        |
-| 全球 CDN 地址 | `https://233334.xyz/dav/` |
-| 香港反代地址  | `https://s.irin.im/dav/`  |
+| 全球 CDN 地址 | `https://cloud.example.com/dav/` |
+| 香港反代地址  | `https://files.example.com/dav/`  |
 | 用户名        | `rcloud`                  |
 | 密码          | 设置中生成的 `rcd_…` 密码 |
 
@@ -80,7 +80,7 @@ WebDAV 与网页使用同一份文件和目录。通过客户端上传、移动�
 可用下列命令验证目录查询；`curl` 会提示输入独立密码：
 
 ```sh
-curl --user rcloud -X PROPFIND -H 'Depth: 1' https://233334.xyz/dav/
+curl --user rcloud -X PROPFIND -H 'Depth: 1' https://cloud.example.com/dav/
 ```
 
 常见状态：`401` 凭据无效、到期或撤销；`403` 操作不允许；`409` 路径/名称冲突或父目录不存在；`412` 条件不满足；`413` 请求过大；`423` 被锁定；`507` 存储或递归操作限制。以响应中的具体说明为准。

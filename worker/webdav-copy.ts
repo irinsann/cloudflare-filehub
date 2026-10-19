@@ -82,10 +82,10 @@ export async function prepareCopy(
     const reserved = await c.env.DB.batch([
       c.env.DB.prepare(
         `WITH capacity AS MATERIALIZED (
-        SELECT COALESCE(SUM(size),0) AS used FROM storage_allocations
+        SELECT used_bytes AS used FROM storage_quota_state WHERE id=1 AND ready=1
       ) INSERT INTO storage_allocations(object_key,size)
         SELECT json_extract(value,'$.key'),json_extract(value,'$.size') FROM json_each(?),capacity
-        WHERE used+?<=?`,
+        WHERE used+?<=? RETURNING object_key`,
       ).bind(reservations, total, STORAGE_LIMIT),
       c.env.DB.prepare(
         `INSERT INTO cleanup_tasks(object_key,created_at)
@@ -93,7 +93,8 @@ export async function prepareCopy(
         WHERE object_key IN (SELECT json_extract(value,'$.key') FROM json_each(?))`,
       ).bind(timestamp, reservations),
     ]);
-    if (reserved[0].meta.changes !== files.length) fail(507, '存储容量不足（总容量50GB）');
+    // D1 meta.changes also includes the quota trigger; count only inserted reservations.
+    if (reserved[0].results.length !== files.length) fail(507, '存储容量不足（总容量50GB）');
     // On failure, the durable queue and allocations remain until cleanup confirms R2 deletion.
     for (const file of files) {
       let source: R2ObjectBody | null;

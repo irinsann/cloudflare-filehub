@@ -1,59 +1,86 @@
 # RCloud Cloudflare 部署
 
-站点统一使用 https://233334.xyz。首页自动进入 /drive/ 私人网盘，公开文章 /p/:slug、文件分享 /s/:token、文件直链 /d/:token。Worker 只绑定 233334.xyz；图床、分享和直链默认使用已有 VPS 反代域名 https://s.irin.im。
+示例源站为 `https://cloud.example.com`，可选反代为 `https://files.example.com`。请替换为自己控制的域名。首页进入 `/drive/`；文章、文件分享、图片和目录网站分别位于 `/p/`、`/s/`、`/i/` 和 `/site/`。
 
-## 准备资源
+## 配置与资源
 
-安装依赖并登录 Wrangler。创建专用私有 R2 Bucket 和 D1 数据库，保持 r2.dev 关闭。复制根目录 wrangler.jsonc 到被 Git 忽略的 wrangler.production.jsonc，删除 env 段，填入真实账号 ID、D1 ID 和 Bucket 名。不要提交真实密钥。
+1. 安装依赖并登录 Wrangler，创建私有 R2 Bucket 和 D1 数据库，保持 R2 的公开访问关闭。
+2. 复制根目录 `wrangler.jsonc` 为被 Git 忽略的 `wrangler.production.jsonc`，删除 `env` 段，填入真实资源 ID、名称和 Custom Domain。
+3. 对照 [配置模板](wrangler.production.example.jsonc) 设置变量。模板位于 docs，路径带 `../`；复制到项目根目录时改为 `worker/index.ts`、`./dist` 和 `db/migrations`。
+4. 保留 `nodejs_compat`、私有 BUCKET/DB 绑定、静态资源绑定和 Cron。生产必须使用 `ENVIRONMENT=production`、`LOCAL_AUTH=false`。
 
-使用 docs/wrangler.production.example.jsonc 的单域名 routes 和变量模板。ADMIN_ORIGIN、MARKDOWN_ORIGIN 为 https://233334.xyz；FILES_ORIGIN 为 https://s.irin.im，TRUSTED_PROXY_ORIGINS 包含 https://s.irin.im，ENVIRONMENT=production，LOCAL_AUTH=false。全站存储配额固定为 50GB，无单文件大小上限。上传分片为 16MiB，每片通过鉴权 Worker 流式写入 R2，不需要公开 Bucket 或浏览器持有存储密钥。
+| 变量                  | 示例或用途                                           |
+| --------------------- | ---------------------------------------------------- |
+| ADMIN_ORIGIN          | `https://cloud.example.com`                          |
+| MARKDOWN_ORIGIN       | `https://cloud.example.com`                          |
+| FILES_ORIGIN          | 单域名使用源站；反代可设 `https://files.example.com` |
+| TRUSTED_PROXY_ORIGINS | 可选精确 HTTPS Origin 列表，不含路径或尾随斜线       |
+| ADMIN_EMAILS          | `owner@example.com`                                  |
+| AUTH_MODE             | `password_totp` 或 `access`                          |
+| MAX_TEXT_BYTES        | `1048576`，在线文本上限                              |
 
-## Access 路径策略
-
-1. 创建 Self-hosted 管理应用，目标 233334.xyz 的 drive/_ 与 api/admin/_ 两个路径，Allow 仅管理员邮箱，登录方式为 One-time PIN。
-2. 文章、分享、直链及公开 API 路径不添加 Access 应用。前端资源统一位于 /drive/assets/，随私人后台一起保护。
-3. 后台与管理 API 由路径应用保护。Worker 另行验证管理员 JWT 与邮箱白名单。公开文章必须已发布，文件必须由管理员主动创建有效链接；回收站、过期和撤销立即阻断访问。
-4. 将管理应用 AUD、团队域名和管理员邮箱填入本地生产配置。验证路径匹配后再上线。
-
-## 发布
-
-在根目录执行：
-
-```sh
-pnpm db:production
-pnpm exec wrangler secret put SHARE_SESSION_SECRET --config wrangler.production.jsonc
-pnpm check
-pnpm run deploy:production
-```
-
-分享密钥使用随机 32 字节字符串，创建分享、读取可复制链接和密码解锁都需要它。它同时签名可重复获取的分享地址和解锁会话；升级时保留现有密钥，轮换会使已复制的签名地址失效。此次分享列表升级不需要数据库迁移。Custom Domain 自动配置 DNS 和 HTTPS 证书；先核对目标 DNS 无需保留的冲突服务。已有部署迁移域名时，从 Worker Domains 中移除旧绑定并确认旧域名不再提供服务。
-
-## 验证
-
-首页会跳转 /drive/；/drive/ 和 /api/admin/files 未登录应进入 Access 登录；登录后检查上传与列表。匿名 /p/:slug、/s/:token、/d/:token 和 /api/public/\* 无需管理员登录，但仍受发布、令牌、有效期和密码约束。未创建内容时公开路径返回 404。测试直链 Range/HEAD，撤销链接后不可下载。清空回收站必须由用户在界面确认，正常文件不受影响。
-
-全站存储上限 50GB，无单文件上限；分片失败自动重试，24 小时未完成任务自动清理。文本在线编辑上限仍为 1MiB。发布后可在 Cloudflare 查看用量，实际消耗取决于文件与访问量。
+应用总容量为 50 GiB。网页通过 16 MiB 分片写入私有 R2，不需要公开 Bucket 或把存储凭据交给浏览器。
 
 ## 站内密码与验证器登录
 
-设置 AUTH_MODE=password_totp 后，/login 提供站内登录与首次绑定，认证接口位于 /api/auth/\*。准备独立 AUTH_ENCRYPTION_KEY 随机密钥作为 Worker Secret，用于 AES-GCM 加密验证器密钥。不要旋转此密钥，否则已有验证器将无法解密。AUTH_SETUP_SECRET 是独立随机一次性邀请令牌；AUTH_SETUP_EXPIRES 是邀请有效期的毫秒时间戳。首次设置链接格式为 /login#setup=令牌，页面读入后立即移除 URL 片段。令牌不提交公开仓库，不对外分享。
+设置 `AUTH_MODE=password_totp`。准备独立随机 Worker Secret：
 
-用户亲自设置至少 12 字符密码，并扫描站内二维码输入验证码完成绑定，保存显示一次的 8 个恢复码。密码用独立随机盐 PBKDF2 保存；TOTP 为 SHA1 / 6 位 / 30 秒，接受前后一个窗口且原子拒绝已用验证码。恢复码只存哈希并只能使用一次，仍须提供密码。登录 Cookie 为 Secure、HttpOnly、SameSite=Strict 的随机会话，服务端存哈希，24 小时过期，退出立即撤销。
+- `SHARE_SESSION_SECRET`：至少 32 字符，签名分享地址与解锁会话。
+- `AUTH_ENCRYPTION_KEY`：用于加密 TOTP 密钥。
+- `AUTH_SETUP_SECRET`：一次性初始化邀请令牌；同时设置有效期毫秒时间戳 `AUTH_SETUP_EXPIRES`。
 
-迁移时先部署并完成账户绑定，再移除 RCloud Access 应用；不要在账户未建立时移除现有保护。绑定成功后 /setup/start 会永久拒绝初始化，随后删除 AUTH_SETUP_SECRET。密码或验证器凭据更新必须由用户本人操作；遗失密码时由 Cloudflare 账户所有者进行受控离线重置，平台无公开绕过或重置接口。
+通过 `wrangler secret put` 交互输入，不提交到 Git。首次链接为 `https://cloud.example.com/login#setup=令牌`；页面读取后移除片段。用户设置至少 12 字符密码、扫描验证器二维码、输入验证码，并保存仅显示一次的恢复码。绑定后删除初始化 Secret。
 
-## Google Drive 与 HTML 文件夹升级
+TOTP 为 SHA1 / 6 位 / 30 秒，拒绝重复使用验证码。恢复码单次有效且仍须提供密码。登录会话有效 24 小时，Cookie 为 Secure、HttpOnly、SameSite=Strict，退出立即撤销。语言偏好 Cookie 与认证无关。
 
-先运行 `pnpm db:production` 应用 `0011_google_drive.sql` 和 `0012_site_shares.sql`，再部署新代码。迁移新增独立表和目录删除时撤销网站分享的触发器，不搬移或重命名现有 R2 文件。
+从 Access 切换时先完成账户绑定，再移除原 Access 应用，不能在账户建立前撤掉现有保护。保留 `AUTH_ENCRYPTION_KEY`；盲目轮换会令已有验证器密钥无法解密。遗失密码需由部署者受控恢复，平台没有公开绕过入口。
 
-HTML 网站使用现有 R2、D1 和 `SHARE_SESSION_SECRET`。将 `/site/*` 留给应用验证分享权限，反代不要缓存该路径，也不要覆盖 CORS、CSP 或重定向响应。
+## Cloudflare Access 登录
 
-Google Drive 是可选连接，缺少配置时页面显示未配置，R2 功能仍可使用。它还需要 `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET` 和已有的 `AUTH_ENCRYPTION_KEY`，配置及两个域名回调见 [Google Drive 接入](google-drive.md)。`/api/oauth/google/callback` 必须能直接到达 Worker，不能放进 Cloudflare Access 保护范围；它通过一次性 state 和浏览器 nonce 验证授权，不能自行调用以绕过登录。
+选择 `AUTH_MODE=access`，创建 Self-hosted 应用保护 `cloud.example.com/drive/*` 与 `cloud.example.com/api/admin/*`，Allow 仅允许管理员邮箱，例如 `owner@example.com`。填入 `ACCESS_TEAM_DOMAIN`、应用 `ACCESS_AUD` 和 `ADMIN_EMAILS`。
 
-## VPS 反代要求
+公开文章、图片、文件分享、`/site/*`、上传 API `/api/v1/*` 和 `/dav/*` 必须能到达 Worker，由各自的分享权限、Token 或 WebDAV 凭据验证。不要用整个域名的 Access 登录截住公开资源。Worker 仍独立验证管理员 JWT 签名、issuer、audience、有效期和邮箱。
 
-WebDAV 升级需要先应用 `0010_webdav.sql`（`pnpm db:production`），再部署代码。它复用现有 D1/R2，不需要新的 Secret 或付费服务。登录设置后创建专用凭据，连接 `https://233334.xyz/dav/` 或 `https://s.irin.im/dav/`。Access 如仍保护整个域名，需要让 `/dav/*` 通过，由应用自行验证专用凭据。反代须透传 WebDAV 方法及条件/锁定请求头，并禁止缓存 `/dav/*`；详见 [RaiDrive 连接与协议说明](webdav.md)。
+## 迁移与发布
 
-上传 API 使用独立 Bearer Token。升级时先应用 `0007_api_tokens.sql` 和 `0008_image_api_scope.sql`，在 Worker 配置中保留 `"compatibility_flags": ["nodejs_compat"]`，再部署 Worker，登录「设置 → 上传 API」手动创建 Token。无需配置全局上传密钥。反代须转发 Authorization、Content-Type 和 X-File-Size，并禁止缓存 `/api/*`。详情和脚本见 [API 文档](api.md)；图床上传与可导入配置见 [ShareX 文档](sharex.md)，反代表单请求需保留正确的 Content-Length。
+已有站点先备份 D1，应用所有待执行迁移后再部署新 Worker：
 
-反代使用其他域名时，将外部 HTTPS Origin 加入 TRUSTED_PROXY_ORIGINS，例如 https://s.irin.im（无尾随斜线）。反代上游仍为 233334.xyz，保留浏览器 Origin、Cookie 与 Set-Cookie，不改写 Origin，不缓存登录和管理接口。应用只接受配置的精确可信 Origin，保留写接口的自定义头（包括 X-Drive-Request、X-Google-Connection）与会话验证，不信任任意 X-Forwarded-Host。
+```sh
+pnpm check
+pnpm db:production
+# 首次部署设置 Secret；升级时保留已有值
+pnpm exec wrangler secret put SHARE_SESSION_SECRET --config wrangler.production.jsonc
+pnpm run deploy:production
+```
+
+站内认证还需按上节设置相应 Secrets。不要在每次更新时重建分享密钥；轮换 `SHARE_SESSION_SECRET` 会使已复制的签名地址和解锁会话失效。
+
+本版迁移：
+
+- `0012_site_shares.sql`：目录网站与删除时撤销网站分享的触发器。
+- `0013_remove_google_drive.sql`：移除旧 Google 连接、授权、上传元数据；不请求 Google 删除远端文件。
+- `0014_html_hosting.sql`：HTML 上传分享映射与版本触发器，不搬移或改名现有文件，不修改旧分享。
+- `0015_resource_accounting.sql`：回填容量计数，添加事务触发器与引用索引，必须先于新代码部署。
+
+新部署也按顺序执行全部迁移。不要跳过历史迁移或编辑已应用的 SQL。Google Drive 已退出当前功能集；备份并确认不再使用后，可从 Worker 设置移除旧 OAuth Secrets。HTML hosting 和容量优化不新增 Secrets 或 Cloudflare 产品。
+
+## 反代、上传 API 与 WebDAV
+
+反代上游使用源站域名，外部浏览器地址必须列在 `TRUSTED_PROXY_ORIGINS`。保留浏览器 Origin，不将其重写为上游；透传 Cookie、Set-Cookie、Authorization、Content-Type、X-File-Size 和 X-Drive-Request。应用不信任任意 X-Forwarded-Host。
+
+禁止缓存登录、`/api/*`、`/dav/*`、图片与文件分享、`/site/*` 等受控内容。保留 CSP、CORS、Range、Content-Disposition 和重定向头；目录网站 CSP 同时覆盖配置的源站和可信反代下的同一分享路径。
+
+`/drive/assets/`下带构建哈希的JavaScript、CSS及字体属于公开程序资源，使用长期immutable缓存，减少重复下载与会话查询。管理HTML外壳仍要求认证并使用`private, no-store`；不要将静态资源的缓存规则扩展到文件或分享接口。
+
+上传 API 使用独立 Token，图床 Token 可导出 ShareX 配置，表单请求需保留正确 Content-Length。WebDAV 使用独立用户名/密码，透传其方法及条件/锁头，连接 `https://cloud.example.com/dav/` 或反代下的 `/dav/`。详见 [API](api.md)、[ShareX](sharex.md) 和 [WebDAV](webdav.md)。
+
+## 上线检查
+
+- 未登录后台/API 被拒绝；站内模式在当前域名登录，Access 模式按 Access 流程登录。
+- 上传、下载、删除与恢复正常；撤销后链接拒绝后续请求。
+- HTML 上传保存到 `/Html-hosting`，重复发布返回同一链接，撤销后旧重试不重新公开。
+- 目录网站的 CSS、模块、JSON 和子页面在各配置域名下正确加载。
+- 分别检查语言切换、手机/桌面布局、Range/HEAD、图床 API 和目标 WebDAV 客户端。
+- 查看 Cloudflare 实际用量。50 GiB 是应用上限，不是免费额度；套餐与反代也可能限制单请求大小或超时。
+
+自动化和人工验收边界见 [验证指南](verification.md)。本地测试或 dry-run 不代表生产已经部署。

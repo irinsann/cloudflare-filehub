@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "irin-drive",
+  "name": "cloudflare-filehub",
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -10,11 +10,11 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": true,
   },
-  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "irin-drive-private" }],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "filehub-storage" }],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "irin-drive",
+      "database_name": "cloudflare-filehub",
       "database_id": "REPLACE_WITH_D1_DATABASE_ID",
       "migrations_dir": "db/migrations",
     },
@@ -44,11 +44,11 @@
         "ACCESS_AUD": "",
         "ADMIN_EMAILS": "",
       },
-      "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "irin-drive-private" }],
+      "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "filehub-storage" }],
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "irin-drive",
+          "database_name": "cloudflare-filehub",
           "database_id": "local-only",
           "migrations_dir": "db/migrations",
         },

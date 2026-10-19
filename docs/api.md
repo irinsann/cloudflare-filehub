@@ -1,6 +1,6 @@
 # RCloud API
 
-上传 API 使用 `/api/v1`，供命令行、备份脚本和自动化工具调用。当前地址为 `https://s.irin.im`，也可直接使用 `https://233334.xyz`；自部署请替换为自己的 HTTPS 站点。
+上传 API 使用 `/api/v1`，供命令行、备份脚本和自动化工具调用。示例使用 `https://cloud.example.com` 或可选反代 `https://files.example.com`；部署时请替换为自己的 HTTPS 站点。
 
 - [上传快速开始](#上传快速开始)
 - [图片上传与 ShareX](sharex.md)（MD5 命名、公开直链）
@@ -47,7 +47,7 @@ Bash（隐藏输入，不把 Token 字面值写入命令历史）：
 ```bash
 read -rsp 'RCloud Token: ' RCLOUD_TOKEN; echo
 export RCLOUD_TOKEN
-python3 scripts/upload.py ./backup.zip --url https://s.irin.im
+python3 scripts/upload.py ./backup.zip --url https://files.example.com
 unset RCLOUD_TOKEN
 ```
 
@@ -55,7 +55,7 @@ PowerShell 7：
 
 ```powershell
 $env:RCLOUD_TOKEN = Read-Host 'RCloud Token' -MaskInput
-python scripts/upload.py 'C:\Backups\backup.zip' --url https://s.irin.im
+python scripts/upload.py 'C:\Backups\backup.zip' --url https://files.example.com
 Remove-Item Env:RCLOUD_TOKEN
 ```
 
@@ -79,7 +79,7 @@ FILE='./示例文件.txt'
 SIZE=$(wc -c < "$FILE" | tr -d '[:space:]')
 NAME=$(python3 -c 'import os,sys,urllib.parse; print(urllib.parse.quote(os.path.basename(sys.argv[1]), safe=""))' "$FILE")
 curl --fail-with-body --request POST \
-  "https://s.irin.im/api/v1/files?name=$NAME" \
+  "https://files.example.com/api/v1/files?name=$NAME" \
   --header "Authorization: Bearer $RCLOUD_TOKEN" \
   --header 'Content-Type: application/octet-stream' \
   --header "X-File-Size: $SIZE" \
@@ -115,7 +115,7 @@ curl --fail-with-body --request POST \
 `POST /api/v1/uploads`
 
 ```bash
-curl --fail-with-body 'https://s.irin.im/api/v1/uploads' \
+curl --fail-with-body 'https://files.example.com/api/v1/uploads' \
   -H "Authorization: Bearer $RCLOUD_TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{"name":"backup.zip","size":20000000,"folder_id":null}'
@@ -143,7 +143,7 @@ id 是任务 ID，fileId 是最终文件 ID，二者不同。初始化预留完�
 
 ```bash
 curl --fail-with-body --request PUT \
-  "https://s.irin.im/api/v1/uploads/$UPLOAD_ID/parts/1" \
+  "https://files.example.com/api/v1/uploads/$UPLOAD_ID/parts/1" \
   -H "Authorization: Bearer $RCLOUD_TOKEN" \
   -H 'Content-Type: application/octet-stream' \
   -H 'X-File-Size: 16777216' --data-binary @part-001.bin
@@ -176,7 +176,7 @@ curl --fail-with-body --request PUT \
 
 ```bash
 curl --fail-with-body --request POST \
-  "https://s.irin.im/api/v1/uploads/$UPLOAD_ID/complete" \
+  "https://files.example.com/api/v1/uploads/$UPLOAD_ID/complete" \
   -H "Authorization: Bearer $RCLOUD_TOKEN"
 ```
 
@@ -260,7 +260,7 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 | GET/HEAD | /api/public/share/{token}/preview  | 可预览格式                                                                                            |
 | GET/HEAD | /api/public/share/{token}/download | 受控下载                                                                                              |
 
-创建分享和管理列表返回同一条分享的稳定 `url`、`directUrl`，可以再次复制；读取列表不会新建分享或重置统计。默认链接来源为 s.irin.im。这些 URL 本身授予分享访问权，管理列表仅向管理员提供，并禁止缓存。密码 Cookie 每个分享独立，最长一小时。无效链接 404，撤销/到期 410，未解锁 API 返回 401，禁止下载返回 403；分享页面可返回不含文件信息的解锁界面。
+创建分享和管理列表返回同一条分享的稳定 `url`、`directUrl`，可以再次复制；读取列表不会新建分享或重置统计。默认链接来源为 files.example.com。这些 URL 本身授予分享访问权，管理列表仅向管理员提供，并禁止缓存。密码 Cookie 每个分享独立，最长一小时。无效链接 404，撤销/到期 410，未解锁 API 返回 401，禁止下载返回 403；分享页面可返回不含文件信息的解锁界面。
 
 管理列表响应为 `{data:[…],page,limit,total}`，每页最多 100 条，按创建时间倒序、ID 次序稳定分页。网页每页显示 40 条，可翻页管理和复制更早的分享。
 
@@ -278,6 +278,27 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 
 完整授权的 200 GET `/s/{token}` 记一次浏览；HEAD、Range、失败或未解锁请求不计浏览，`/preview` 不计浏览。元数据 GET 保留原有浏览计数行为。显示 HTML 不增加下载计数；需要下载时使用创建分享返回的 `directUrl`（`/d/{token}`）或 `/api/public/share/{token}/download`，两者按下载权限返回原始附件，HEAD 和 Range 不增加下载计数。
 
+### HTML 上传与自动分享
+
+这组接口仅供已登录管理员使用，不属于 `/api/v1` 上传 Token 权限。写入要求可信 Origin 和 `X-Drive-Request: 1`。
+
+| 方法   | 路径                                     | 请求与响应                                                  |
+| ------ | ---------------------------------------- | ----------------------------------------------------------- |
+| POST   | /api/admin/html-hosting/folder           | 确保根目录 Html-hosting，返回 `{data:{id}}`                 |
+| POST   | /api/admin/html-hosting                  | `{file_id}`，注册已上传 HTML，返回 `{data:HtmlHostingItem}` |
+| GET    | /api/admin/html-hosting?page=1&limit=40  | `{data:[HtmlHostingItem],total,page,limit}`，最多每页100条  |
+| GET    | /api/admin/html-hosting/{fileId}         | 取得已有 hosting 记录与稳定链接                             |
+| DELETE | /api/admin/html-hosting/{fileId}         | `{version}`，撤销专用分享，返回更新记录                     |
+| POST   | /api/admin/html-hosting/{fileId}/restore | `{version}`，明确恢复分享，返回更新记录                     |
+
+`HtmlHostingItem` 包含 `file_id,share_id,name,size,enabled,version,created_at,expires_at,password_protected,views,downloads,last_access_at,url,directUrl`，不返回对象 Key 或令牌/密码摘要。列表包含撤销记录，排除回收站和未完成文件。
+
+流程：确保目录 → 使用原有管理员分片接口上传 HTML/HTM 到该目录 → 按 file_id 注册。创建返回 201，重复注册返回 200 与同一分享；不会修改现有普通分享。发布失败时保留成功上传的 file_id，只重试注册，不能重传整个文件。分片和50 GiB容量限制与文件上传一致，没有额外 HTML 文件大小上限。
+
+原注册 POST 不会恢复已撤销分享。恢复必须使用当前 version；发生状态竞争返回409，刷新记录后再由用户操作。相同动作的顺序重试可返回当前结果，过旧动作不能覆盖后续撤销。普通分享管理改变密码、有效期或下载权限也会增加 version；hosting 恢复保留这些设置，已过期记录需在普通分享中先修改有效期。
+
+`url` 复用单文件 `/s/{token}` 原字节直出，`directUrl` 是按原权限下载的附件地址；本接口不放宽 HTML 沙箱。依赖相对 CSS、JS、图片的站点应使用文件夹网站分享。文件删除会撤销分享，恢复文件后仍需明确恢复分享；永久删除级联移除记录。
+
 ### 图床
 
 | Method   | 路径                               | 参数/行为                                                                 |
@@ -292,7 +313,7 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 | GET/HEAD | /i/{name}                          | 公开内联图片，支持 Range                                                  |
 | GET/HEAD | /i/{name}?download=1               | 公开附件下载，仍检查直链有效性，支持 Range                                |
 
-获取目录 → 管理员分片上传至目录 → 调用 /images 公开。支持 PNG/JPEG/GIF/WebP，通过文件头识别，另用 SHA-256 检查 MD5 命名冲突。保存到 Image-hosting，名称为 32位md5.ext，链接默认 s.irin.im。重复图片可能复用已有文件，应使用返回的 file_id；单独调用 POST /images 不会自动删除重复源文件，网页共用上传流程会继续清理重复源。
+获取目录 → 管理员分片上传至目录 → 调用 /images 公开。支持 PNG/JPEG/GIF/WebP，通过文件头识别，另用 SHA-256 检查 MD5 命名冲突。保存到 Image-hosting，名称为 32位md5.ext，链接默认 files.example.com。重复图片可能复用已有文件，应使用返回的 file_id；单独调用 POST /images 不会自动删除重复源文件，网页共用上传流程会继续清理重复源。
 
 网页图床与 Markdown 编辑器的新图片上传共用上述管理员流程；编辑器支持选取、拖入和粘贴，将返回的 `url` 插入正文。该流程使用网页管理员会话，不要求用户提供上传 Token，也不调用旧文档附件接口。图床图片上传成功后独立公开，与文章的草稿、发布状态和生命周期无关。
 
@@ -328,7 +349,7 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 
 文档列表响应 `{data:[…],page,limit,total}`，每页最多 100 条；`published=1` 在分页前过滤，新增私人草稿不会挤走已发布文章。网页已发布管理每页显示 40 条。
 
-编辑器新图片使用 `![图片](https://s.irin.im/i/MD5.ext)`，实际 URL 取图床接口返回值；自部署使用配置的图床域名。旧私有附件格式 `![图片](attachment:UUID)` 继续兼容，仅发布快照实际引用且属于该文档的附件可以公开。HTTPS 图片（包括图床）由浏览器直接请求，取消发布或删除 Markdown 文件不会撤销这些图片；需要在图床中单独撤销直链或删除图片。
+编辑器新图片使用 `![图片](https://files.example.com/i/MD5.ext)`，实际 URL 取图床接口返回值；自部署使用配置的图床域名。旧私有附件格式 `![图片](attachment:UUID)` 继续兼容，仅发布快照实际引用且属于该文档的附件可以公开。HTTPS 图片（包括图床）由浏览器直接请求，取消发布或删除 Markdown 文件不会撤销这些图片；需要在图床中单独撤销直链或删除图片。
 
 Slug 1–100 字符，仅小写字母、数字和连字符，不能是系统保留名。Markdown/在线文本上限 1MiB。单篇发布最多 20 张旧格式受控附件，图床 HTTPS 直链不计入该数量。
 
@@ -336,9 +357,7 @@ Slug 1–100 字符，仅小写字母、数字和连字符，不能是系统保�
 
 站内模式在 /login 使用密码＋验证器验证码登录；POST /api/auth/login 请求 {password,code}，设置 24 小时 HttpOnly 会话，code 也可使用一次性恢复码。POST /api/auth/logout 撤销会话。首次绑定使用 /api/auth/setup/start 与 /api/auth/setup/finish，详见 [部署文档](deployment.md)。脚本请使用 Token，避免保存账号密码和 TOTP 密钥。
 
-## Google Drive 与 HTML 网站
-
-Google Drive 使用独立的管理员 API 和远端存储，与现有 `/api/v1` 上传 Token 权限分开。Google 的 OAuth 访问凭据不向浏览器返回；配置及接口见 [Google Drive](google-drive.md)。
+## HTML 文件夹网站
 
 HTML 文件夹网站使用 `/api/admin/site-shares` 管理、`/site/{token}/` 公开访问，支持相对资源和密码访问；完整请求格式与兼容边界见 [HTML 文件夹分享](html-sites.md)。
 
@@ -365,4 +384,4 @@ HTML 文件夹网站使用 `/api/admin/site-shares` 管理、`/site/{token}/` �
 - 任务 24 小时后失效，定时任务分批清理，容量到实际删除对象才释放。撤销 Token 不等于取消任务。
 - 上传不覆盖同名文件。直接上传和初始化不是幂等操作，不应自动重试整个 POST；分片 PUT 可重试。
 - 文件类型判断不代表病毒扫描或完整解码；图床 Token 上传会直接公开图片；普通文件上传仍为私有。
-- 部署前先应用所有待执行迁移，包括 0007_api_tokens.sql、0008_image_api_scope.sql 和 0009_image_stats.sql，再发布 Worker（启用 nodejs_compat）；无需新增 Cloudflare Secret。现有网页认证和上传继续可用。
+- 部署前先应用所有待执行迁移，包括 HTML hosting 的 0014_html_hosting.sql 和容量计数的 0015_resource_accounting.sql，再发布 Worker（启用 nodejs_compat）；无需新增 Cloudflare Secret。现有网页认证和上传继续可用。

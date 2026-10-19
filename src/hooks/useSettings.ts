@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import { useEffect, useState } from 'react';
 import type { Settings } from '../../shared/types';
 import { api } from '../lib/api';
@@ -16,7 +17,9 @@ export function useSettings(refresh: number, view: View) {
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : '读取设置失败');
+          setError(
+            cause instanceof Error ? cause.message : tr('读取设置失败', 'Could not load settings'),
+          );
         }
       });
     return () => controller.abort();

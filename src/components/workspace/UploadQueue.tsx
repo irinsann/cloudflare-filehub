@@ -1,3 +1,4 @@
+import { tr } from '../../lib/i18n';
 import { useState } from 'react';
 import { X, CheckCircle2, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -14,11 +15,16 @@ export function UploadQueue({ uploads }: { uploads: ReturnType<typeof useUploads
           onClick={() => setCollapsed(!collapsed)}
           aria-expanded={!collapsed}
         >
-          上传任务 · {uploads.items.filter((i) => i.state === 'success').length}/
-          {uploads.items.length}
+          {tr('上传任务 ·', 'Uploads ·')}
+          {uploads.items.filter((i) => i.state === 'success').length}/{uploads.items.length}
           {collapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
-        <Button variant="ghost" size="icon" onClick={uploads.clear} aria-label="清除已完成任务">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={uploads.clear}
+          aria-label={tr('清除已完成任务', 'Clear completed uploads')}
+        >
           <X size={16} />
         </Button>
       </header>
@@ -32,7 +38,7 @@ export function UploadQueue({ uploads }: { uploads: ReturnType<typeof useUploads
               ) : item.state === 'error' ? (
                 <Button variant="ghost" size="sm" onClick={() => uploads.retry(item)}>
                   <RefreshCw size={13} />
-                  重试
+                  {tr('重试', 'Retry')}
                 </Button>
               ) : (
                 <span>{item.progress}%</span>
@@ -42,10 +48,10 @@ export function UploadQueue({ uploads }: { uploads: ReturnType<typeof useUploads
             <small className={item.state === 'error' ? 'error-text' : 'muted'}>
               {item.error ??
                 (item.state === 'success'
-                  ? '已完成'
+                  ? tr('已完成', 'Complete')
                   : item.state === 'queued'
-                    ? '等待上传'
-                    : '正在上传')}{' '}
+                    ? tr('等待上传', 'Queued')
+                    : tr('正在上传', 'Uploading'))}{' '}
               · {sizeLabel(item.file.size)}
             </small>
           </div>

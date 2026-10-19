@@ -1,5 +1,5 @@
 import vm from 'node:vm';
-const r = await fetch(process.argv[2] || 'https://233334.xyz/login');
+const r = await fetch(process.argv[2] || 'https://cloud.example.com/login');
 if (!r.ok) throw Error('Login page status ' + r.status);
 const html = await r.text();
 const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)];

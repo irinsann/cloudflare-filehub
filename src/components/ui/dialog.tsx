@@ -1,3 +1,4 @@
+import { tr } from '../../lib/i18n';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { useId, useRef, type ReactNode } from 'react';
@@ -44,7 +45,10 @@ export function Modal({
                 <Dialog.Description id={descriptionId}>{description}</Dialog.Description>
               )}
             </div>
-            <Dialog.Close className="button button-ghost button-icon" aria-label="关闭">
+            <Dialog.Close
+              className="button button-ghost button-icon"
+              aria-label={tr('关闭', 'Close')}
+            >
               <X size={18} />
             </Dialog.Close>
           </header>

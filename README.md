@@ -1,135 +1,117 @@
-# Cloudflare Filehub · RCloud
+# RCloud · Cloudflare Filehub
 
-MIT 开源的 Serverless 个人云盘与 Markdown 发布平台。
+**中文** · [English](#english)
 
-运行在 Cloudflare Workers + 私有 R2 + D1 上的个人云盘和 Markdown 发布平台。React / TypeScript / Vite、原生 CSS 与 Radix 无障碍组件，Lucide 图标；Hono API；Drizzle Schema 与参数化 D1 查询；CodeMirror 6 编辑器；unified / remark GFM / rehype-sanitize 安全渲染。
+基于 Cloudflare Workers、私有 R2 和 D1 的个人云盘、图床与 Markdown 发布平台。支持 HTML 上传分享和文件夹静态网站，采用 MIT 协议。
 
-统一站点 `https://233334.xyz`：首页自动进入 `/drive/` 私人后台，`/p/:slug` 为公开文章，`/s/:token` 为分享页，`/d/:token` 为文件直链。Worker 只绑定 233334.xyz；图床、分享和直链默认生成 https://s.irin.im 链接，由已有 VPS 反代访问。
+## 功能
 
-## 本地开始
+- 文件管理：多级目录、搜索、排序、列表/网格、分片上传、预览、回收站、恢复和永久删除。
+- 图床：保存到 `/Image-hosting`，按内容 MD5 命名；直链、Markdown 链接、引用/下载统计，默认列表与全量画廊切换。
+- HTML 上传：拖入或选择 HTML/HTM，保存到 `/Html-hosting` 后自动生成稳定分享地址；可再次复制、撤销、恢复，上传和发布分别重试。
+- HTML 网站：发布含 `index.html` 的文件夹，直接加载相对 CSS、JavaScript 模块、JSON、字体、图片和子页面，没有 iframe。
+- Markdown：保存在 `/Markdown`；CodeMirror 编辑、预览、草稿恢复和版本冲突检测；编辑器图片自动上传图床；发布快照与私人草稿独立。
+- 公开链接：密码、有效期、撤销、下载权限和统计；可选择源站或已配置的反代域名。
+- 自动化：独立上传 API、ShareX 图床配置和 WebDAV 凭据。
+- 界面：中文/英文、明暗主题、桌面侧栏与手机导航、马卡龙配色与轻量卡片。
+- 认证：站内密码＋TOTP 验证器，或 Cloudflare Access 管理员白名单。
 
-需要 Node.js 22.12+（本次验证使用 24）、pnpm 11；Windows、macOS、Linux 均可。首次安装会下载 workerd / esbuild 平台运行时，受限网络需要允许访问 npm。
+R2 是唯一文件存储后端；当前版本不包含 Google Drive 挂载。
+
+## 本地运行
+
+需要 Node.js 22.12+ 和 pnpm 11。以下命令只操作本地开发环境：
 
 ```sh
 pnpm install --frozen-lockfile
+cp .dev.vars.example .dev.vars.local
+# PowerShell: Copy-Item .dev.vars.example .dev.vars.local
+# 将示例密钥替换为独立随机值
 pnpm db:local
-# 为本地密码分享创建密钥配置（PowerShell 复制命令如下）
-# Copy-Item .dev.vars.example .dev.vars.local
-# 将示例值替换为自己生成的 32 字节随机字符串
 pnpm dev
 ```
 
-打开 `http://127.0.0.1:8787`。`pnpm dev` 先构建前端，再启动本地 Worker，本地 D1/R2 数据保存在 `.wrangler/state`。`--env local` 显式启用仅限 loopback 主机的认证模拟；顶层生产配置默认关闭。**本地配置绝不可用于生产部署。** 不配置分享密钥仍可管理文件和发布文章，但创建分享、读取可复制分享链接和密码解锁会返回配置错误。
+打开 `http://127.0.0.1:8787`。本地数据保存在 `.wrangler/state`。开发认证模拟仅在显式 local 环境与 loopback 地址同时满足时启用，不能用于生产。创建/读取分享链接需要配置 `SHARE_SESSION_SECRET`。
 
-前端热更新：保留 Worker，另一个终端运行 `pnpm dev:ui`，打开 `http://127.0.0.1:5173`。Vite 转发 API 到 8787；为严格来源校验，代理会把 Origin 改为 Worker 地址，仅用于本地开发。
+前端热更新可另开终端运行 `pnpm dev:ui`，API 由开发服务器转发给本地 Worker。
 
-## 已实现
+## 部署与文档
 
-- R2 继续作为主网盘；Google Drive 以独立页面提供文件管理，文件留在 Google，单独计量容量。需配置自己的 Google OAuth 客户端并完成授权，见 [Google Drive 接入](docs/google-drive.md)。
-- HTML 文件夹分享以 `index.html` 为入口，直接加载目录内相对 CSS/JS、模块、JSON、图片和子页面；支持密码、有效期、重复复制和撤销，见 [HTML 网站说明与兼容范围](docs/html-sites.md)。
+部署一个 Worker、一个私有 R2 Bucket 和一个 D1 数据库。使用自己的域名，例如 `https://cloud.example.com`，可选反代地址 `https://files.example.com`。真实账号、资源 ID 和密钥保存在被忽略的本地生产配置及 Cloudflare Secrets 中。
 
-- 多级目录、目录重命名/移动、循环检测、空目录删除/恢复/永久删除。
-- 选取与拖放上传、批量队列、进度与失败重试、大小预检；服务端有大小约束的流式 R2 写入与实际对象大小校验。
-- 文件分页、排序、名称搜索、最近文件、列表/网格、类型图标、图片缩略图、右键操作、多选批量删除。
-- 文件重命名/移动/下载、软删除、回收站恢复、永久删除与全部清空；删除自动撤销公开访问，恢复不会自动重新开放。
-- 图片、PDF、纯文本/JSON/代码、Markdown、音视频预览；音视频/下载支持单个字节区间与 206 / 416 / HEAD。
-- 文件分享支持有效期、可选密码、预览与下载权限、访问与下载统计、管理列表和撤销；可在分享列表重复复制签名链接及 `/d/:token` 文件直链，兼容旧版随机令牌地址。D1 仅保存令牌摘要。
-- HTML/HTM 分享地址直接展示原网页，不添加站点外壳或 iframe，保留单文件内联样式、脚本与内嵌图片；通过响应头沙箱隔离。沿用密码、有效期和下载设置，受密码保护的页面解锁后在原地址显示。
-- 密码使用 PBKDF2-SHA256 随机盐、100,000 次派生（适配 Workers WebCrypto 上限），10 次/5 分钟的 D1 原子尝试限制，短期 HttpOnly / SameSite Cookie；修改密码会使旧会话失效。
-- 上传/新建真实 Markdown 文件、CodeMirror 语法高亮、双栏实时预览、工具栏、Ctrl/Cmd+S、未保存提示、浏览器草稿恢复、保存冲突检测。
-- 标题、Slug、简介、自定义地址、是否允许源文件下载和索引、一键发布/更新/取消发布、复制链接、阅读计数。
-- 独立 R2 发布快照：保存草稿不会更新公开文章；再次发布保持原 Slug。修改 Slug 会使旧地址失效，无隐式重定向。
-- 编辑器选取、拖入或粘贴图片时自动上传图床，按内容 MD5 保存到 `Image-hosting`，插入 `https://s.irin.im/i/MD5.ext` 直链；保存与去重逻辑同图床网页。
-- 兼容旧 `attachment:UUID` 图片：仅已发布快照引用的所属附件可公开，取消发布立即阻断旧附件。图床图片上传后独立公开，不随文章取消发布或删除而撤销。
-- Worker 直接返回安全 HTML 正文、目录、标题锚点、代码高亮/复制、SEO 与 Open Graph。禁止原始 HTML；HTTPS 远程图片由浏览器直连，不代理外部 URL。
-- 中文响应式后台、蓝色操作色与悬浮玻璃面板、桌面侧栏和手机底部导航、编辑/预览切换、浅色/深色主题、加载/空状态和错误反馈。
-- 生产 Access JWT 签名、issuer、audience、过期/必要声明、管理员邮箱白名单；写 API Origin 与自定义请求头校验；安全响应头、保守 no-store 缓存与请求限流。
-- D1/R2 跨存储恢复机制：预先登记待清理对象，D1 提交成功才释放；永久删除和清空回收站原子移除元数据、持久化清理任务，并立即批量删除 R2 文件、附件和快照，R2 失败由每小时 Cron 重试。
+- [部署与升级](docs/deployment.md)
+- [上传 API 与管理接口](docs/api.md) · [OpenAPI](docs/openapi.json)
+- [ShareX](docs/sharex.md) · [WebDAV / RaiDrive](docs/webdav.md)
+- [HTML 网站兼容范围](docs/html-sites.md)
+- [数据与安全架构](docs/architecture.md) · [UI 维护](docs/ui-architecture.md)
+- [验证与发布检查](docs/verification.md)
 
-- 独立图床上传 API，兼容 ShareX 自定义上传器；复用网页图床的 MD5 命名、Image-hosting 目录与公开直链。支持在设置中创建图床专用 Token 并下载配置。见 [ShareX 配置指南](docs/sharex.md) 与 [配置模板](docs/RCloud.sxcu)。
+升级前备份 D1，先应用全部待执行迁移，再部署新 Worker。迁移 `0013` 移除已退出功能的 Google 连接元数据，`0014` 新增 HTML 上传分享记录，`0015` 建立事务内维护的容量计数。它们不搬移或改名现有 R2 文件。保留现有分享签名密钥和认证加密密钥。
 
-## 项目布局
+## 容量与边界
 
-```text
-src/                 React 后台、编辑器、预览、组件与上传队列
-worker/              鉴权、文件、分享、发布、存储、公共 HTML
-shared/              公共类型、Zod 校验与 Markdown 渲染
-db/schema.ts         Drizzle 表定义
-db/migrations/       D1 SQL 迁移、外键、索引与约束
-tests/               workerd 中运行的真实 D1/R2 与鉴权测试
-docs/                部署、接口、架构及验收指南
-wrangler.jsonc       默认生产配置与显式 local 环境
-```
+应用总容量为 **50 GiB**（53,687,091,200 字节），包括回收站、发布快照、附件和上传预留。网页/API 分片上传没有额外单文件上限，但不能超过剩余容量。每片 16 MiB；直接上传上限 32 MiB，WebDAV 单次 PUT 上限 100,000,000 字节，在线文本/Markdown 上限 1 MiB。
 
-## 界面与维护
+50 GiB 是应用限制，**不是 Cloudflare 免费存储额度**。实际成本取决于 Workers、D1、R2 用量和账号套餐。容量检查读取单行计数，完整文件读取减少一次 R2 HEAD，清理引用查询使用索引；权限检查与访问统计仍保留。
 
-后台、登录、普通文件分享和公开文章采用统一的悬浮玻璃界面与明暗主题；HTML 分享保留上传网页自身的设计。导航和操作面板使用半透明背景、细边和柔和阴影，编辑与阅读正文保持高不透明度。背景模糊限定在独立表面，系统要求减少透明度或浏览器不支持模糊时回退为实色。样式使用原生 CSS 和语义类名，按布局、文件、弹窗、管理页面、阅读排版和编辑器拆分；主题、设置读取和空状态分别封装，避免页面间重复实现。
+单 HTML 分享适用于内联脚本、样式和内嵌图片的自包含页面。目录网站支持分享目录内的相对资源，但沙箱不开放浏览器持久存储、Service Worker、外部 CDN/API 或后端应用。详见 [HTML 网站说明](docs/html-sites.md)。上传内容不会获得管理后台的同源权限。
 
-不依赖 Tailwind、运行时工具类合并或外部字体。编辑器、Markdown 渲染与预览按需加载，保留现有代码语言支持。模块职责、响应式断点和界面验收要求见 [UI 架构](docs/ui-architecture.md)。
+回收站恢复不会自动恢复公开分享；撤销无法收回接收者已保存的内容。图床图片独立公开，删除或取消发布文章不会自动撤销所引用的图片。文件没有历史版本或病毒扫描。协议测试不等于每个 WebDAV 客户端版本都已完成实机验收。
 
-## 检查与部署
+## 开发检查
 
 ```sh
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-pnpm worker:check
-# 完整顺序检查
 pnpm check
-pnpm peers check
 ```
 
-测试使用 Cloudflare 官方 `@cloudflare/vitest-plugin`，在 workerd 中执行 SQL 迁移和真实本地 D1/R2 操作，不会访问生产 Bucket 或 D1。覆盖文件生命周期、存储配额与清理、图床、文件/ShareX 上传 API、分享、Markdown 快照、密码/TOTP 和 Access 认证。浏览器检查单独覆盖桌面与移动布局、主题和操作流程，详见 [验收与验证](docs/verification.md)。
+依次运行类型检查、Lint、workerd 本地 D1/R2 测试、前端构建和 Worker dry-run。测试不访问生产存储；浏览器交互与真实 WebDAV 客户端需要单独验证。
 
-生产资源、Access 与域名步骤见 [部署指南](docs/deployment.md)，主要路由见 [API 文档](docs/api.md)，数据与安全边界见 [架构说明](docs/architecture.md)。没有真实资源 ID / Access 配置时，不应运行生产部署命令。
+```text
+src/             React 后台、编辑器、上传队列、主题与语言
+worker/          Hono API、鉴权、存储、公开 HTML 和 WebDAV
+shared/          类型、校验、渲染与语言工具
+db/migrations/   顺序 SQL 迁移
+tests/           本地 D1/R2、安全和协议测试
+docs/            部署、接口、架构与验收
+```
 
-## MVP 的明确边界
+## English
 
-- 取消单文件大小限制，全站存储上限 50GB（53,687,091,200 字节，包含回收站、附件、发布副本及上传预留空间），按 16MiB 分片流式上传 R2，分片自动重试最多 3 次。上传任务有效期 24 小时；刷新页面后需重新选择上传，尚不支持跨页面断点续传。在线文本/Markdown 仍为 1MiB。
-- 文件夹采用清空后删除，避免递归删除与恢复冲突。子文件/目录包括回收站项，先恢复移出或永久删除它们。
-- 名称搜索不是内容全文搜索；文件、分享管理和已发布文章支持分页，单页最多 100 条。目录选择使用独立分页接口。
-- 多选实现批量删除；重命名、移动、分享按单个文件操作。未实现批量下载打包、复杂多选移动。
-- 预览密码分享关闭下载不能防止接收者另存内容或截图。下载计数口径是成功开始返回完整 200 GET 下载响应；HEAD、预览、Range 与未授权不计数，不代表传输完成或独立访客。
-- 图片格式用文件头验证，不能保证图像完整解码；PDF/媒体只做签名识别。未知/伪装格式强制下载，HTML/SVG 的私有预览仍作文本；HTML 分享原样返回，并通过 CSP sandbox 隔离本站权限，禁止外部子资源和 fetch/XHR 等连接，也禁止被其他页面嵌套。网页可以导航自身，依赖 CDN 或远程接口的内容需要改为自包含文件。HTML 下载仍返回原始附件。未实现病毒扫描、缩略图处理或转码。
-- 不保留文件内容历史；旧草稿对象和发布快照会清理。源文件改名不修改已经发布的标题或 Slug。
-- 普通文件分享授予当前文件的访问权，Markdown 文件分享展示当前原文。若需让未发布修改保持私有，应使用 Markdown 编辑器的发布快照功能，而不是原文分享。
-- 已取消发布的快照保留到再次发布或永久删除文件；不会通过公开接口返回。旧格式附件随文档永久删除一起清理，未引用附件不会自动删。编辑器新上传的图床图片独立保存在 `Image-hosting`；取消发布、删除文章或移除正文中的图片链接不会清理图床图片，需要在图床中撤销直链或删除对应图片。
-- D1 限流是正确性优先的基础防护，会产生写操作；大量攻击应叠加 Cloudflare WAF / Bot 防护，避免免费额度耗尽。单 Worker 没有完整网络级 DDoS 配额隔离。
-- 定时兜底清理仅处理排队超过 1 小时且无文件、快照、附件、图床和上传会话引用的对象，每次最多 8 个对象及 2 个过期超过 1 小时的分片任务。分片终止失败保留会话与配额重试；普通直传明确失败时移除 pending 索引，未确认终止的 pending 保留，需人工对账处理，避免误删慢速上传。单篇发布最多 20 张旧格式受控附件，归属验证合并查询，以控制免费档子请求预算。图床直链不计入该附件数量。操作日志保留 90 天。
-- 保留现有操作日志不含文件内容、密码或令牌；这里未配置外部遥测服务。
-- 支持 WebDAV 独立凭据及文件管理，见 [WebDAV / RaiDrive 连接说明](docs/webdav.md)。WebDAV 单次 PUT 上限为 100,000,000 字节，网页分片上传不受此限制；多用户、文件历史版本、Office 协作、专用同步客户端与全文索引属于后续扩展。
+RCloud is a self-hosted personal drive, image host, and Markdown publishing platform built on **Cloudflare Workers + private R2 + D1**, licensed under MIT.
 
-## 成本
+### Features
 
-上传/更新/发布调用 R2 A 类操作并增加存储；读取、下载、预览、附件和清理检查调用 R2 B 类操作。公开阅读运行 Worker 并查询/更新 D1；请求限流和计数也产生 D1 写入。Worker CPU、请求数、D1 读写与存储和 R2 存储/操作按账号实际套餐计费。这里不缓存可撤销私人内容，`run_worker_first: true` 也会让静态请求先运行 Worker，选择它是为统一鉴权与多域名隔离。以后可针对不可变公共静态资源优化。
+- File browsing, folders, search, multipart uploads, previews, trash and recovery.
+- MD5-named image hosting in `/Image-hosting`, direct and Markdown links, view/download counters, a default list and a full gallery.
+- Drag-and-drop HTML/HTM hosting in `/Html-hosting`, automatic stable share links, revocation and explicit restoration. Publication retries reuse the uploaded file and share.
+- Folder websites with an `index.html` entry point and relative CSS, JavaScript modules, JSON, fonts, images and subpages, displayed directly without an iframe.
+- Markdown files in `/Markdown`, editing and preview, automatic image uploads, conflict detection, and separate published snapshots.
+- Password-protected and expiring shares, selectable configured public origins, upload API, ShareX and WebDAV.
+- Chinese/English UI, light/dark themes, responsive layouts and a soft macaron palette.
+- Password plus TOTP authentication, or Cloudflare Access with an administrator allowlist.
 
-价格和限制可能变化，请以 [Workers 定价](https://developers.cloudflare.com/workers/platform/pricing/)、[R2 定价](https://developers.cloudflare.com/r2/pricing/)、[D1 定价](https://developers.cloudflare.com/d1/platform/pricing/) 与 [Workers 限制](https://developers.cloudflare.com/workers/platform/limits/) 为准。
+R2 is the only file storage backend. Google Drive mounting is not included in this version.
 
-## 开源协议
+### Run locally
 
-本项目采用 [MIT License](LICENSE)。第三方依赖保留各自的开源协议。
+Use Node.js 22.12+ and pnpm 11. Install dependencies with `pnpm install --frozen-lockfile`, copy `.dev.vars.example` to `.dev.vars.local`, replace placeholder secrets, then run `pnpm db:local` and `pnpm dev`. Open `http://127.0.0.1:8787`. Local authentication bypass is restricted to the explicit local environment on loopback hosts; never deploy it.
 
-站内认证可选择 AUTH_MODE=password_totp：密码＋验证器验证码，首次扫码绑定、一次性恢复码、24 小时可撤销会话。详见部署文档；默认 Access 模式仍可选择。
+### Deploy and upgrade
 
-图床：登录后在「图床」上传 PNG、JPEG、GIF 或 WebP，按实际内容 MD5 命名并保存到 Image-hosting；返回 `/i/MD5.ext` 图片直链，可复制 Markdown，重复图片复用链接。可撤销、恢复、下载及永久删除图片；移入回收站会撤销直链，恢复文件后需另行恢复直链。永久删除要求先撤销，并连同源文件及关联分享等数据一起删除；R2 清理失败会持久重试，实际删除成功后才释放容量。
+Provision a Worker, a private R2 bucket and a D1 database. Configure your own HTTPS origin, for example `cloud.example.com`, and an optional reverse proxy at `files.example.com`. Keep production resource IDs and secrets out of Git. Follow the [deployment guide](docs/deployment.md).
 
-图床默认使用分页列表，不自动请求图片内容。切换到画廊后会取齐全部图片记录并加载所有图片，点击可查看大图；两种视图均支持复制、下载和图片管理。画廊及预览使用管理员私有接口，不增加公开引用次数。
+Back up D1, apply all migrations, then deploy. Migration 0013 removes retired Google connection metadata, 0014 adds HTML hosting records, and 0015 maintains storage usage with transactional triggers. Existing R2 files are not moved or renamed. Preserve existing signing and encryption keys.
 
-图床分别显示引用次数和下载次数，接口同时返回最近访问时间。公开图片的完整 200 GET 计引用，`?download=1` 或图床管理员下载的完整 200 GET 计下载；HEAD、206、失败请求、管理列表和私有预览不计数。历史图片从统计功能上线后由 0 累加，撤销、恢复和去重保留统计，永久删除会清除统计。计数采用尽力写入，失败不影响图片显示；重复请求可能重复计入，不代表唯一访客或文件传输完成。
+### Limits and safety
 
-复制分享、文件直链、图床图片/Markdown 和文章阅读链接时，可以选择全球 CDN 或香港反代；选择会在当前浏览器站点中保存，所有链接入口同步使用。域名分别取自部署配置 `ADMIN_ORIGIN` 和 `FILES_ORIGIN`，当前部署为 `https://233334.xyz` 与 `https://s.irin.im`，默认使用香港反代。编辑器新上传图片的插入链接也使用所选域名，已有正文保持原样。切换域名保留路径、参数、分享权限和统计记录；有密码的分享在另一个域名可能需要重新解锁。
+The application enforces **50 GiB total capacity**, including trash, snapshots, attachments and upload reservations. This is not a promise of 50 GiB of free Cloudflare storage. Multipart uploads use 16 MiB parts without an additional per-file cap. Direct uploads are capped at 32 MiB, WebDAV PUT at 100,000,000 bytes, and online text editing at 1 MiB.
 
-「文件分享」列表可再次复制已有分享；无密码且允许下载时也可复制文件直链。复制不会重新创建分享，旧地址仍然有效。已过期或撤销的分享不可复制；剪贴板不可用时会显示地址供手动复制。
+Single HTML shares support self-contained pages. Folder websites support resources inside their own share, but sandboxing excludes persistent browser storage, service workers, external APIs/CDNs and server-side applications. See [HTML compatibility](docs/html-sites.md).
 
-界面模块划分和响应式验收见 [UI 架构](docs/ui-architecture.md)。
+Revocation affects subsequent requests; it cannot erase downloaded copies. Restoring a trashed file does not automatically republish it. Image hosting has its own lifecycle, independent of Markdown publishing. Version history, virus scanning and multi-user collaboration are not included.
 
-## 上传 API
+`pnpm check` runs type checking, lint, local workerd/D1/R2 tests, the frontend build and a Worker dry-run. Browser and real WebDAV client acceptance are tracked separately in the [verification guide](docs/verification.md).
 
-在「设置 → 上传 API」创建仅上传 Token，可设有效期并随时撤销。脚本通过 Bearer Token 调用 `/api/v1`，支持直接上传、16MiB 分片、查询进度和取消任务；文件默认私有，与网盘共用 50GiB 容量。
+## License
 
-- [API 文档与 cURL 示例](docs/api.md)
-- [OpenAPI 3.1 规范](docs/openapi.json)
-- [Python 上传脚本](scripts/upload.py)：设置环境变量 `RCLOUD_TOKEN` 后执行 `python scripts/upload.py ./backup.zip`。
-
-已有部署需先执行 `pnpm db:production` 应用所有待执行迁移（包括图床统计的 `0009_image_stats.sql`），再部署。无需新增 Cloudflare Secret。
+[MIT](LICENSE). Third-party dependencies retain their own licenses.

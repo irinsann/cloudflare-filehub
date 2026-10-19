@@ -1,3 +1,4 @@
+import { tr } from './lib/i18n';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, Upload, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import type { FileRecord, FolderRecord } from '../shared/types';
@@ -17,12 +18,13 @@ import { UploadQueue } from './components/workspace/UploadQueue';
 import { Management } from './pages/Management';
 import { ImageHosting } from './pages/ImageHosting';
 import { PublicLinksProvider } from './components/PublicLinks';
-import { useGoogleDriveUploads } from './hooks/useGoogleDriveUploads';
-import { GoogleDriveUploadQueue } from './components/GoogleDriveUploadQueue';
-import { GoogleDrive } from './pages/GoogleDrive';
+import { useLocale } from './lib/i18n';
+import { HtmlHosting } from './pages/HtmlHosting';
+import { useHtmlUploads } from './hooks/useHtmlUploads';
 const Editor = lazy(() => import('./pages/Editor')),
   Preview = lazy(() => import('./components/Preview'));
 export default function App() {
+  useLocale();
   const browser = useFileBrowser();
   const { view, folder, refresh, reload, navigate, search, searchFiles, selected, setSelected } =
     browser;
@@ -40,8 +42,7 @@ export default function App() {
     searchInput = useRef<HTMLInputElement>(null);
   const notify = useCallback((message: string) => setToast(message), []);
   const uploads = useUploads(settings, reload, notify);
-  const [driveRevision, setDriveRevision] = useState(0);
-  const driveUploads = useGoogleDriveUploads(() => setDriveRevision((value) => value + 1));
+  const htmlUploads = useHtmlUploads(reload);
   useEffect(() => {
     if (!toast) return;
     const timeout = setTimeout(() => setToast(''), 4500);
@@ -69,9 +70,9 @@ export default function App() {
     try {
       await send(file ? `/files/${file.id}/restore` : `/folders/${f!.id}/restore`, 'POST');
       reload();
-      notify('已恢复，公开访问保持关闭');
+      notify(tr('已恢复，公开访问保持关闭', 'Restored. Public access remains off.'));
     } catch (e) {
-      notify(e instanceof Error ? e.message : '恢复失败');
+      notify(e instanceof Error ? e.message : tr('恢复失败', 'Could not restore'));
     }
   }
   async function batchDelete() {
@@ -82,22 +83,23 @@ export default function App() {
         await send(`/files/${id}`, 'DELETE');
         completed++;
       } catch (e) {
-        notify(e instanceof Error ? e.message : '删除失败');
+        notify(e instanceof Error ? e.message : tr('删除失败', 'Could not delete'));
         break;
       }
     }
     setBulkBusy(false);
     setBulkDelete(false);
     reload();
-    notify(`已将 ${completed} 个文件移入回收站`);
+    notify(tr('已将 {0} 个文件移入回收站', 'Moved {0} files to trash', { '0': completed }));
   }
-  const heading = sections.find((s) => s.id === view)!.label;
+  const section = sections.find((s) => s.id === view)!;
+  const heading = section.label;
   const management =
     view === 'published' ||
     view === 'shares' ||
     view === 'settings' ||
     view === 'images' ||
-    view === 'google-drive';
+    view === 'html';
   if (editing)
     return (
       <PublicLinksProvider settings={settings}>
@@ -105,7 +107,7 @@ export default function App() {
           fallback={
             <div className="full-loading">
               <Loader2 className="spin" />
-              加载编辑器…
+              {tr('加载编辑器…', 'Loading editor…')}
             </div>
           }
         >
@@ -137,21 +139,24 @@ export default function App() {
         theme={theme}
         toggleTheme={toggleTheme}
         search={search}
-        onSearch={view === 'google-drive' ? browser.setSearch : searchFiles}
+        onSearch={searchFiles}
         searchInput={searchInput}
         allowDrop={!management && view !== 'trash'}
         onFiles={(files) => uploads.add(files, folder)}
       >
-        <div className="content">
+        <div className="content" data-view={view}>
           <div className="page-heading">
             <div>
+              <span className="page-heading-icon" aria-hidden="true">
+                <section.icon size={23} strokeWidth={1.7} />
+              </span>
               <h1>{heading}</h1>
             </div>
             <div className="heading-actions">
               {view === 'trash' && (
                 <Button variant="danger" onClick={() => setAction({ type: 'emptyTrash' })}>
                   <Trash2 size={16} />
-                  清空回收站
+                  {tr('清空回收站', 'Empty trash')}
                 </Button>
               )}
               {!management && view !== 'trash' && (
@@ -159,12 +164,12 @@ export default function App() {
                   {view === 'markdown' && (
                     <Button variant="outline" onClick={() => setAction({ type: 'markdown' })}>
                       <Plus size={16} />
-                      新建文档
+                      {tr('新建文档', 'New document')}
                     </Button>
                   )}
                   <Button onClick={() => fileInput.current?.click()} disabled={!settings}>
                     <Upload size={16} />
-                    上传文件
+                    {tr('上传文件', 'Upload files')}
                   </Button>
                 </>
               )}
@@ -185,20 +190,14 @@ export default function App() {
               <AlertCircle size={18} />
               <span>{error}</span>
               <Button variant="ghost" size="sm" onClick={reload}>
-                重试
+                {tr('重试', 'Retry')}
               </Button>
             </div>
           )}
           {view === 'images' ? (
             <ImageHosting settings={settings} notify={notify} onComplete={reload} />
-          ) : view === 'google-drive' ? (
-            <GoogleDrive
-              search={browser.query}
-              clearSearch={() => browser.setSearch('')}
-              revision={driveRevision}
-              uploads={driveUploads}
-              notify={notify}
-            />
+          ) : view === 'html' ? (
+            <HtmlHosting uploads={htmlUploads} revision={refresh} notify={notify} />
           ) : management ? (
             <Management
               view={view}
@@ -206,8 +205,6 @@ export default function App() {
               settings={settings}
               onEdit={setEditing}
               notify={notify}
-              googleUploading={driveUploads.busy}
-              stopGoogleUploads={driveUploads.stopForDisconnect}
             />
           ) : (
             <FilesPanel
@@ -220,10 +217,7 @@ export default function App() {
           )}
         </div>
 
-        <div className="upload-stack">
-          <UploadQueue uploads={uploads} />
-          <GoogleDriveUploadQueue uploads={driveUploads} />
-        </div>
+        <UploadQueue uploads={uploads} />
         {toast && (
           <div className="toast" role="status">
             <CheckCircle2 size={17} />
@@ -238,14 +232,16 @@ export default function App() {
             onClose={() => setAction(null)}
             onDone={(id) => {
               reload();
-              notify('操作已完成');
+              notify(tr('操作已完成', 'Done'));
               if (id) setEditing(id);
             }}
             notify={notify}
           />
         )}
         {preview && (
-          <Suspense fallback={<div className="full-loading">加载预览…</div>}>
+          <Suspense
+            fallback={<div className="full-loading">{tr('加载预览…', 'Loading preview…')}</div>}
+          >
             <Preview file={preview} onClose={() => setPreview(null)} />
           </Suspense>
         )}
@@ -261,18 +257,25 @@ export default function App() {
         )}
         {bulkDelete && (
           <Modal
-            title="批量移入回收站"
+            title={tr('批量移入回收站', 'Move selected files to trash')}
             onClose={() => {
               if (!bulkBusy) setBulkDelete(false);
             }}
           >
-            <p>确定删除所选的 {selected.size} 个文件？关联分享和文章会立即失效。</p>
+            <p>
+              {tr('确定删除所选的', 'Delete the selected ')}
+              {selected.size}
+              {tr(
+                '个文件？关联分享和文章会立即失效。',
+                ' files? Their shares and published articles will become unavailable.',
+              )}
+            </p>
             <div className="dialog-footer">
               <Button variant="outline" onClick={() => setBulkDelete(false)} disabled={bulkBusy}>
-                取消
+                {tr('取消', 'Cancel')}
               </Button>
               <Button variant="danger" disabled={bulkBusy} onClick={() => void batchDelete()}>
-                {bulkBusy ? '处理中…' : '确认删除'}
+                {bulkBusy ? tr('处理中…', 'Working…') : tr('确认删除', 'Delete')}
               </Button>
             </div>
           </Modal>

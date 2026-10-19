@@ -8,7 +8,7 @@ import {
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-export * from './google-drive-schema';
+export * from './html-hosting-schema';
 export * from './site-shares-schema';
 export const folders = sqliteTable(
   'folders',
@@ -71,24 +71,32 @@ export const fileShares = sqliteTable(
   },
   (t) => [index('shares_file').on(t.fileId)],
 );
-export const markdownPages = sqliteTable('markdown_pages', {
-  id: text().primaryKey(),
-  fileId: text('file_id')
-    .notNull()
-    .unique()
-    .references(() => files.id, { onDelete: 'cascade' }),
-  title: text().notNull(),
-  slug: text().notNull().unique(),
-  description: text().notNull().default(''),
-  published: integer().notNull().default(0),
-  publishedAt: integer('published_at'),
-  updatedAt: integer('updated_at').notNull(),
-  snapshotKey: text('snapshot_key'),
-  publishedVersion: integer('published_version'),
-  allowSource: integer('allow_source').notNull().default(0),
-  allowIndex: integer('allow_index').notNull().default(0),
-  views: integer().notNull().default(0),
-});
+export const markdownPages = sqliteTable(
+  'markdown_pages',
+  {
+    id: text().primaryKey(),
+    fileId: text('file_id')
+      .notNull()
+      .unique()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    title: text().notNull(),
+    slug: text().notNull().unique(),
+    description: text().notNull().default(''),
+    published: integer().notNull().default(0),
+    publishedAt: integer('published_at'),
+    updatedAt: integer('updated_at').notNull(),
+    snapshotKey: text('snapshot_key'),
+    publishedVersion: integer('published_version'),
+    allowSource: integer('allow_source').notNull().default(0),
+    allowIndex: integer('allow_index').notNull().default(0),
+    views: integer().notNull().default(0),
+  },
+  (t) => [
+    index('pages_snapshot_key')
+      .on(t.snapshotKey)
+      .where(sql`${t.snapshotKey} IS NOT NULL`),
+  ],
+);
 export const markdownAttachments = sqliteTable(
   'markdown_attachments',
   {
@@ -125,10 +133,24 @@ export const operations = sqliteTable(
   },
   (t) => [index('operations_time').on(t.createdAt)],
 );
-export const cleanupTasks = sqliteTable('cleanup_tasks', {
+export const cleanupTasks = sqliteTable(
+  'cleanup_tasks',
+  {
+    objectKey: text('object_key').primaryKey(),
+    createdAt: integer('created_at').notNull(),
+    attempts: integer().notNull().default(0),
+  },
+  (t) => [index('cleanup_created_at').on(t.createdAt)],
+);
+export const storageAllocations = sqliteTable('storage_allocations', {
   objectKey: text('object_key').primaryKey(),
-  createdAt: integer('created_at').notNull(),
-  attempts: integer().notNull().default(0),
+  size: integer().notNull(),
+});
+export const storageQuotaState = sqliteTable('storage_quota_state', {
+  id: integer().primaryKey(),
+  ready: integer().notNull().default(0),
+  lockUntil: integer('lock_until').notNull().default(0),
+  usedBytes: integer('used_bytes').notNull().default(0),
 });
 export const rateLimits = sqliteTable(
   'rate_limits',
@@ -153,7 +175,7 @@ export const uploadSessions = sqliteTable(
     size: integer().notNull(),
     expiresAt: integer('expires_at').notNull(),
   },
-  (t) => [index('uploads_expiry').on(t.expiresAt)],
+  (t) => [index('uploads_expiry').on(t.expiresAt), index('uploads_object_key').on(t.objectKey)],
 );
 export const uploadParts = sqliteTable(
   'upload_parts',
@@ -189,17 +211,21 @@ export const adminRecovery = sqliteTable('admin_recovery', {
   codeHash: text('code_hash').primaryKey(),
 });
 
-export const imageHosts = sqliteTable('image_hosts', {
-  name: text().primaryKey(),
-  fileId: text('file_id')
-    .notNull()
-    .unique()
-    .references(() => files.id, { onDelete: 'cascade' }),
-  objectKey: text('object_key').notNull(),
-  sha256: text().notNull(),
-  enabled: integer().notNull().default(1),
-  createdAt: integer('created_at').notNull(),
-  views: integer().notNull().default(0),
-  downloads: integer().notNull().default(0),
-  lastAccessAt: integer('last_access_at'),
-});
+export const imageHosts = sqliteTable(
+  'image_hosts',
+  {
+    name: text().primaryKey(),
+    fileId: text('file_id')
+      .notNull()
+      .unique()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    objectKey: text('object_key').notNull(),
+    sha256: text().notNull(),
+    enabled: integer().notNull().default(1),
+    createdAt: integer('created_at').notNull(),
+    views: integer().notNull().default(0),
+    downloads: integer().notNull().default(0),
+    lastAccessAt: integer('last_access_at'),
+  },
+  (t) => [index('images_object_key').on(t.objectKey)],
+);

@@ -2,8 +2,5 @@
 # Generate at least 32 random bytes. Never use this placeholder in production.
 SHARE_SESSION_SECRET=replace-with-a-random-secret-at-least-32-characters
 
-# Optional Google Drive connection. Use your own OAuth Web application client.
-# Keep credentials in .dev.vars.local locally and Worker Secrets in production.
-# GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-# GOOGLE_CLIENT_SECRET=your-client-secret
+# Password + authenticator login requires a separate encryption key.
 # AUTH_ENCRYPTION_KEY=replace-with-an-independent-random-secret-at-least-32-characters

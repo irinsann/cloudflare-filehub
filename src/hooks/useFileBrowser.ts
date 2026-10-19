@@ -58,7 +58,7 @@ export function useFileBrowser() {
   useEffect(() => {
     setSelected(new Set());
     const controller = new AbortController();
-    if (['published', 'shares', 'settings', 'images', 'google-drive'].includes(view)) return;
+    if (['published', 'shares', 'settings', 'images', 'html'].includes(view)) return;
     const serial = ++request.current;
     setLoading(true);
     setError('');
@@ -112,7 +112,7 @@ export function useFileBrowser() {
     }
   }, [grid]);
   function searchFiles(value: string) {
-    if (['published', 'shares', 'settings', 'images'].includes(view)) {
+    if (['published', 'shares', 'settings', 'images', 'html'].includes(view)) {
       setView('files');
       setFolder(null);
       setCrumbs([]);

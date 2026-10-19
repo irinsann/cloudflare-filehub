@@ -1,3 +1,4 @@
+import { requestLocale } from './locale';
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { z } from 'zod';
@@ -69,14 +70,21 @@ async function matchCode(secret: string, code: string) {
 const cookieName = (env: Env) =>
   env.ENVIRONMENT === 'local' ? 'rcloud-session' : '__Host-rcloud-session';
 export async function siteIdentity(c: AppContext) {
+  const existing = c.get('siteIdentity');
+  if (existing !== undefined) return existing;
   const token = getCookie(c, cookieName(c.env));
-  if (!token || !/^[0-9a-f]{64}$/.test(token)) return null;
+  if (!token || !/^[0-9a-f]{64}$/.test(token)) {
+    c.set('siteIdentity', null);
+    return null;
+  }
   const s = await c.env.DB.prepare(
     'SELECT token_hash FROM admin_sessions WHERE token_hash=? AND expires_at>?',
   )
     .bind(await digest(token), now())
     .first();
-  return s ? c.env.ADMIN_EMAILS.split(',')[0] || 'owner' : null;
+  const identity = s ? c.env.ADMIN_EMAILS.split(',')[0] || 'owner' : null;
+  c.set('siteIdentity', identity);
+  return identity;
 }
 async function prepareSession(c: AppContext, requireConsumedCode = false) {
   const token = randomToken();
@@ -226,7 +234,16 @@ siteAuthRoutes.post('/logout', async (c) => {
 });
 export async function loginPage(c: AppContext) {
   const ready = !!(await c.env.DB.prepare('SELECT id FROM admin_account WHERE id=1').first());
-  const script = String.raw`const ready=${ready};const form=document.getElementById('auth');const error=document.getElementById('error');let token='';async function post(path,data){const r=await fetch('/api/auth/'+path,{method:'POST',headers:{'Content-Type':'application/json','X-Drive-Request':'1'},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw Error(j.error.message);return j.data;}if(!ready){const invite=new URLSearchParams(location.hash.slice(1)).get('setup');history.replaceState(null,'','/login');if(invite)post('setup/start',{token:invite}).then(d=>{token=d.token;document.getElementById('qr').innerHTML=d.qr;document.getElementById('secret').textContent=d.secret;form.hidden=false;document.getElementById('loading').hidden=true;}).catch(e=>error.textContent=e.message);else error.textContent='请使用管理员提供的一次性设置链接。';}form.onsubmit=async e=>{e.preventDefault();const button=document.getElementById('submit');button.disabled=true;error.textContent='';try{const p=document.getElementById('password').value;const confirm=document.getElementById('confirm');if(!ready&&p!==confirm.value)throw Error('两次密码不一致');const d=await post(ready?'login':'setup/finish',{token,password:p,code:document.getElementById('code').value.trim().toLowerCase()});document.getElementById('password').value='';if(ready)location.replace('/drive/');else{form.hidden=true;document.getElementById('qr').replaceChildren();document.getElementById('secret').textContent='';document.getElementById('recovery').hidden=false;document.getElementById('codes').textContent=d.recovery.join('\n');}}catch(e){error.textContent=e.message;}finally{button.disabled=false;}};`;
-  const page = htmlPage('登录', loginBody(ready), script + loginUiScript, '', loginCss);
+  const script = String.raw`const ready=${ready};const form=document.getElementById('auth');const error=document.getElementById('error');let token='';async function post(path,data){const r=await fetch('/api/auth/'+path,{method:'POST',headers:{'Content-Type':'application/json','X-Drive-Request':'1','Accept-Language':window.RCloudI18n.locale},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw Error(j.error.message);return j.data;}if(!ready){const invite=new URLSearchParams(location.hash.slice(1)).get('setup');history.replaceState(null,'','/login');if(invite)post('setup/start',{token:invite}).then(d=>{token=d.token;document.getElementById('qr').innerHTML=d.qr;document.getElementById('secret').textContent=d.secret;form.hidden=false;document.getElementById('loading').hidden=true;}).catch(e=>error.textContent=e.message);else {error.dataset.i18n='请使用管理员提供的一次性设置链接。';error.textContent=window.RCloudI18n.t('请使用管理员提供的一次性设置链接。');}}form.onsubmit=async e=>{e.preventDefault();const button=document.getElementById('submit');button.disabled=true;delete error.dataset.i18n;error.textContent='';try{const p=document.getElementById('password').value;const confirm=document.getElementById('confirm');if(!ready&&p!==confirm.value)throw Error(window.RCloudI18n.t('两次密码不一致'));const d=await post(ready?'login':'setup/finish',{token,password:p,code:document.getElementById('code').value.trim().toLowerCase()});document.getElementById('password').value='';if(ready)location.replace('/drive/');else{form.hidden=true;document.getElementById('qr').replaceChildren();document.getElementById('secret').textContent='';document.getElementById('recovery').hidden=false;document.getElementById('codes').textContent=d.recovery.join('\n');}}catch(e){error.textContent=e.message;}finally{button.disabled=false;}};`;
+  const locale = requestLocale(c.req.raw);
+  const page = htmlPage(
+    '登录',
+    loginBody(ready, locale),
+    script + loginUiScript,
+    '',
+    loginCss,
+    locale,
+    true,
+  );
   return new Response(page.html, { headers: page.headers });
 }

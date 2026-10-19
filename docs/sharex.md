@@ -14,7 +14,7 @@
 
 ## 图片上传接口
 
-`POST https://s.irin.im/api/v1/images`
+`POST https://files.example.com/api/v1/images`
 
 | 项目           | 值                                                  |
 | -------------- | --------------------------------------------------- |
@@ -27,7 +27,7 @@
 
 ```bash
 # RCLOUD_IMAGE_TOKEN 为已保存的图床 Token 环境变量
-curl --fail-with-body 'https://s.irin.im/api/v1/images' \
+curl --fail-with-body 'https://files.example.com/api/v1/images' \
   -H "Authorization: Bearer $RCLOUD_IMAGE_TOKEN" \
   -F 'file=@./screenshot.png'
 ```
@@ -39,13 +39,13 @@ curl --fail-with-body 'https://s.irin.im/api/v1/images' \
   "data": {
     "name": "39dd1aed58e76c360216335fda25d0cf.png",
     "file_id": "5b691acf-6c30-4c9d-92b0-0d44f34931a1",
-    "url": "https://s.irin.im/i/39dd1aed58e76c360216335fda25d0cf.png",
+    "url": "https://files.example.com/i/39dd1aed58e76c360216335fda25d0cf.png",
     "duplicate": false
   }
 }
 ```
 
-保存逻辑与网页图床共用：文件以内容 MD5 和识别出的扩展名命名，归入根目录 `Image-hosting`，公开直链默认使用 `s.irin.im`。相同内容复用已有图片和链接；同时比较 SHA-256，拒绝 MD5 冲突。重新上传已停用的同一图片会重新启用直链，与网页行为一致。Token 撤销不会撤销已上传图片；管理图片请使用网站。
+保存逻辑与网页图床共用：文件以内容 MD5 和识别出的扩展名命名，归入根目录 `Image-hosting`，公开直链默认使用 `files.example.com`。相同内容复用已有图片和链接；同时比较 SHA-256，拒绝 MD5 冲突。重新上传已停用的同一图片会重新启用直链，与网页行为一致。Token 撤销不会撤销已上传图片；管理图片请使用网站。
 
 没有额外的应用层单图片大小上限；图床与网盘共用 50GiB 配额，接收时预留表单大小，发布复制时还需要一份图片的临时空间。服务端按 16MiB 写入 R2；ShareX 仍发送一个 HTTP 请求，因此还受 Cloudflare 和 VPS 的请求大小、超时限制。大图片无法通过时可使用网页分片上传。类型识别不等同于完整图片解码或病毒扫描。
 

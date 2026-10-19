@@ -20,8 +20,10 @@ import { identifier } from '../shared/validation';
 import { webdavRoutes } from './webdav';
 import { webdavCredentials } from './webdav-auth';
 import { storageWriteLease } from './write-lease';
-import { googleDriveRoutes, googleDriveCallback, cleanupGoogleDrive } from './google-drive';
+import { htmlHostingRoutes } from './html-hosting';
 import { siteShareAdminRoutes, siteSharePublicRoutes } from './site-shares';
+import { requestLocale } from './locale';
+import { translateError } from './error-locale';
 const app = new Hono<AppEnv>();
 app.use('*', async (c, next) => {
   c.set('requestId', crypto.randomUUID());
@@ -75,8 +77,7 @@ app.get('/login', (c) =>
 app.route('/api/admin', fileRoutes);
 app.route('/api/admin', tokenRoutes);
 app.route('/api/admin', webdavCredentials);
-app.route('/api/admin', googleDriveRoutes);
-app.get('/api/oauth/google/callback', googleDriveCallback);
+app.route('/api/admin', htmlHostingRoutes);
 app.route('/api/admin', siteShareAdminRoutes);
 app.route('/site', siteSharePublicRoutes);
 app.route('/dav', webdavRoutes);
@@ -107,6 +108,24 @@ app.use('/s/*', async (c, next) => {
 });
 app.on(['GET', 'HEAD'], '/p/:slug', (c) => readPage(c));
 app.on(['GET', 'HEAD'], '/s/:token', sharePage);
+app.all('/api/*', () => fail(404, '接口不存在'));
+// Build assets contain public application code only. Never cache the authenticated HTML shell here.
+app.get('/drive/assets/:asset', async (c) => {
+  const name = c.req.param('asset');
+  if (!/^[a-zA-Z0-9_.-]+-[a-zA-Z0-9_-]{8,}\.(js|css|woff2?)$/.test(name)) fail(404, '文件不存在');
+  const url = new URL(c.req.url);
+  url.pathname = `/assets/${name}`;
+  const asset = await c.env.ASSETS.fetch(new Request(url, c.req.raw));
+  if (
+    (asset.status !== 304 && !asset.ok) ||
+    /text\/html/i.test(asset.headers.get('Content-Type') || '')
+  )
+    fail(404, '文件不存在');
+  const response = new Response(asset.body, asset);
+  response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  return response;
+});
 app.get('/favicon.svg', (c) => c.env.ASSETS.fetch(c.req.raw));
 app.get('/robots.txt', (c) =>
   c.text(
@@ -135,6 +154,7 @@ app.get('*', async (c) => {
     assetUrl.pathname = assetUrl.pathname.slice(6) || '/';
   const asset = await c.env.ASSETS.fetch(new Request(assetUrl, c.req.raw));
   const response = new Response(asset.body, asset);
+  response.headers.set('Cache-Control', 'private, no-store');
   response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   response.headers.set(
     'Content-Security-Policy',
@@ -153,7 +173,7 @@ app.onError((error, c) => {
             )
           ? 409
           : 500;
-  const message =
+  const originalMessage =
     error instanceof HTTPException
       ? error.message
       : error instanceof ZodError
@@ -161,6 +181,8 @@ app.onError((error, c) => {
         : status === 409
           ? '名称、Slug 或目录状态冲突，请刷新后重试'
           : '服务暂时无法完成请求';
+  const locale = requestLocale(c.req.raw);
+  const message = translateError(originalMessage, locale);
   if (status === 500)
     console.error(JSON.stringify({ requestId: c.get('requestId'), type: error.name }));
   const jsonResponse =
@@ -168,7 +190,11 @@ app.onError((error, c) => {
   if (!jsonResponse) {
     const page = htmlPage(
       `${status}`,
-      `<main class="card"><h1>${status}</h1><p>${escapeHtml(message)}</p></main>`,
+      `<main class="card"><h1>${status}</h1><p data-locale-zh="${escapeHtml(originalMessage)}" data-locale-en="${escapeHtml(translateError(originalMessage, 'en'))}">${escapeHtml(message)}</p></main>`,
+      undefined,
+      '',
+      '',
+      locale,
     );
     return new Response(page.html, { status, headers: page.headers });
   }
@@ -179,6 +205,5 @@ export default {
   fetch: app.fetch,
   scheduled: (_event: ScheduledController, env: Env, ctx: ExecutionContext) => {
     ctx.waitUntil(cleanup(env));
-    ctx.waitUntil(cleanupGoogleDrive(env));
   },
 } satisfies ExportedHandler<Env>;

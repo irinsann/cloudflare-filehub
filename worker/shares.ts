@@ -1,3 +1,4 @@
+import { requestLocale, uiText, uiAttr } from './locale';
 import { Hono } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
@@ -277,6 +278,7 @@ publicShareRoutes.on(['GET', 'HEAD'], '/:token/:action', async (c) => {
   return response;
 });
 export async function sharePage(c: AppContext) {
+  const locale = requestLocale(c.req.raw);
   const token = c.req.param('token') ?? '';
   const share = await lookup(c, false);
   const file = await getFile(c.env, share.file_id);
@@ -296,12 +298,12 @@ const api='/api/public/share/'+token;
 const view=document.getElementById('view');
 const message=document.getElementById('message');
 async function load(){
-  const r=await fetch(api);
+  const r=await fetch(api,{headers:{'Accept-Language':window.RCloudI18n.locale}});
   const j=await r.json();
-  if(r.status===401){document.getElementById('unlock').hidden=false;message.textContent='请输入分享密码';return}
+  if(r.status===401){document.getElementById('unlock').hidden=false;message.dataset.i18n='请输入分享密码';message.textContent=window.RCloudI18n.t('请输入分享密码');return}
   if(!r.ok){message.textContent=j.error.message;return}
   document.getElementById('unlock').hidden=true;
-  const f=j.data;
+  delete document.getElementById('message').dataset.i18n;document.getElementById('name').replaceChildren();const f=j.data;
   if(f.preview_type==='html'){location.reload();return}
   document.getElementById('name').textContent=f.name;
   message.textContent=(f.size/1024).toFixed(1)+' KB · '+f.mime;
@@ -314,7 +316,7 @@ async function load(){
   }else if(f.mime.startsWith('video/')||f.mime.startsWith('audio/')){
     e=document.createElement(f.mime.startsWith('video/')?'video':'audio');e.src=url;e.controls=true;
   }else if(f.mime.startsWith('text/')||f.mime==='application/json'){
-    const t=await fetch(api+'/text');const tj=await t.json();
+    const t=await fetch(api+'/text',{headers:{'Accept-Language':window.RCloudI18n.locale}});const tj=await t.json();
     e=document.createElement('pre');e.textContent=t.ok?tj.data.content:tj.error.message;
   }
   if(e)view.replaceChildren(e);
@@ -322,16 +324,19 @@ async function load(){
 }
 document.getElementById('unlock').onsubmit=async(e)=>{
   e.preventDefault();
-  const r=await fetch(api+'/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('password').value})});
+  const r=await fetch(api+'/unlock',{method:'POST',headers:{'Content-Type':'application/json','Accept-Language':window.RCloudI18n.locale},body:JSON.stringify({password:document.getElementById('password').value})});
   document.getElementById('password').value='';
   if(r.ok)${html ? 'location.reload()' : 'load()'};else message.textContent=(await r.json()).error.message;
 };
 load();`;
   const page = htmlPage(
     '文件分享',
-    `<main class="card"><div class="share-heading"><span class="share-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span><div><h1 id="name">文件分享</h1><p id="message" aria-live="polite">正在验证分享…</p></div></div><form id="unlock" hidden><input id="password" type="password" aria-label="分享密码" placeholder="输入访问密码" autocomplete="current-password" required maxlength="128"><button>解锁</button></form><div id="view"></div><div class="share-actions"><a id="download" class="button" hidden>下载文件</a></div></main>`,
+    `<main class="card"><div class="share-heading"><span class="share-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span><div><h1 id="name">${uiText('文件分享', locale)}</h1><p id="message" aria-live="polite">${uiText('正在验证分享…', locale)}</p></div></div><form id="unlock" hidden><input id="password" type="password" ${uiAttr('aria-label', '分享密码', locale)} ${uiAttr('placeholder', '输入访问密码', locale)} autocomplete="current-password" required maxlength="128"><button>${uiText('解锁', locale)}</button></form><div id="view"></div><div class="share-actions"><a id="download" class="button" hidden>${uiText('下载文件', locale)}</a></div></main>`,
     readerScript + script,
     '<meta name="robots" content="noindex,nofollow">',
+    '',
+    locale,
+    true,
   );
   return new Response(c.req.method === 'HEAD' ? null : page.html, { headers: page.headers });
 }

@@ -1,3 +1,4 @@
+import { tr } from './i18n';
 import { send } from './api';
 import { uploadFile } from './upload';
 
@@ -17,9 +18,11 @@ export async function uploadHostedImage(
   onProgress: (percent: number | null) => void = () => {},
 ): Promise<HostedImage> {
   if (!imageName.test(file.name) && !imageType.test(file.type)) {
-    throw new Error('仅支持 PNG、JPEG、GIF 和 WebP 图片');
+    throw new Error(
+      tr('仅支持 PNG、JPEG、GIF 和 WebP 图片', 'Only PNG, JPEG, GIF and WebP images are supported'),
+    );
   }
-  if (!file.size) throw new Error('图片为空');
+  if (!file.size) throw new Error(tr('图片为空', 'Image is empty'));
 
   const folder = await send<{ id: string }>('/images/folder', 'POST');
   const uploaded = await uploadFile(file, folder.id, onProgress);
@@ -31,7 +34,13 @@ export async function uploadHostedImage(
       await send('/files/' + uploaded.id + '/permanent', 'DELETE');
     } catch {
       // A valid image URL must remain usable even if removal of its redundant source fails.
-      return { ...result, cleanupWarning: '重复源文件清理失败，请在云盘中检查' };
+      return {
+        ...result,
+        cleanupWarning: tr(
+          '重复源文件清理失败，请在云盘中检查',
+          'Could not remove the duplicate source. Check your files.',
+        ),
+      };
     }
   }
   return result;

@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import { useEffect, useRef, useState } from 'react';
 import {
   Upload,
@@ -51,7 +52,7 @@ function GalleryThumbnail({
       <button
         type="button"
         className="image-gallery-open"
-        aria-label={'预览 ' + image.name}
+        aria-label={tr('预览 ', 'Preview ') + image.name}
         disabled={disabled || state === 'error'}
         onClick={onPreview}
       >
@@ -66,10 +67,12 @@ function GalleryThumbnail({
           onError={() => setState('error')}
         />
       </button>
-      {state === 'loading' && <span className="image-gallery-state">加载中…</span>}
+      {state === 'loading' && (
+        <span className="image-gallery-state">{tr('加载中…', 'Loading…')}</span>
+      )}
       {state === 'error' && (
         <div className="image-gallery-state" role="alert">
-          <span>图片加载失败</span>
+          <span>{tr('图片加载失败', 'Could not load image')}</span>
           <Button
             size="sm"
             variant="outline"
@@ -78,7 +81,7 @@ function GalleryThumbnail({
               setAttempt((value) => value + 1);
             }}
           >
-            重试
+            {tr('重试', 'Retry')}
           </Button>
         </div>
       )}
@@ -143,7 +146,9 @@ export function ImageHosting({
         }
       } catch (cause) {
         if (!controller.signal.aborted)
-          setLoadError(cause instanceof Error ? cause.message : '读取图片失败');
+          setLoadError(
+            cause instanceof Error ? cause.message : tr('读取图片失败', 'Could not load images'),
+          );
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -175,19 +180,26 @@ export function ImageHosting({
         try {
           const r = await uploadHostedImage(file, (percent) => {
             if (mounted.current)
-              setStatus(file.name + ' · ' + (percent === null ? '生成直链' : percent + '%'));
+              setStatus(
+                file.name +
+                  ' · ' +
+                  (percent === null ? tr('生成直链', 'Create direct link') : percent + '%'),
+              );
           });
           if (!mounted.current) break;
           if (r.cleanupWarning) setError(r.cleanupWarning);
-          setStatus(r.name + ' · 已上传');
+          setStatus(r.name + tr(' · 已上传', ' · Uploaded'));
           changed = true;
         } catch (e) {
           if (!mounted.current) break;
-          setError(file.name + '：' + (e instanceof Error ? e.message : '上传失败'));
+          setError(
+            file.name + '：' + (e instanceof Error ? e.message : tr('上传失败', 'Upload failed')),
+          );
         }
       }
     } catch (e) {
-      if (mounted.current) setError(e instanceof Error ? e.message : '上传失败');
+      if (mounted.current)
+        setError(e instanceof Error ? e.message : tr('上传失败', 'Upload failed'));
     } finally {
       locked.current = false;
       if (mounted.current) {
@@ -230,13 +242,14 @@ export function ImageHosting({
       }
       notify(
         action === 'permanent'
-          ? '图片已彻底删除'
+          ? tr('图片已彻底删除', 'Image permanently deleted')
           : action === 'restore'
-            ? '直链已恢复'
-            : '直链已撤销',
+            ? tr('直链已恢复', 'Direct link restored')
+            : tr('直链已撤销', 'Direct link revoked'),
       );
     } catch (e) {
-      if (mounted.current) setError(e instanceof Error ? e.message : '操作失败');
+      if (mounted.current)
+        setError(e instanceof Error ? e.message : tr('操作失败', 'Action failed'));
     } finally {
       locked.current = false;
       if (mounted.current) setOperation(null);
@@ -249,7 +262,7 @@ export function ImageHosting({
   }
   const copied = (value: string) =>
     void copy(value)
-      .then(() => notify('已复制'))
+      .then(() => notify(tr('已复制', 'Copied')))
       .catch(() => {
         if (mounted.current) setManualCopy(value);
       });
@@ -263,22 +276,22 @@ export function ImageHosting({
       <div className="image-host-actions">
         <Button size="sm" variant="ghost" disabled={working} onClick={() => openPreview(row)}>
           <Eye size={14} />
-          预览
+          {tr('预览', 'Preview')}
         </Button>
         <Button size="sm" variant="ghost" asChild>
           <a href={'/api/admin/images/' + encodeURIComponent(row.name) + '/download'}>
             <Download size={14} />
-            下载
+            {tr('下载', 'Download')}
           </a>
         </Button>
         <Button size="sm" variant="ghost" onClick={() => copied(publicLink(row.url))}>
           <Link2 size={14} />
-          直链
+          {tr('直链', 'Direct link')}
         </Button>
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => copied(imageMarkdown('图片', publicLink(row.url)))}
+          onClick={() => copied(imageMarkdown(tr('图片', 'Image'), publicLink(row.url)))}
         >
           <Copy size={14} />
           Markdown
@@ -290,7 +303,7 @@ export function ImageHosting({
             disabled={working}
             onClick={() => void changeImage(row, 'revoke')}
           >
-            {operation?.name === row.name ? '撤销中…' : '撤销'}
+            {operation?.name === row.name ? tr('撤销中…', 'Revoking…') : tr('撤销', 'Revoke')}
           </Button>
         ) : (
           <>
@@ -302,8 +315,8 @@ export function ImageHosting({
             >
               <RotateCcw size={14} />
               {operation?.name === row.name && operation.action === 'restore'
-                ? '恢复中…'
-                : '恢复直链'}
+                ? tr('恢复中…', 'Restoring…')
+                : tr('恢复直链', 'Restore link')}
             </Button>
             <Button
               size="sm"
@@ -316,7 +329,7 @@ export function ImageHosting({
               }}
             >
               <Trash2 size={14} />
-              彻底删除
+              {tr('彻底删除', 'Delete permanently')}
             </Button>
           </>
         )}
@@ -334,13 +347,13 @@ export function ImageHosting({
         }}
       >
         <ImagePlus size={28} />
-        <strong>上传图片</strong>
+        <strong>{tr('上传图片', 'Upload images')}</strong>
         <Button disabled={working || !settings} onClick={() => input.current?.click()}>
           <Upload size={16} />
-          {busy ? '上传中…' : '选择图片'}
+          {busy ? tr('上传中…', 'Uploading…') : tr('选择图片', 'Choose images')}
         </Button>
         <small>
-          PNG / JPEG / GIF / WebP · 剩余{' '}
+          {tr('PNG / JPEG / GIF / WebP · 剩余', 'PNG / JPEG / GIF / WebP · Available ')}{' '}
           {settings ? sizeLabel(settings.storageAvailableBytes) : '—'}
         </small>
         <input
@@ -368,37 +381,41 @@ export function ImageHosting({
       <div className="public-links-toolbar image-host-toolbar">
         <LinkOriginSelect />
         <div className="image-host-view-tools">
-          <div className="image-host-view-switch" role="group" aria-label="图片显示方式">
+          <div
+            className="image-host-view-switch"
+            role="group"
+            aria-label={tr('图片显示方式', 'Image display')}
+          >
             <Button
               variant={view === 'list' ? 'outline' : 'ghost'}
               size="sm"
-              aria-label="列表视图"
-              title="列表视图"
+              aria-label={tr('列表视图', 'List view')}
+              title={tr('列表视图', 'List view')}
               aria-pressed={view === 'list'}
               disabled={working}
               onClick={() => changeView('list')}
             >
               <List size={18} />
-              列表
+              {tr('列表', 'List')}
             </Button>
             <Button
               variant={view === 'gallery' ? 'outline' : 'ghost'}
               size="sm"
-              aria-label="画廊视图"
-              title="画廊视图"
+              aria-label={tr('画廊视图', 'Gallery view')}
+              title={tr('画廊视图', 'Gallery view')}
               aria-pressed={view === 'gallery'}
               disabled={working}
               onClick={() => changeView('gallery')}
             >
               <LayoutGrid size={18} />
-              画廊
+              {tr('画廊', 'Gallery')}
             </Button>
           </div>
           <Button
             variant="ghost"
             size="icon"
-            aria-label="刷新图片"
-            title="刷新图片"
+            aria-label={tr('刷新图片', 'Refresh images')}
+            title={tr('刷新图片', 'Refresh images')}
             disabled={working || loading}
             onClick={refreshImages}
           >
@@ -407,10 +424,11 @@ export function ImageHosting({
         </div>
       </div>
       {loading ? (
-        <div className="skeleton-list" aria-label="加载图片">
+        <div className="skeleton-list" aria-label={tr('加载图片', 'Loading images')}>
           {view === 'gallery' && (
             <p className="muted" role="status">
-              正在读取全部图片{loadedCount > 0 ? ` · ${loadedCount} 张` : '…'}
+              {tr('正在读取全部图片', 'Loading all images')}
+              {loadedCount > 0 ? tr(' · {0} 张', ' · {0} images', { '0': loadedCount }) : '…'}
             </p>
           )}
           <div className="skeleton" />
@@ -420,11 +438,11 @@ export function ImageHosting({
         <div className="error-banner" role="alert">
           <span>{loadError}</span>
           <Button variant="outline" size="sm" onClick={refreshImages}>
-            重试
+            {tr('重试', 'Retry')}
           </Button>
         </div>
       ) : rows.length > 0 && view === 'gallery' ? (
-        <div className="image-gallery" aria-label="图床画廊">
+        <div className="image-gallery" aria-label={tr('图床画廊', 'Image gallery')}>
           {rows.map((row) => (
             <article
               className="image-gallery-card"
@@ -450,7 +468,7 @@ export function ImageHosting({
                 <div className="image-gallery-meta">
                   <span>{sizeLabel(row.size)}</span>
                   <span className={row.enabled ? 'image-gallery-public' : undefined}>
-                    {row.enabled ? '公开' : '已撤销'}
+                    {row.enabled ? tr('公开', 'Public') : tr('已撤销', 'Revoked')}
                   </span>
                   <time dateTime={new Date(row.created_at).toISOString()}>
                     {dateLabel(row.created_at)}
@@ -459,11 +477,13 @@ export function ImageHosting({
                 <div className="image-gallery-stats">
                   <span>
                     <Eye size={14} />
-                    引用 {row.views ?? 0}
+                    {tr('引用', 'Views')}
+                    {row.views ?? 0}
                   </span>
                   <span>
                     <Download size={14} />
-                    下载 {row.downloads ?? 0}
+                    {tr('下载', 'Download')}
+                    {row.downloads ?? 0}
                   </span>
                 </div>
                 {imageActions(row)}
@@ -473,16 +493,16 @@ export function ImageHosting({
         </div>
       ) : rows.length > 0 ? (
         <div className="image-host-list">
-          <table aria-label="图床图片">
+          <table aria-label={tr('图床图片', 'Hosted images')}>
             <thead>
               <tr>
-                <th scope="col">名称</th>
-                <th scope="col">大小</th>
-                <th scope="col">状态</th>
-                <th scope="col">上传时间</th>
-                <th scope="col">引用</th>
-                <th scope="col">下载</th>
-                <th scope="col">操作</th>
+                <th scope="col">{tr('名称', 'Name')}</th>
+                <th scope="col">{tr('大小', 'Size')}</th>
+                <th scope="col">{tr('状态', 'Status')}</th>
+                <th scope="col">{tr('上传时间', 'Uploaded')}</th>
+                <th scope="col">{tr('引用', 'Views')}</th>
+                <th scope="col">{tr('下载', 'Download')}</th>
+                <th scope="col">{tr('操作', 'Actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -492,7 +512,9 @@ export function ImageHosting({
                     <span title={r.name}>{r.name}</span>
                   </th>
                   <td className="image-host-meta">{sizeLabel(r.size)}</td>
-                  <td className="image-host-meta">{r.enabled ? '公开' : '已撤销'}</td>
+                  <td className="image-host-meta">
+                    {r.enabled ? tr('公开', 'Public') : tr('已撤销', 'Revoked')}
+                  </td>
                   <td className="image-host-meta">
                     <time dateTime={new Date(r.created_at).toISOString()}>
                       {dateLabel(r.created_at)}
@@ -500,13 +522,13 @@ export function ImageHosting({
                   </td>
                   <td className="image-host-meta">
                     <span className="image-host-mobile-label" aria-hidden="true">
-                      引用{' '}
+                      {tr('引用', 'Views')}{' '}
                     </span>
                     {r.views ?? 0}
                   </td>
                   <td className="image-host-meta">
                     <span className="image-host-mobile-label" aria-hidden="true">
-                      下载{' '}
+                      {tr('下载', 'Download')}{' '}
                     </span>
                     {r.downloads ?? 0}
                   </td>
@@ -517,7 +539,9 @@ export function ImageHosting({
           </table>
         </div>
       ) : null}
-      {!loading && !rows.length && !error && !loadError && <EmptyState label="暂无图片" />}
+      {!loading && !rows.length && !error && !loadError && (
+        <EmptyState label={tr('暂无图片', 'No images yet')} />
+      )}
       {view === 'list' && !loadError && (page > 1 || rows.length >= 40) && (
         <div className="image-pagination">
           <Button
@@ -525,7 +549,7 @@ export function ImageHosting({
             disabled={page === 1 || working || loading}
             onClick={() => setPage((n) => n - 1)}
           >
-            上一页
+            {tr('上一页', 'Previous')}
           </Button>
           <span>{page}</span>
           <Button
@@ -533,23 +557,28 @@ export function ImageHosting({
             disabled={rows.length < 40 || working || loading}
             onClick={() => setPage((n) => n + 1)}
           >
-            下一页
+            {tr('下一页', 'Next')}
           </Button>
         </div>
       )}
       {manualCopy !== null && <ManualCopy value={manualCopy} onClose={() => setManualCopy(null)} />}
       {preview && (
-        <Modal title="图片预览" description={preview.name} onClose={() => setPreview(null)} wide>
+        <Modal
+          title={tr('图片预览', 'Image preview')}
+          description={preview.name}
+          onClose={() => setPreview(null)}
+          wide
+        >
           {previewLoading && (
             <p role="status" className="muted">
-              加载中…
+              {tr('加载中…', 'Loading…')}
             </p>
           )}
           {previewError ? (
             <div role="alert" className="error-banner">
-              <span>图片加载失败</span>
+              <span>{tr('图片加载失败', 'Could not load image')}</span>
               <Button variant="outline" size="sm" onClick={() => openPreview(preview)}>
-                重试
+                {tr('重试', 'Retry')}
               </Button>
             </div>
           ) : (
@@ -568,8 +597,11 @@ export function ImageHosting({
       )}
       {deleting && (
         <Modal
-          title="彻底删除图片"
-          description="图片文件也将删除，引用它的文章将无法显示此图片。此操作无法撤销。"
+          title={tr('彻底删除图片', 'Delete image permanently')}
+          description={tr(
+            '图片文件也将删除，引用它的文章将无法显示此图片。此操作无法撤销。',
+            'The image file will be deleted. Articles using it will show a broken image. This cannot be undone.',
+          )}
           onClose={closeDelete}
         >
           <p className="image-delete-name">{deleting.name}</p>
@@ -580,14 +612,14 @@ export function ImageHosting({
           )}
           <div className="dialog-footer">
             <Button variant="ghost" disabled={working} onClick={closeDelete}>
-              取消
+              {tr('取消', 'Cancel')}
             </Button>
             <Button
               variant="danger"
               disabled={working}
               onClick={() => void changeImage(deleting, 'permanent')}
             >
-              {working ? '删除中…' : '彻底删除'}
+              {working ? tr('删除中…', 'Deleting…') : tr('彻底删除', 'Delete permanently')}
             </Button>
           </div>
         </Modal>

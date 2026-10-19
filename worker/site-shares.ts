@@ -1,3 +1,4 @@
+import { requestLocale, uiText, uiAttr } from './locale';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { paginationParams } from '../shared/pagination';
@@ -181,6 +182,7 @@ function jsonScript(value: string) {
 }
 
 function unlockPage(c: AppContext, base: string, path: SitePath) {
+  const locale = requestLocale(c.req.raw);
   const endpoint = `/site/${base}`;
   const next = encodedSitePath(path);
   const script = `const form=document.getElementById('unlock');
@@ -190,17 +192,20 @@ form.addEventListener('submit',async(event)=>{
   const message=document.getElementById('message');
   button.disabled=true;message.textContent='';
   try{
-    const response=await fetch(${jsonScript(endpoint)},{method:'POST',headers:{'Content-Type':'application/json','X-Drive-Request':'1'},body:JSON.stringify({password:document.getElementById('password').value,path:${jsonScript(next)},query:location.search})});
+    const response=await fetch(${jsonScript(endpoint)},{method:'POST',headers:{'Content-Type':'application/json','X-Drive-Request':'1','Accept-Language':window.RCloudI18n.locale},body:JSON.stringify({password:document.getElementById('password').value,path:${jsonScript(next)},query:location.search})});
     const result=await response.json();
-    if(!response.ok)throw new Error(result.error?.message||'解锁失败');
+    if(!response.ok)throw new Error(result.error?.message||window.RCloudI18n.t('解锁失败'));
     location.replace(result.data.url);
-  }catch(error){message.textContent=error.message||'解锁失败';button.disabled=false}
+  }catch(error){message.textContent=error.message||window.RCloudI18n.t('解锁失败');button.disabled=false}
 });`;
   const page = htmlPage(
     '网站分享',
-    '<main class="card"><h1>网站分享</h1><form id="unlock"><input id="password" type="password" aria-label="访问密码" placeholder="访问密码" autocomplete="current-password" required maxlength="128"><button type="submit">打开网站</button></form><p id="message" role="alert"></p></main>',
+    `<main class="card"><h1>${uiText('网站分享', locale)}</h1><form id="unlock"><input id="password" type="password" ${uiAttr('aria-label', '访问密码', locale)} ${uiAttr('placeholder', '访问密码', locale)} autocomplete="current-password" required maxlength="128"><button type="submit">${uiText('打开网站', locale)}</button></form><p id="message" role="alert"></p></main>`,
     script,
     '<meta name="robots" content="noindex,nofollow">',
+    '',
+    locale,
+    true,
   );
   return new Response(c.req.method === 'HEAD' ? null : page.html, { headers: page.headers });
 }

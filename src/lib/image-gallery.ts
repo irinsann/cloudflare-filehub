@@ -1,3 +1,4 @@
+import { tr } from './i18n';
 import { api, ApiError } from './api';
 
 const pageSize = 40;
@@ -29,7 +30,10 @@ async function readPage<T>(page: number, signal: AbortSignal) {
     } catch (error) {
       signal.throwIfAborted();
       if (!(error instanceof ApiError) || error.status !== 429) throw error;
-      if (retry >= 2) throw new Error('图片列表请求过于频繁，请稍后重试');
+      if (retry >= 2)
+        throw new Error(
+          tr('图片列表请求过于频繁，请稍后重试', 'Too many image requests. Try again shortly.'),
+        );
       await waitForRetry(signal);
     }
   }
@@ -46,10 +50,14 @@ export async function loadImageGallery<T extends { name: string }>(
     const previousCount = images.size;
     for (const image of next) images.set(image.name, image);
     if (next.length >= pageSize && images.size === previousCount)
-      throw new Error('图片列表分页重复，请刷新后重试');
+      throw new Error(
+        tr('图片列表分页重复，请刷新后重试', 'Duplicate image page. Refresh and try again.'),
+      );
     onProgress?.(images.size);
     signal.throwIfAborted();
     if (next.length < pageSize) return [...images.values()];
   }
-  throw new Error('图片列表超过分页范围，请刷新后重试');
+  throw new Error(
+    tr('图片列表超过分页范围，请刷新后重试', 'Image page is out of range. Refresh and try again.'),
+  );
 }

@@ -1,3 +1,4 @@
+import { tr } from '../../lib/i18n';
 import {
   FolderOpen,
   ChevronRight,
@@ -85,7 +86,7 @@ export function FilesPanel({
             }}
           >
             <FolderOpen size={16} />
-            {view === 'files' ? '全部文件' : heading}
+            {view === 'files' ? tr('全部文件', 'All files') : heading}
           </button>
           {crumbs.map((f, i) => (
             <span key={f.id}>
@@ -101,7 +102,12 @@ export function FilesPanel({
               </button>
             </span>
           ))}
-          {query && <span className="muted"> / 搜索：{query}</span>}
+          {query && (
+            <span className="muted">
+              {tr('/ 搜索：', '/ Search: ')}
+              {query}
+            </span>
+          )}
           {!!listing?.files.length && (
             <Button
               className="mobile-select-all"
@@ -115,7 +121,9 @@ export function FilesPanel({
                 )
               }
             >
-              {selected.size === listing.files.length ? '取消全选' : '全选'}
+              {selected.size === listing.files.length
+                ? tr('取消全选', 'Deselect all')
+                : tr('全选', 'Select all')}
             </Button>
           )}
         </div>
@@ -124,15 +132,15 @@ export function FilesPanel({
             <Button
               variant="ghost"
               size="sm"
-              aria-label="新建文件夹"
+              aria-label={tr('新建文件夹', 'New folder')}
               onClick={() => setAction({ type: 'folder' })}
             >
               <FolderPlus size={17} />
-              <span>新建文件夹</span>
+              <span>{tr('新建文件夹', 'New folder')}</span>
             </Button>
           )}
           <Select
-            aria-label="排序方式"
+            aria-label={tr('排序方式', 'Sort by')}
             className="file-sort"
             size="sm"
             value={sort + ':' + direction}
@@ -143,19 +151,19 @@ export function FilesPanel({
               setPage(1);
             }}
             options={[
-              { value: 'updated_at:desc', label: '最新修改' },
-              { value: 'updated_at:asc', label: '最早修改' },
-              { value: 'name:asc', label: '名称升序' },
-              { value: 'name:desc', label: '名称降序' },
-              { value: 'size:desc', label: '从大到小' },
-              { value: 'size:asc', label: '从小到大' },
+              { value: 'updated_at:desc', label: tr('最新修改', 'Newest first') },
+              { value: 'updated_at:asc', label: tr('最早修改', 'Oldest first') },
+              { value: 'name:asc', label: tr('名称升序', 'Name A–Z') },
+              { value: 'name:desc', label: tr('名称降序', 'Name Z–A') },
+              { value: 'size:desc', label: tr('从大到小', 'Largest first') },
+              { value: 'size:asc', label: tr('从小到大', 'Smallest first') },
             ]}
           />
           <div className="view-toggle">
             <button
               className={!grid ? 'selected' : ''}
               onClick={() => setGrid(false)}
-              aria-label="列表视图"
+              aria-label={tr('列表视图', 'List view')}
               aria-pressed={!grid}
             >
               <List size={16} />
@@ -163,7 +171,7 @@ export function FilesPanel({
             <button
               className={grid ? 'selected' : ''}
               onClick={() => setGrid(true)}
-              aria-label="网格视图"
+              aria-label={tr('网格视图', 'Grid view')}
               aria-pressed={grid}
             >
               <LayoutGrid size={16} />
@@ -173,14 +181,18 @@ export function FilesPanel({
       </div>
       {selected.size > 0 && (
         <div className="selection-bar">
-          <span>已选择 {selected.size} 个文件</span>
+          <span>
+            {tr('已选择', 'Selected ')}
+            {selected.size}
+            {tr('个文件', ' files')}
+          </span>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-            取消选择
+            {tr('取消选择', 'Deselect')}
           </Button>
           {view !== 'trash' && (
             <Button size="sm" variant="danger" onClick={() => setBulkDelete(true)}>
               <Trash2 size={14} />
-              批量删除
+              {tr('批量删除', 'Delete selected')}
             </Button>
           )}
         </div>
@@ -195,13 +207,13 @@ export function FilesPanel({
         <>
           {!grid && (!!listing?.files.length || !!folders.length) && (
             <div className="file-row table-head">
-              <span>名称</span>
-              <span>大小</span>
-              <span>修改时间</span>
+              <span>{tr('名称', 'Name')}</span>
+              <span>{tr('大小', 'Size')}</span>
+              <span>{tr('修改时间', 'Modified')}</span>
               <label className="file-checkbox">
                 <input
                   type="checkbox"
-                  aria-label="选择本页全部文件"
+                  aria-label={tr('选择本页全部文件', 'Select all files on this page')}
                   disabled={!listing?.files.length}
                   checked={!!listing?.files.length && selected.size === listing.files.length}
                   onChange={() =>
@@ -240,7 +252,7 @@ export function FilesPanel({
                   </span>
                   <span>
                     <span className="file-title">{f.name}</span>
-                    <small>文件夹</small>
+                    <small>{tr('文件夹', 'Folder')}</small>
                   </span>
                 </button>
                 <span className="file-size muted">—</span>
@@ -250,7 +262,7 @@ export function FilesPanel({
                   className="file-more"
                   variant="ghost"
                   size="icon"
-                  aria-label={`${f.name} 操作`}
+                  aria-label={tr('{0} 操作', 'Actions for {0}', { '0': f.name })}
                   onClick={() => setMenu({ folder: f })}
                 >
                   <MoreHorizontal size={18} />
@@ -290,10 +302,10 @@ export function FilesPanel({
                       {f.mime === 'text/markdown'
                         ? 'Markdown'
                         : f.mime === 'application/octet-stream'
-                          ? '文件'
+                          ? tr('文件', 'File')
                           : f.name.includes('.')
                             ? f.name.split('.').pop()?.toUpperCase()
-                            : '文件'}
+                            : tr('文件', 'File')}
                       {' · ' + sizeLabel(f.size)}
                     </small>
                   </span>
@@ -304,7 +316,7 @@ export function FilesPanel({
                   <input
                     type="checkbox"
                     checked={selected.has(f.id)}
-                    aria-label={`选择 ${f.name}`}
+                    aria-label={tr('选择 {0}', 'Select {0}', { '0': f.name })}
                     onChange={() => select(f.id)}
                   />
                 </label>
@@ -312,7 +324,7 @@ export function FilesPanel({
                   className="file-more"
                   variant="ghost"
                   size="icon"
-                  aria-label={`${f.name} 操作`}
+                  aria-label={tr('{0} 操作', 'Actions for {0}', { '0': f.name })}
                   onClick={() => setMenu({ file: f })}
                 >
                   <MoreHorizontal size={18} />
@@ -322,15 +334,22 @@ export function FilesPanel({
           </div>
           {!listing?.files.length && !folders.length && !error && (
             <EmptyState
-              label={query ? '没有找到匹配文件' : view === 'trash' ? '回收站为空' : '暂无文件'}
+              label={
+                query
+                  ? tr('没有找到匹配文件', 'No matching files')
+                  : view === 'trash'
+                    ? tr('回收站为空', 'Trash is empty')
+                    : tr('暂无文件', 'No files yet')
+              }
             />
           )}
         </>
       )}
       <div className="file-footer">
         <span>
-          {listing?.total ?? 0} 个文件
-          {folderTotal ? ` · ${folderTotal} 个文件夹` : ''}
+          {listing?.total ?? 0}
+          {tr('个文件', ' files')}
+          {folderTotal ? tr(' · {0} 个文件夹', ' · {0} folders', { '0': folderTotal }) : ''}
         </span>
         {(page > 1 || (!!listing && itemTotal > listing.limit)) && (
           <div>
@@ -340,7 +359,7 @@ export function FilesPanel({
               disabled={loading || page <= 1}
               onClick={() => setPage(page - 1)}
             >
-              上一页
+              {tr('上一页', 'Previous')}
             </Button>
             <span>{page}</span>
             <Button
@@ -349,7 +368,7 @@ export function FilesPanel({
               disabled={loading || !listing || page * listing.limit >= itemTotal}
               onClick={() => setPage(page + 1)}
             >
-              下一页
+              {tr('下一页', 'Next')}
             </Button>
           </div>
         )}

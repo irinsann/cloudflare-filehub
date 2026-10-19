@@ -7,10 +7,10 @@
   },
   "servers": [
     {
-      "url": "https://s.irin.im"
+      "url": "https://files.example.com"
     },
     {
-      "url": "https://233334.xyz"
+      "url": "https://cloud.example.com"
     }
   ],
   "security": [

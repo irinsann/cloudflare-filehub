@@ -39,11 +39,21 @@ export async function activeFolder(env: Env, id: string | null) {
 }
 export async function getFile(env: Env, id: string, deleted = false) {
   identifier.parse(id);
-  const file = await env.DB.prepare("SELECT * FROM files WHERE id=? AND status='ready'")
+  const file = await env.DB.prepare(
+    deleted
+      ? "SELECT * FROM files WHERE id=? AND status='ready'"
+      : `WITH RECURSIVE candidate AS (
+        SELECT * FROM files WHERE id=? AND status='ready' AND deleted_at IS NULL
+      ), chain(id,parent_id,deleted_at) AS (
+        SELECT d.id,d.parent_id,d.deleted_at FROM folders d JOIN candidate f ON d.id=f.folder_id
+        UNION SELECT d.id,d.parent_id,d.deleted_at FROM folders d JOIN chain c ON d.id=c.parent_id
+      ) SELECT * FROM candidate WHERE folder_id IS NULL OR (
+        EXISTS(SELECT 1 FROM chain) AND NOT EXISTS(SELECT 1 FROM chain WHERE deleted_at IS NOT NULL)
+      )`,
+  )
     .bind(id)
     .first<FileRecord>();
-  if (!file || (!deleted && file.deleted_at)) fail(404, '文件不存在');
-  if (!deleted) await activeFolder(env, file.folder_id);
+  if (!file) fail(404, '文件不存在');
   return file;
 }
 // Selection is internal SQL; every statement runs against the same transaction snapshot.

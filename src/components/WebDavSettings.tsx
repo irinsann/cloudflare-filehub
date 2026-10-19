@@ -1,3 +1,4 @@
+import { tr } from '../lib/i18n';
 import '../styles/webdav.css';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { Copy, ExternalLink, HardDrive, Plus } from 'lucide-react';
@@ -49,8 +50,8 @@ function ConnectionField({
           type="button"
           size="icon"
           variant="ghost"
-          aria-label={'复制' + label}
-          title={'复制' + label}
+          aria-label={tr('复制', 'Copy') + ' ' + label}
+          title={tr('复制', 'Copy') + ' ' + label}
           disabled={!value}
           onClick={onCopy}
         >
@@ -95,7 +96,11 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted)
-          setLoadError(error instanceof Error ? error.message : '读取 WebDAV 设置失败');
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : tr('读取 WebDAV 设置失败', 'Could not load WebDAV settings'),
+          );
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -129,7 +134,12 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
           : current,
       );
     } catch (error) {
-      if (mounted.current) setActionError(error instanceof Error ? error.message : '创建凭据失败');
+      if (mounted.current)
+        setActionError(
+          error instanceof Error
+            ? error.message
+            : tr('创建凭据失败', 'Could not create credentials'),
+        );
     } finally {
       locked.current = false;
       if (mounted.current) setBusy(false);
@@ -154,9 +164,14 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
           : current,
       );
       setRevoking(null);
-      notify('WebDAV 凭据已撤销');
+      notify(tr('WebDAV 凭据已撤销', 'WebDAV credentials revoked'));
     } catch (error) {
-      if (mounted.current) setActionError(error instanceof Error ? error.message : '撤销凭据失败');
+      if (mounted.current)
+        setActionError(
+          error instanceof Error
+            ? error.message
+            : tr('撤销凭据失败', 'Could not revoke credentials'),
+        );
     } finally {
       locked.current = false;
       if (mounted.current) setBusy(false);
@@ -169,8 +184,8 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
         value={value}
         onCopy={() =>
           void copy(value)
-            .then(() => notify(label + '已复制'))
-            .catch(() => notify('复制失败，请手动复制'))
+            .then(() => notify(label + ' · ' + tr('已复制', 'Copied')))
+            .catch(() => notify(tr('复制失败，请手动复制', 'Could not copy. Copy manually.')))
         }
       />
     );
@@ -195,7 +210,7 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
           }}
         >
           <Plus size={16} />
-          创建凭据
+          {tr('创建凭据', 'Create credentials')}
         </Button>
       </div>
       <a
@@ -204,11 +219,11 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
         target="_blank"
         rel="noreferrer"
       >
-        RaiDrive / Windows 配置
+        {tr('RaiDrive / Windows 配置', 'RaiDrive / Windows setup')}
         <ExternalLink size={14} />
       </a>
       {loading ? (
-        <p role="status">加载中…</p>
+        <p role="status">{tr('加载中…', 'Loading…')}</p>
       ) : loadError ? (
         <div className="error-banner" role="alert">
           <span>{loadError}</span>
@@ -218,7 +233,7 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
             variant="outline"
             onClick={() => setRevision((value) => value + 1)}
           >
-            重试
+            {tr('重试', 'Retry')}
           </Button>
         </div>
       ) : (
@@ -227,7 +242,7 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
             <div className="webdav-connect-heading">
               <LinkOriginSelect compact />
               <span>
-                单次上传{' '}
+                {tr('单次上传', 'Upload limit')}{' '}
                 {new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 }).format(
                   info.maxUploadBytes / 1000000,
                 )}{' '}
@@ -235,8 +250,8 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
               </span>
             </div>
             <div className="webdav-connection">
-              {copyField('服务器地址', endpoint)}
-              {copyField('用户名', info.username)}
+              {copyField(tr('服务器地址', 'Server URL'), endpoint)}
+              {copyField(tr('用户名', 'Username'), info.username)}
             </div>
             {info.credentials.length ? (
               <div className="webdav-credentials">
@@ -249,14 +264,16 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
                         <code>{credential.prefix}…</code>
                         <small>
                           {credential.revoked_at
-                            ? '已撤销'
+                            ? tr('已撤销', 'Revoked')
                             : !active
-                              ? '已到期'
-                              : '有效至 ' + dateLabel(credential.expires_at)}
+                              ? tr('已到期', 'Expired')
+                              : tr('有效至 ', 'Expires ') + dateLabel(credential.expires_at)}
                         </small>
                         <small>
-                          最近使用：
-                          {credential.last_used_at ? dateLabel(credential.last_used_at) : '未使用'}
+                          {tr('最近使用：', 'Last used: ')}
+                          {credential.last_used_at
+                            ? dateLabel(credential.last_used_at)
+                            : tr('未使用', 'Never used')}
                         </small>
                       </div>
                       <Button
@@ -269,58 +286,65 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
                           setRevoking(credential);
                         }}
                       >
-                        撤销
+                        {tr('撤销', 'Revoke')}
                       </Button>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <p>暂无凭据</p>
+              <p>{tr('暂无凭据', 'No credentials')}</p>
             )}
           </>
         )
       )}
       {creating && (
-        <Modal title={password ? '保存 WebDAV 密码' : '创建 WebDAV 凭据'} onClose={close}>
+        <Modal
+          title={
+            password
+              ? tr('保存 WebDAV 密码', 'Save WebDAV password')
+              : tr('创建 WebDAV 凭据', 'Create WebDAV credentials')
+          }
+          onClose={close}
+        >
           {password ? (
             <div className="form-stack">
-              <p>密码仅显示一次，请保存。</p>
+              <p>{tr('密码仅显示一次，请保存。', 'This password is shown once. Save it now.')}</p>
               <LinkOriginSelect compact />
-              {copyField('服务器地址', endpoint)}
-              {copyField('用户名', info?.username ?? 'rcloud')}
-              {copyField('密码', password)}
+              {copyField(tr('服务器地址', 'Server URL'), endpoint)}
+              {copyField(tr('用户名', 'Username'), info?.username ?? 'rcloud')}
+              {copyField(tr('密码', 'Password'), password)}
               <div className="dialog-footer">
                 <Button type="button" onClick={close}>
-                  已保存
+                  {tr('已保存', 'Saved')}
                 </Button>
               </div>
             </div>
           ) : (
             <form className="form-stack" onSubmit={(event) => void create(event)}>
               <label>
-                名称
+                {tr('名称', 'Name')}
                 <input
                   autoFocus
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   maxLength={80}
                   required
-                  placeholder="例如：RaiDrive"
+                  placeholder={tr('例如：RaiDrive', 'For example: RaiDrive')}
                   disabled={busy}
                 />
               </label>
               <div className="form-field">
-                <label htmlFor={daysId}>有效期</label>
+                <label htmlFor={daysId}>{tr('有效期', 'Expires')}</label>
                 <Select
                   id={daysId}
-                  aria-label="有效期"
+                  aria-label={tr('有效期', 'Expires')}
                   value={days}
                   onValueChange={setDays}
                   options={[
-                    { value: '30', label: '30 天' },
-                    { value: '90', label: '90 天' },
-                    { value: '365', label: '365 天' },
+                    { value: '30', label: tr('30 天', '30 days') },
+                    { value: '90', label: tr('90 天', '90 days') },
+                    { value: '365', label: tr('365 天', '365 days') },
                   ]}
                   disabled={busy}
                 />
@@ -332,10 +356,10 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
               )}
               <div className="dialog-footer">
                 <Button type="button" variant="ghost" disabled={busy} onClick={close}>
-                  取消
+                  {tr('取消', 'Cancel')}
                 </Button>
                 <Button type="submit" disabled={busy || !name.trim()}>
-                  {busy ? '创建中…' : '创建'}
+                  {busy ? tr('创建中…', 'Creating…') : tr('创建', 'Create')}
                 </Button>
               </div>
             </form>
@@ -344,8 +368,11 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
       )}
       {revoking && (
         <Modal
-          title="撤销 WebDAV 凭据"
-          description="使用此凭据的设备将无法继续连接。"
+          title={tr('撤销 WebDAV 凭据', 'Revoke WebDAV credentials')}
+          description={tr(
+            '使用此凭据的设备将无法继续连接。',
+            'Devices using these credentials will no longer be able to connect.',
+          )}
           onClose={close}
         >
           <p>{revoking.name}</p>
@@ -356,7 +383,7 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
           )}
           <div className="dialog-footer">
             <Button type="button" variant="ghost" disabled={busy} onClick={close}>
-              取消
+              {tr('取消', 'Cancel')}
             </Button>
             <Button
               type="button"
@@ -364,7 +391,7 @@ export function WebDavSettings({ notify }: { notify: (message: string) => void }
               disabled={busy}
               onClick={() => void revoke(revoking)}
             >
-              {busy ? '撤销中…' : '撤销'}
+              {busy ? tr('撤销中…', 'Revoking…') : tr('撤销', 'Revoke')}
             </Button>
           </div>
         </Modal>

@@ -2,24 +2,22 @@
 
 ## 数据表
 
-| 表                       | 职责与约束                                                                                                       |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| files                    | UUID、随机 object_key（唯一）、文件名/目录/MIME/大小/etag、version、pending/ready/deleting、毫秒时间、deleted_at |
-| folders                  | UUID、父目录外键、名称、软删除；活跃兄弟名称唯一，根目录通过 COALESCE 索引统一                                   |
-| file_shares              | 文件外键、唯一 token_hash、带盐 password_hash、有效期/启用/下载权限、查看与下载计数                              |
-| markdown_pages           | 文件一对一、唯一 Slug、标题简介、发布标志、snapshot_key、published_version、下载/索引权限、阅读计数              |
-| markdown_attachments     | 归属文档的文件外键、独立随机图片对象 Key、MIME/大小                                                              |
-| page_attachments         | 页面和已引用附件复合主键；限制快照可公开的附件集合                                                               |
-| operations               | 操作类型、目标 ID、时间；无密码、令牌或正文                                                                      |
-| cleanup_tasks            | 对象 Key 主键、创建时间、尝试次数；跨存储补偿                                                                    |
-| rate_limits              | scope + 哈希 IP/身份 + 时间窗；原子计数和到期时间                                                                |
-| site_shares              | R2 文件夹外键、签名种子、密码哈希、授权版本、有效期/撤销状态与 HTML 浏览计数                                     |
-| google_drive_connections | 单账号连接 ID、账户摘要、加密访问/刷新令牌、有效期与刷新互斥租约                                                 |
-| google_drive_generation  | 连接代次；阻止断开或换号后迟到的 OAuth 回调覆盖新状态                                                            |
-| google_drive_oauth       | 一次性 state/nonce 摘要、加密 PKCE verifier、发起域名、管理员会话与到期时间                                      |
-| google_drive_uploads     | 连接外键、加密上传会话地址、远端文件 ID、预期大小、确认偏移、完成结果与互斥租约                                  |
+| 表                                        | 职责与约束                                                                                                       |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| files                                     | UUID、随机 object_key（唯一）、文件名/目录/MIME/大小/etag、version、pending/ready/deleting、毫秒时间、deleted_at |
+| folders                                   | UUID、父目录外键、名称、软删除；活跃兄弟名称唯一，根目录通过 COALESCE 索引统一                                   |
+| file_shares                               | 文件外键、唯一 token_hash、带盐 password_hash、有效期/启用/下载权限、查看与下载计数                              |
+| markdown_pages                            | 文件一对一、唯一 Slug、标题简介、发布标志、snapshot_key、published_version、下载/索引权限、阅读计数              |
+| markdown_attachments                      | 归属文档的文件外键、独立随机图片对象 Key、MIME/大小                                                              |
+| page_attachments                          | 页面和已引用附件复合主键；限制快照可公开的附件集合                                                               |
+| operations                                | 操作类型、目标 ID、时间；无密码、令牌或正文                                                                      |
+| cleanup_tasks                             | 对象 Key 主键、创建时间、尝试次数；跨存储补偿                                                                    |
+| rate_limits                               | scope + 哈希 IP/身份 + 时间窗；原子计数和到期时间                                                                |
+| html_hosts                                | file_id/专用 share_id 一对一映射、版本与创建时间；删除源文件或分享时级联清理                                     |
+| storage_allocations / storage_quota_state | 对象与上传预留容量账本、事务内精确计数；50 GiB 总容量                                                            |
+| site_shares                               | R2 文件夹外键、签名种子、密码哈希、授权版本、有效期/撤销状态与 HTML 浏览计数                                     |
 
-完整 Schema 见 `db/migrations/` 中的顺序迁移；Google Drive 与目录网站分享分别由 `0011_google_drive.sql`、`0012_site_shares.sql` 新增。Drizzle 定义从 `db/schema.ts` 汇总。启用外键和文件大小非负约束；常用目录、删除状态、最近更新时间、附件归属、操作时间和限流到期字段均有索引。目录触发器在 SQLite 内部再次阻断循环、非空删除和移入已删除目录，防止竞争更新绕过服务层检查。Drizzle 用于文件元数据更新，复杂条件/CAS/递归 CTE 使用参数化 D1 SQL，避免引入不适配边缘事务的封装。
+完整 Schema 见 `db/migrations/` 中的顺序迁移；目录网站、HTML 上传和容量计数分别由 `0012`、`0014`、`0015` 迁移提供。历史 `0011` Google 表由 `0013` 移除；当前运行时代码不连接 Google Drive。Drizzle 定义从 `db/schema.ts` 汇总。启用外键和文件大小非负约束；常用目录、删除状态、最近更新时间、附件归属、操作时间和限流到期字段均有索引。目录触发器在 SQLite 内部再次阻断循环、非空删除和移入已删除目录，防止竞争更新绕过服务层检查。Drizzle 用于文件元数据更新，复杂条件/CAS/递归 CTE 使用参数化 D1 SQL，避免引入不适配边缘事务的封装。
 
 ## 对象生命周期
 
@@ -57,15 +55,21 @@ HTML 直接展示，不使用 iframe。响应保持 `sandbox allow-scripts` 且�
 
 网站应使用相对路径；不自动重写域名根绝对路径或网页字节。浏览器本地存储、Service Worker/PWA、跨站 API、表单及外部登录不属于此隔离模式。单文件 `/s/:token` 继续使用其原有、更严格的资源策略。
 
-## 独立 Google Drive 挂载
+## HTML 上传分享
 
-R2 继续作为主网盘，维持现有 50GiB 容量、图床、Markdown、分享和 WebDAV。Google Drive 使用独立页面、`shared/google-drive.ts` 类型和 `/api/admin/google-drive/*` 接口；远端文件不进入 R2 的文件、容量分配或清理任务，不建立全盘 D1 镜像。浏览使用 Google 文件 ID 与游标分页，写操作依据远端 capabilities；普通文件流式下载，原生文档按支持的格式导出，普通导出的 10 MB 限制仍由 Google 决定。
+`worker/html-hosting.ts` 管理专用的 `html_hosts` 映射。一条记录只关联现有 files 和 file_shares，不拥有新的对象 Key，不复制内容或重复分配容量。网页先确保根目录 `/Html-hosting`，再通过原有分片接口上传；上传成功后按 file_id 幂等创建一个专用分享。现有普通文件分享保持独立，不会被自动接管。
 
-`worker/google-drive-oauth.ts` 负责授权，`google-drive-client.ts` 负责加密凭据、Google 请求和刷新，`google-drive-uploads.ts` 负责上传会话，`google-drive.ts` 编排文件接口。OAuth 发起要求管理员身份与可信 Origin；独立回调使用一次性 state、PKCE 和短期 Lax nonce Cookie，不放宽主登录的 Strict Cookie。香港反代即使保留上游 Host，也使用白名单内的浏览器 Origin 生成回调；回调核对保存的域名及 nonce，不信任任意转发主机头。
+注册只接受该目录内已完成且存活的 HTML/HTM 文件，提交事务时再次检查目录、文件名、版本和对象身份。并发注册只创建一条映射及一个分享，之后的 POST 返回原记录；已撤销记录不会被迟到的发布重试重新启用。同名文件保留各自文件 ID、对象及链接。
 
-普通写入、重连和断开操作绑定当前连接 ID；上传队列与会话同样绑定原账号，避免旧窗口操作另一个账号。令牌刷新和上传分别使用 D1 条件租约，迟到响应不得恢复已断开的连接。上传以 16 MiB 分片顺序转发，失联先查询 Google 确认的偏移；已经消费的请求流不能直接重放。取消先确认远端是否已完成，查询失败保留待确认状态。断开与定时清理只移除本地连接或过期会话，均不删除 Google 文件。
+撤销和恢复采用版本条件更新。普通分享界面修改启用、密码、过期或下载设置时，数据库触发器同步增加 hosting 版本，防止旧窗口覆盖新状态。恢复保留既有密码、有效期和下载权限，不恢复已删除的文件。源文件进入回收站会关闭分享；恢复文件不会自动重新公开。永久删除通过外键级联清除 hosting 映射。公开响应复用原 `/s/:token` 的 HTML 沙箱规则与统计，下载复用 `/d/:token`。
 
-OAuth 客户端由部署者配置，真实账号仍需在 Google 页面授权。当前 Google 自动化验证使用模拟 API，不能代替真实账号授权及跨代理浏览器联调；最新验收状态见 [验证指南](verification.md)。
+## 资源使用与准确性
+
+`storage_allocations` 仍是每个对象及预留空间的容量账本。迁移 0015 先对现有账本求和回填 `storage_quota_state.used_bytes`，再用 INSERT、DELETE、size UPDATE 触发器随同账本事务增减。容量查询和预留读取单行计数，不再反复扫描整张表；事务回滚同时回滚计数。回收站、快照、附件、上传预留及尚未成功删除的 R2 对象仍占容量。人工维护应修改账本，不应直接改计数器。
+
+普通完整读取及 textObject 使用一次 R2 GET，避免先做额外 HEAD；HEAD 和 Range 保留原协议检查。getFile 用同一次实时 D1 查询取得元数据并检查祖先目录，公开权限不缓存。文件夹网站按目录和名称建立索引；清理前的上传、图床和快照引用检查也使用索引，不跳过引用验证。
+
+限流达到上限后不再重复写计数，准入数量保持不变。图片引用、下载和其他访问统计没有抽样或降低精度。每次请求仍消耗 Worker/数据库资源；这些优化不构成免费额度或访问人数承诺。
 
 ## 前端
 
@@ -74,3 +78,5 @@ OAuth 客户端由部署者配置，真实账号仍需在 Google 页面授权。
 WebDAV 位于 `/dav/`，使用独立凭据（仅保存 SHA-256 摘要），共享文件/目录表、私有 R2 与容量配额。路径查询使用递归 SQL；重名返回冲突。覆盖先写新对象，再切换元数据并排队清理旧对象。持久锁及全局短期写入租约协调网页和 WebDAV 的命名空间修改；目录删除从叶到根软删除并撤销公开授权。XML 使用受限的 namespace-aware 解析器，拒绝 DOCTYPE 与自定义实体。详细协议限制见 [WebDAV](webdav.md)。
 
 全文搜索、历史版本、多用户可新增服务接口，当前不引入微服务或新的付费产品依赖。
+
+语言工具位于 `shared/i18n.ts` 与 `src/lib/i18n.ts`；界面偏好保存在当前站点浏览器存储及非认证 Cookie 中。语言切换不修改文件内容、分享权限或存储命名。API 的机器可读状态码与路径保持稳定。
