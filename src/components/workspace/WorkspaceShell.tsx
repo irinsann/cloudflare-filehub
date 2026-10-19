@@ -76,11 +76,11 @@ export function WorkspaceShell({
   );
   const links = (
     <nav className="workspace-nav" aria-label="工作空间">
-      {sections.map((s, i) => (
+      {sections.map((s) => (
         <button
           key={s.id}
           className={
-            'nav-item ' + (view === s.id ? 'active' : '') + (i === 6 ? ' nav-divider' : '')
+            'nav-item ' + (view === s.id ? 'active' : '') + (s.id === 'trash' ? ' nav-divider' : '')
           }
           aria-current={view === s.id ? 'page' : undefined}
           onClick={() => go(s.id)}

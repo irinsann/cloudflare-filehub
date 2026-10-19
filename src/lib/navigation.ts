@@ -7,6 +7,7 @@ import {
   Image,
   Trash2,
   Settings2,
+  Cloud,
 } from 'lucide-react';
 export const sections = [
   { id: 'files', label: '我的文件', icon: FolderOpen },
@@ -15,6 +16,7 @@ export const sections = [
   { id: 'published', label: '已发布文章', icon: Globe2 },
   { id: 'shares', label: '文件分享', icon: Link2 },
   { id: 'images', label: '图床', icon: Image },
+  { id: 'google-drive', label: 'Google Drive', icon: Cloud },
   { id: 'trash', label: '回收站', icon: Trash2 },
   { id: 'settings', label: '设置', icon: Settings2 },
 ] as const;

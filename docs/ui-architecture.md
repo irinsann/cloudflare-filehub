@@ -13,41 +13,48 @@ RCloud 使用蓝灰背景、蓝色操作色和悬浮玻璃面板。导航与操�
 
 ## 模块职责
 
-| 模块                                    | 职责                                                     |
-| --------------------------------------- | -------------------------------------------------------- |
-| `src/App.tsx`                           | 页面编排、当前编辑文件、预览、批量操作与反馈             |
-| `src/hooks/useFileBrowser.ts`           | 列表请求、过期请求取消、搜索、排序、分页、导航与视图偏好 |
-| `src/hooks/useSettings.ts`              | 账号与容量设置读取、请求取消和独立错误状态               |
-| `src/hooks/useTheme.ts`                 | 明暗主题、系统初始偏好及本地保存；存储不可用时继续工作   |
-| `src/hooks/useUploads.ts`               | 上传队列状态、失败重试和完成后的列表刷新                 |
-| `src/components/workspace/`             | 布局、文件列表、文件操作菜单和上传队列                   |
-| `src/components/EmptyState.tsx`         | 文件、图床及管理页面共用的空状态                         |
-| `src/components/ui/`                    | 类型明确的按钮变体及 Radix 对话框封装                    |
-| `src/components/ApiTokens.tsx`          | 文件与图床上传 Token 管理、一次性显示和 ShareX 配置下载  |
-| `src/components/PublicLinks.tsx`        | 公开链接域名的共享切换控件、选中反馈和浏览器偏好保存     |
-| `src/lib/public-links.ts`               | 域名配置校验、默认选择和保留路径/参数的可信链接转换      |
-| `src/lib/upload.ts`                     | 网盘与图床共用的分片上传、重试和失败清理                 |
-| `src/lib/image-upload.ts`               | 图床与编辑器共用的 MD5 图床发布、返回直链和重复源清理    |
-| `src/lib/image-gallery.ts`              | 画廊全量记录读取、去重、限流重试及请求取消               |
-| `src/pages/Editor.tsx`                  | Markdown 编辑、保存/发布、图片选取/拖入/粘贴与直链插入   |
-| `shared/brand.ts`、`public/favicon.svg` | 后台与服务端页面共享标志、站点图标                       |
-| `worker/public-styles.ts`               | 公开文章、分享、错误页及登录页的基础样式                 |
-| `worker/login-view.ts`                  | 登录、绑定验证器及恢复流程的页面结构与交互               |
+| 模块                                                                              | 职责                                                     |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `src/App.tsx`                                                                     | 页面编排、当前编辑文件、预览、批量操作与反馈             |
+| `src/hooks/useFileBrowser.ts`                                                     | 列表请求、过期请求取消、搜索、排序、分页、导航与视图偏好 |
+| `src/hooks/useSettings.ts`                                                        | 账号与容量设置读取、请求取消和独立错误状态               |
+| `src/hooks/useTheme.ts`                                                           | 明暗主题、系统初始偏好及本地保存；存储不可用时继续工作   |
+| `src/hooks/useUploads.ts`                                                         | 上传队列状态、失败重试和完成后的列表刷新                 |
+| `src/components/workspace/`                                                       | 布局、文件列表、文件操作菜单和上传队列                   |
+| `src/components/EmptyState.tsx`                                                   | 文件、图床及管理页面共用的空状态                         |
+| `src/components/ui/`                                                              | 类型明确的按钮变体及 Radix 对话框封装                    |
+| `src/components/ApiTokens.tsx`                                                    | 文件与图床上传 Token 管理、一次性显示和 ShareX 配置下载  |
+| `src/components/PublicLinks.tsx`                                                  | 公开链接域名的共享切换控件、选中反馈和浏览器偏好保存     |
+| `src/lib/public-links.ts`                                                         | 域名配置校验、默认选择和保留路径/参数的可信链接转换      |
+| `src/lib/upload.ts`                                                               | 网盘与图床共用的分片上传、重试和失败清理                 |
+| `src/lib/image-upload.ts`                                                         | 图床与编辑器共用的 MD5 图床发布、返回直链和重复源清理    |
+| `src/lib/image-gallery.ts`                                                        | 画廊全量记录读取、去重、限流重试及请求取消               |
+| `src/pages/Editor.tsx`                                                            | Markdown 编辑、保存/发布、图片选取/拖入/粘贴与直链插入   |
+| `src/pages/GoogleDrive.tsx`                                                       | 独立 Google Drive 浏览、游标分页、搜索、回收站与目录导航 |
+| `src/components/GoogleDriveConnection.tsx`                                        | 设置页与独立页共用的连接状态、授权、重新连接和断开入口   |
+| `src/components/GoogleDriveActions.tsx`                                           | Google 文件能力检查、重命名、移动、删除、恢复与导出选择  |
+| `src/hooks/useGoogleDriveUploads.ts`、`src/components/GoogleDriveUploadQueue.tsx` | 绑定账号的独立上传队列、进度、重试与取消确认             |
+| `src/lib/google-drive-upload.ts`、`src/lib/google-drive-api.ts`                   | 顺序分片、失联查询偏移与绑定连接的写请求                 |
+| `src/components/Actions.tsx`、`src/pages/Management.tsx`                          | R2 目录网站发布、文件/HTML 网站分享切换、再次复制和撤销  |
+| `shared/brand.ts`、`public/favicon.svg`                                           | 后台与服务端页面共享标志、站点图标                       |
+| `worker/public-styles.ts`                                                         | 公开文章、分享、错误页及登录页的基础样式                 |
+| `worker/login-view.ts`                                                            | 登录、绑定验证器及恢复流程的页面结构与交互               |
 
 ## 样式与资源
 
 `src/styles.css` 只负责导入，组件布局各自归入对应文件：
 
-| 样式文件       | 内容                                           |
-| -------------- | ---------------------------------------------- |
-| `tokens.css`   | 颜色、字体、间距、侧栏宽度等公共变量，明暗主题 |
-| `base.css`     | 显式基础重置、按钮、焦点、加载及空状态         |
-| `shell.css`    | 桌面侧栏、搜索、移动导航、抽屉及页面标题       |
-| `files.css`    | 文件工具栏、列表、网格、选择状态及分页         |
-| `overlays.css` | 对话框、操作菜单、消息及上传队列               |
-| `pages.css`    | 设置、API Token、分享/文章管理及图床           |
-| `prose.css`    | Markdown 阅读排版与代码高亮                    |
-| `editor.css`   | 编辑器工具栏、双栏与移动端切换                 |
+| 样式文件           | 内容                                           |
+| ------------------ | ---------------------------------------------- |
+| `tokens.css`       | 颜色、字体、间距、侧栏宽度等公共变量，明暗主题 |
+| `base.css`         | 显式基础重置、按钮、焦点、加载及空状态         |
+| `shell.css`        | 桌面侧栏、搜索、移动导航、抽屉及页面标题       |
+| `files.css`        | 文件工具栏、列表、网格、选择状态及分页         |
+| `overlays.css`     | 对话框、操作菜单、消息及上传队列               |
+| `pages.css`        | 设置、API Token、分享/文章管理及图床           |
+| `prose.css`        | Markdown 阅读排版与代码高亮                    |
+| `editor.css`       | 编辑器工具栏、双栏与移动端切换                 |
+| `google-drive.css` | Google Drive 连接面板、文件列表及独立上传队列  |
 
 样式使用原生 CSS 和语义类名，不依赖 Tailwind、运行时工具类合并或组件生成器配置。新增视觉状态应放入所属文件，避免新增覆盖整站的补丁样式层。公共页由 Worker 直接返回 HTML，样式保持独立以免加载后台应用；修改主题或标志时应同时检查后台与公共页。
 
@@ -75,8 +82,16 @@ RCloud 使用蓝灰背景、蓝色操作色和悬浮玻璃面板。导航与操�
 
 列表和画廊复用复制直链、Markdown、下载、撤销、恢复及永久删除操作，保留引用/下载统计。画廊使用管理员私有图片接口，撤销公开直链后的图片仍可查看，浏览画廊不会增加公开引用次数；点击图片打开大图预览。卡片使用自适应网格和固定图片比例，避免图片加载导致布局跳动。
 
+## Google Drive 与 HTML 网站分享
+
+“我的文件”继续展示 R2 主网盘；Google Drive 通过独立导航进入，复用现有主题、按钮、选择控件和弹窗，不混入 R2 文件列表、容量、WebDAV 或回收站。Google 页面展示独立账号和容量，按游标翻页。远端能力决定可用操作；原生 Google 文档提供导出格式和 Google 打开入口，普通导出超出 Google 限制时明确反馈。
+
+Google 上传使用单独队列，切换页面不丢失状态；每项绑定入队时的连接 ID。账号改变后停止旧队列，重试不会自动改用新账号。取消前查询远端完成状态，已完成显示成功，确认失败保留“取消结果待确认”；Google 授权失效显示重新连接，不将用户踢出 RCloud 登录。
+
+R2 文件夹菜单提供“发布 HTML 网站”，可设置密码和有效期。分享管理页在文件与 HTML 网站之间切换，复用公开域名选择、复制反馈与手动复制回退。访客打开网站直接看到原 HTML，界面不添加 iframe 或网盘外壳。网站的目录、资源与浏览器权限边界见 [数据与安全架构](architecture.md)，不能把同域路径分享描述成任意网站的无修改托管。
+
 ## 验收与变更约束
 
-使用本地测试数据检查桌面、平板和手机，至少覆盖文件列表/网格、空回收站、图床、设置 Token 弹窗、编辑器、登录、分享与公开文章。检查长文件名、空结果、明暗主题、键盘焦点、Esc 关闭、触摸点击、横向溢出以及空页面的多余滚动。
+使用本地测试数据检查桌面、平板和手机，至少覆盖文件列表/网格、空回收站、图床、设置 Token 弹窗、编辑器、登录、分享与公开文章，以及 Google Drive 的未配置/未连接/失效状态、独立上传队列和 HTML 网站分享。检查长文件名、空结果、明暗主题、键盘焦点、Esc 关闭、触摸点击、横向溢出以及空页面的多余滚动。Google 模拟接口测试与真实授权验收分别记录，不以模拟成功宣称已实连账号。
 
 样式变更不应改变认证、文件公开权限、分片上传、50GiB 总容量、MD5 图床命名或 ShareX 接口。业务回归与实际浏览器检查分别执行，详见 [验证指南](verification.md)。发布前运行 `pnpm check`；更新截图时使用本地样例，避免包含私人文件、邮箱、Token 或验证码。

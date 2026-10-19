@@ -17,6 +17,9 @@ import { UploadQueue } from './components/workspace/UploadQueue';
 import { Management } from './pages/Management';
 import { ImageHosting } from './pages/ImageHosting';
 import { PublicLinksProvider } from './components/PublicLinks';
+import { useGoogleDriveUploads } from './hooks/useGoogleDriveUploads';
+import { GoogleDriveUploadQueue } from './components/GoogleDriveUploadQueue';
+import { GoogleDrive } from './pages/GoogleDrive';
 const Editor = lazy(() => import('./pages/Editor')),
   Preview = lazy(() => import('./components/Preview'));
 export default function App() {
@@ -37,6 +40,8 @@ export default function App() {
     searchInput = useRef<HTMLInputElement>(null);
   const notify = useCallback((message: string) => setToast(message), []);
   const uploads = useUploads(settings, reload, notify);
+  const [driveRevision, setDriveRevision] = useState(0);
+  const driveUploads = useGoogleDriveUploads(() => setDriveRevision((value) => value + 1));
   useEffect(() => {
     if (!toast) return;
     const timeout = setTimeout(() => setToast(''), 4500);
@@ -88,7 +93,11 @@ export default function App() {
   }
   const heading = sections.find((s) => s.id === view)!.label;
   const management =
-    view === 'published' || view === 'shares' || view === 'settings' || view === 'images';
+    view === 'published' ||
+    view === 'shares' ||
+    view === 'settings' ||
+    view === 'images' ||
+    view === 'google-drive';
   if (editing)
     return (
       <PublicLinksProvider settings={settings}>
@@ -128,7 +137,7 @@ export default function App() {
         theme={theme}
         toggleTheme={toggleTheme}
         search={search}
-        onSearch={searchFiles}
+        onSearch={view === 'google-drive' ? browser.setSearch : searchFiles}
         searchInput={searchInput}
         allowDrop={!management && view !== 'trash'}
         onFiles={(files) => uploads.add(files, folder)}
@@ -182,6 +191,14 @@ export default function App() {
           )}
           {view === 'images' ? (
             <ImageHosting settings={settings} notify={notify} onComplete={reload} />
+          ) : view === 'google-drive' ? (
+            <GoogleDrive
+              search={browser.query}
+              clearSearch={() => browser.setSearch('')}
+              revision={driveRevision}
+              uploads={driveUploads}
+              notify={notify}
+            />
           ) : management ? (
             <Management
               view={view}
@@ -189,6 +206,8 @@ export default function App() {
               settings={settings}
               onEdit={setEditing}
               notify={notify}
+              googleUploading={driveUploads.busy}
+              stopGoogleUploads={driveUploads.stopForDisconnect}
             />
           ) : (
             <FilesPanel
@@ -201,7 +220,10 @@ export default function App() {
           )}
         </div>
 
-        <UploadQueue uploads={uploads} />
+        <div className="upload-stack">
+          <UploadQueue uploads={uploads} />
+          <GoogleDriveUploadQueue uploads={driveUploads} />
+        </div>
         {toast && (
           <div className="toast" role="status">
             <CheckCircle2 size={17} />

@@ -4,6 +4,8 @@ import { Modal } from './ui/dialog';
 import { Button } from './ui/button';
 import { apiPage, copy, send } from '../lib/api';
 import { LinkOriginSelect, usePublicLinks } from './PublicLinks';
+import { Select } from './ui/select';
+import type { SiteShareListItem } from '../../shared/site-shares';
 export type Action = {
   type:
     | 'folder'
@@ -14,7 +16,8 @@ export type Action = {
     | 'delete'
     | 'purge'
     | 'emptyTrash'
-    | 'direct';
+    | 'direct'
+    | 'site';
   file?: FileRecord;
   folder?: FolderRecord;
 };
@@ -36,6 +39,7 @@ export function Actions({
     action.file?.name ?? action.folder?.name ?? (action.type === 'markdown' ? '未命名.md' : ''),
   );
   const [password, setPassword] = useState(''),
+    [siteDays, setSiteDays] = useState('0'),
     [expires, setExpires] = useState(''),
     [download, setDownload] = useState(true),
     [busy, setBusy] = useState(false),
@@ -89,6 +93,7 @@ export function Actions({
     purge: '永久删除',
     emptyTrash: '清空回收站',
     direct: '生成文件直链',
+    site: '发布 HTML 网站',
   };
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -121,6 +126,17 @@ export function Actions({
           'DELETE',
         );
       if (action.type === 'emptyTrash') await send('/trash', 'DELETE');
+      if (action.type === 'site') {
+        const result = await send<SiteShareListItem>('/site-shares', 'POST', {
+          folder_id: folder!.id,
+          password: password || undefined,
+          expires_in_days: Number(siteDays) || null,
+        });
+        setLink(result.url);
+        onDone();
+        notify('网站已发布');
+        return;
+      }
       if (action.type === 'share' || action.type === 'direct') {
         const result = await send<{ url: string; directUrl: string }>('/shares', 'POST', {
           file_id: file!.id,
@@ -129,6 +145,7 @@ export function Actions({
           allow_download: action.type === 'direct' || download,
         });
         setLink(action.type === 'direct' ? result.directUrl : result.url);
+        onDone();
         notify(action.type === 'direct' ? '文件直链已创建' : '分享已创建');
         return;
       }
@@ -235,40 +252,61 @@ export function Actions({
             <p className="muted">目标：{path.at(-1)?.name ?? '根目录'}</p>
           </>
         )}
-        {(action.type === 'share' || action.type === 'direct') && !link && (
-          <>
-            {action.type === 'share' && (
-              <label>
-                访问密码（可选）
-                <input
-                  type="password"
-                  value={password}
-                  maxLength={128}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="new-password"
-                />
-              </label>
-            )}
-            <label>
-              过期时间（留空永久有效）
-              <input
-                type="datetime-local"
-                value={expires}
-                onChange={(e) => setExpires(e.target.value)}
-              />
-            </label>
-            {action.type === 'share' && (
-              <label className="check-label">
-                <input
-                  type="checkbox"
-                  checked={download}
-                  onChange={(e) => setDownload(e.target.checked)}
-                />
-                允许下载
-              </label>
-            )}
-          </>
-        )}
+        {(action.type === 'share' || action.type === 'direct' || action.type === 'site') &&
+          !link && (
+            <>
+              {action.type === 'site' && <p>以 index.html 为入口，资源使用相对路径。</p>}
+              {(action.type === 'share' || action.type === 'site') && (
+                <label>
+                  访问密码（可选）
+                  <input
+                    type="password"
+                    value={password}
+                    maxLength={128}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                </label>
+              )}
+              {action.type === 'site' ? (
+                <label>
+                  有效期
+                  <Select
+                    aria-label="网站有效期"
+                    value={siteDays}
+                    onValueChange={setSiteDays}
+                    options={[
+                      { value: '0', label: '永久有效' },
+                      { value: '1', label: '1 天' },
+                      { value: '7', label: '7 天' },
+                      { value: '30', label: '30 天' },
+                      { value: '365', label: '1 年' },
+                    ]}
+                  />
+                </label>
+              ) : (
+                <label>
+                  过期时间（留空永久有效）
+                  <input
+                    type="datetime-local"
+                    value={expires}
+                    onChange={(e) => setExpires(e.target.value)}
+                  />
+                </label>
+              )}
+              {action.type === 'site' && <LinkOriginSelect />}
+              {action.type === 'share' && (
+                <label className="check-label">
+                  <input
+                    type="checkbox"
+                    checked={download}
+                    onChange={(e) => setDownload(e.target.checked)}
+                  />
+                  允许下载
+                </label>
+              )}
+            </>
+          )}
         {action.type === 'emptyTrash' && <p>清空回收站？此操作无法恢复。</p>}
         {link && (
           <>
@@ -321,7 +359,7 @@ export function Actions({
             >
               {busy
                 ? '处理中…'
-                : action.type === 'share' || action.type === 'direct'
+                : action.type === 'share' || action.type === 'direct' || action.type === 'site'
                   ? '生成链接'
                   : '确认'}
             </Button>

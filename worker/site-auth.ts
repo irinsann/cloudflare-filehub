@@ -9,6 +9,8 @@ import { writeOriginAllowed } from './origins';
 import { hashPassword, checkPassword, digest, rateLimit } from './auth-crypto';
 import { htmlPage } from './html';
 import { loginBody, loginCss, loginUiScript } from './login-view';
+import { encryptSecret, decryptSecret } from './secret-store';
+export { encryptSecret } from './secret-store';
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const randomToken = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
@@ -63,38 +65,6 @@ async function matchCode(secret: string, code: string) {
   for (const n of [counter, counter - 1, counter + 1])
     if ((await totp(secret, n)) === code) return n;
   return -1;
-}
-async function key(env: Env) {
-  if (!env.AUTH_ENCRYPTION_KEY || env.AUTH_ENCRYPTION_KEY.length < 32)
-    fail(503, '认证加密密钥未配置');
-  return crypto.subtle.importKey(
-    'raw',
-    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(env.AUTH_ENCRYPTION_KEY)),
-    'AES-GCM',
-    false,
-    ['encrypt', 'decrypt'],
-  );
-}
-export async function encryptSecret(secret: string, env: Env) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const b = new Uint8Array(
-    await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      await key(env),
-      new TextEncoder().encode(secret),
-    ),
-  );
-  return JSON.stringify({ iv: Array.from(iv), data: Array.from(b) });
-}
-async function decryptSecret(cipher: string, env: Env) {
-  const v = JSON.parse(cipher);
-  return new TextDecoder().decode(
-    await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: new Uint8Array(v.iv) },
-      await key(env),
-      new Uint8Array(v.data),
-    ),
-  );
 }
 const cookieName = (env: Env) =>
   env.ENVIRONMENT === 'local' ? 'rcloud-session' : '__Host-rcloud-session';

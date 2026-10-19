@@ -8,6 +8,8 @@ import {
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
+export * from './google-drive-schema';
+export * from './site-shares-schema';
 export const folders = sqliteTable(
   'folders',
   {
@@ -20,6 +22,7 @@ export const folders = sqliteTable(
   },
   (t) => [
     index('folder_parent').on(t.parentId, t.deletedAt),
+    index('folders_site_path').on(t.parentId, t.name, t.deletedAt),
     uniqueIndex('folder_names')
       .on(sql`COALESCE(${t.parentId}, '')`, t.name)
       .where(sql`${t.deletedAt} IS NULL`),
@@ -46,6 +49,7 @@ export const files = sqliteTable(
   (t) => [
     index('files_folder').on(t.folderId, t.deletedAt, t.status, t.updatedAt),
     index('files_recent').on(t.deletedAt, t.status, t.updatedAt),
+    index('files_site_path').on(t.folderId, t.name, t.deletedAt, t.status),
   ],
 );
 export const fileShares = sqliteTable(

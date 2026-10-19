@@ -20,6 +20,8 @@ import { identifier } from '../shared/validation';
 import { webdavRoutes } from './webdav';
 import { webdavCredentials } from './webdav-auth';
 import { storageWriteLease } from './write-lease';
+import { googleDriveRoutes, googleDriveCallback, cleanupGoogleDrive } from './google-drive';
+import { siteShareAdminRoutes, siteSharePublicRoutes } from './site-shares';
 const app = new Hono<AppEnv>();
 app.use('*', async (c, next) => {
   c.set('requestId', crypto.randomUUID());
@@ -73,6 +75,10 @@ app.get('/login', (c) =>
 app.route('/api/admin', fileRoutes);
 app.route('/api/admin', tokenRoutes);
 app.route('/api/admin', webdavCredentials);
+app.route('/api/admin', googleDriveRoutes);
+app.get('/api/oauth/google/callback', googleDriveCallback);
+app.route('/api/admin', siteShareAdminRoutes);
+app.route('/site', siteSharePublicRoutes);
 app.route('/dav', webdavRoutes);
 app.route('/api/v1', uploadApi);
 app.route('/api/admin', imageRoutes);
@@ -103,7 +109,9 @@ app.on(['GET', 'HEAD'], '/p/:slug', (c) => readPage(c));
 app.on(['GET', 'HEAD'], '/s/:token', sharePage);
 app.get('/favicon.svg', (c) => c.env.ASSETS.fetch(c.req.raw));
 app.get('/robots.txt', (c) =>
-  c.text('User-agent: *\nAllow: /p/\nDisallow: /api/\nDisallow: /s/\nDisallow: /d/\nDisallow: /\n'),
+  c.text(
+    'User-agent: *\nAllow: /p/\nDisallow: /api/\nDisallow: /s/\nDisallow: /d/\nDisallow: /site/\nDisallow: /\n',
+  ),
 );
 app.get('*', async (c) => {
   if (c.req.path === '/' && !isLocalAuth(c.env, new URL(c.req.url)))
@@ -155,7 +163,9 @@ app.onError((error, c) => {
           : '服务暂时无法完成请求';
   if (status === 500)
     console.error(JSON.stringify({ requestId: c.get('requestId'), type: error.name }));
-  if (!c.req.path.startsWith('/api/')) {
+  const jsonResponse =
+    c.req.path.startsWith('/api/') || (c.req.path.startsWith('/site/') && c.req.method === 'POST');
+  if (!jsonResponse) {
     const page = htmlPage(
       `${status}`,
       `<main class="card"><h1>${status}</h1><p>${escapeHtml(message)}</p></main>`,
@@ -169,5 +179,6 @@ export default {
   fetch: app.fetch,
   scheduled: (_event: ScheduledController, env: Env, ctx: ExecutionContext) => {
     ctx.waitUntil(cleanup(env));
+    ctx.waitUntil(cleanupGoogleDrive(env));
   },
 } satisfies ExportedHandler<Env>;

@@ -42,10 +42,18 @@ pnpm run deploy:production
 
 迁移时先部署并完成账户绑定，再移除 RCloud Access 应用；不要在账户未建立时移除现有保护。绑定成功后 /setup/start 会永久拒绝初始化，随后删除 AUTH_SETUP_SECRET。密码或验证器凭据更新必须由用户本人操作；遗失密码时由 Cloudflare 账户所有者进行受控离线重置，平台无公开绕过或重置接口。
 
-## VPS 反代
+## Google Drive 与 HTML 文件夹升级
+
+先运行 `pnpm db:production` 应用 `0011_google_drive.sql` 和 `0012_site_shares.sql`，再部署新代码。迁移新增独立表和目录删除时撤销网站分享的触发器，不搬移或重命名现有 R2 文件。
+
+HTML 网站使用现有 R2、D1 和 `SHARE_SESSION_SECRET`。将 `/site/*` 留给应用验证分享权限，反代不要缓存该路径，也不要覆盖 CORS、CSP 或重定向响应。
+
+Google Drive 是可选连接，缺少配置时页面显示未配置，R2 功能仍可使用。它还需要 `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET` 和已有的 `AUTH_ENCRYPTION_KEY`，配置及两个域名回调见 [Google Drive 接入](google-drive.md)。`/api/oauth/google/callback` 必须能直接到达 Worker，不能放进 Cloudflare Access 保护范围；它通过一次性 state 和浏览器 nonce 验证授权，不能自行调用以绕过登录。
+
+## VPS 反代要求
 
 WebDAV 升级需要先应用 `0010_webdav.sql`（`pnpm db:production`），再部署代码。它复用现有 D1/R2，不需要新的 Secret 或付费服务。登录设置后创建专用凭据，连接 `https://233334.xyz/dav/` 或 `https://s.irin.im/dav/`。Access 如仍保护整个域名，需要让 `/dav/*` 通过，由应用自行验证专用凭据。反代须透传 WebDAV 方法及条件/锁定请求头，并禁止缓存 `/dav/*`；详见 [RaiDrive 连接与协议说明](webdav.md)。
 
 上传 API 使用独立 Bearer Token。升级时先应用 `0007_api_tokens.sql` 和 `0008_image_api_scope.sql`，在 Worker 配置中保留 `"compatibility_flags": ["nodejs_compat"]`，再部署 Worker，登录「设置 → 上传 API」手动创建 Token。无需配置全局上传密钥。反代须转发 Authorization、Content-Type 和 X-File-Size，并禁止缓存 `/api/*`。详情和脚本见 [API 文档](api.md)；图床上传与可导入配置见 [ShareX 文档](sharex.md)，反代表单请求需保留正确的 Content-Length。
 
-反代使用其他域名时，将外部 HTTPS Origin 加入 TRUSTED_PROXY_ORIGINS，例如 https://s.irin.im（无尾随斜线）。反代上游仍为 233334.xyz，保留浏览器 Origin、Cookie 与 Set-Cookie，不改写 Origin，不缓存登录和管理接口。应用只接受配置的精确可信 Origin，保留写接口的自定义头与会话验证，不信任任意 X-Forwarded-Host。
+反代使用其他域名时，将外部 HTTPS Origin 加入 TRUSTED_PROXY_ORIGINS，例如 https://s.irin.im（无尾随斜线）。反代上游仍为 233334.xyz，保留浏览器 Origin、Cookie 与 Set-Cookie，不改写 Origin，不缓存登录和管理接口。应用只接受配置的精确可信 Origin，保留写接口的自定义头（包括 X-Drive-Request、X-Google-Connection）与会话验证，不信任任意 X-Forwarded-Host。

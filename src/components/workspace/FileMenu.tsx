@@ -1,4 +1,4 @@
-import { RotateCcw, Trash2, FileText, Download, Link2, Pencil, Move } from 'lucide-react';
+import { RotateCcw, Trash2, FileText, Download, Link2, Pencil, Move, Globe2 } from 'lucide-react';
 import { Modal } from '../ui/dialog';
 import { fileUrl } from '../../lib/api';
 import type { FileRecord, FolderRecord } from '../../../shared/types';
@@ -45,6 +45,17 @@ export function FileMenu({
           </>
         ) : (
           <>
+            {menu.folder && (
+              <button
+                onClick={() => {
+                  setAction({ type: 'site', ...menu });
+                  setMenu(null);
+                }}
+              >
+                <Globe2 size={17} />
+                发布 HTML 网站
+              </button>
+            )}
             {menu.file && (
               <>
                 <button

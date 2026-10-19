@@ -18,6 +18,10 @@ beforeEach(async () => {
   await testEnv.DB.prepare('UPDATE storage_quota_state SET ready=0,lock_until=0 WHERE id=1').run();
   await testEnv.DB.batch(
     [
+      'google_drive_uploads',
+      'google_drive_oauth',
+      'google_drive_connections',
+      'site_shares',
       'webdav_locks',
       'webdav_properties',
       'webdav_credentials',
@@ -46,4 +50,5 @@ beforeEach(async () => {
   await testEnv.DB.prepare(
     'UPDATE storage_write_lease SET owner=NULL,expires_at=0 WHERE id=1',
   ).run();
+  await testEnv.DB.prepare('UPDATE google_drive_generation SET generation=0').run();
 });

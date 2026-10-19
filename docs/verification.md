@@ -21,34 +21,34 @@
 
 `tests/public-links.test.ts` 额外覆盖链接域名配置、偏好校验、路径/参数/片段保留，以及双域名下分享、图片、文章的访问和撤销权限。
 
-| 测试文件                            | 覆盖范围                                                                                                            |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `tests/files.test.ts`               | 目录与文件生命周期、重名/循环/非空目录保护、流式上传、MIME 与实际大小校验、分页搜索、Range/HEAD、失败清理与重试     |
-| `tests/uploads.test.ts`             | 大文件上传会话、分片重试与完成、直链撤销、清空回收站                                                                |
-| `tests/quota.test.ts`               | 存量统计、并发容量预留、50GiB 总容量、回收站与发布副本计费、立即清理 R2、保护活跃对象与失败恢复、默认 Markdown 目录 |
-| `tests/images.test.ts`              | MD5 命名、Image-hosting 目录、图片内容验证、重复图片复用、直链/Range 与撤销                                         |
-| `tests/image-gallery.test.ts`       | 全量分页去重、限流同页重试、等待取消、过期响应忽略、重复页保护与失败不返回部分图库                                  |
-| `tests/image-stats.test.ts`         | 引用/下载分别累计、HEAD/Range/失败请求排除、私有预览不计数、撤销/恢复和重复上传保留统计                             |
-| `tests/image-lifecycle.test.ts`     | 恢复原直链、永久删除关联资源、并发恢复/删除/重传保护、R2 失败重试与配额保留、D1 事务回滚                            |
-| `tests/editor-image-upload.test.ts` | 编辑器与图床共用上传、去重清理失败保留有效链接、Markdown 文件名转义、图片与普通文字粘贴分流                         |
-| `tests/upload-api.test.ts`          | Token 哈希、一次性显示、期限/撤销/限流、私有文件上传、空文件、分片、任务归属与管理权限隔离                          |
-| `tests/image-upload-api.test.ts`    | ShareX 表单请求与响应、图床保存复用、重复源文件清理、Token 作用域、错误表单/非图片、流式分片与容量检查              |
-| `tests/shares.test.ts`              | 分享令牌哈希、过期/撤销/下载权限、密码会话与限流、统计口径、删除后恢复不重新公开                                    |
-| `tests/share-links.test.ts`         | 分享链接重复获取、旧地址兼容、签名防篡改、共享统计与权限、管理员列表保护、密钥轮换与配置失败                         |
-| `tests/html-shares.test.ts`         | HTML/HTM 与旧文件兼容、隔离 CSP、HEAD/Range、原始下载、密码/改密/过期/撤销与回收站权限                              |
-| `tests/markdown.test.ts`            | 草稿与公开快照隔离、保存/发布冲突、Slug、源文权限、GFM 与安全过滤、附件归属与撤销、统一域名的路由隔离               |
-| `tests/auth.test.ts`                | Access JWT 签名、issuer/AUD、有效期、管理员邮箱、JWKS、本地模拟限制与管理写请求校验                                 |
-| `tests/site-auth.test.ts`           | 密码与 TOTP、首次绑定、加密验证器密钥、恢复码、会话注销、重放和暴力尝试防护、受信反代来源                           |
-| `tests/auth-atomicity.test.ts`      | 首次绑定与登录写入失败的事务回滚、恢复码保留、同一码并发登录只创建一次会话                                        |
-| `tests/upload-cancel.test.ts`       | 分片取消临时失败时保留会话和配额、NoSuchUpload 幂等清理                                                           |
-| `tests/upload-cancel-race.test.ts`  | 完成与取消并发时保留失败清理任务，保护已成功完成的文件                                                             |
-| `tests/storage-audit.test.ts`       | 一次清空多层回收站、保护尚有上传会话的目录和祖先                                                                  |
-| `tests/image-upload-race.test.ts`   | 相同图片并发上传复用同一记录、不遗留无引用 R2 对象                                                                 |
-| `tests/editor-draft.test.ts`        | 较早保存请求完成后保留后续输入、空白草稿与其他窗口的新内容                                                         |
-| `tests/markdown-concurrency.test.ts`| 并发首次发布返回真实文章 ID、旧快照清理和附件关联                                                                  |
-| `tests/folder-pagination.test.ts`   | 超过 100 个目录的文件/回收站列表及移动目标分页、搜索不产生目录空页                                                 |
-| `tests/management-pagination.test.ts`| 大量草稿不隐藏已发布文章、超过 100 条分享仍可复制、稳定排序与分页参数边界                                          |
-| `tests/webdav-path-limits.test.ts`  | MOVE/COPY 子树深度和编码路径长度、Depth: 0、越界拒绝不覆盖目标                                                     |
+| 测试文件                              | 覆盖范围                                                                                                            |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `tests/files.test.ts`                 | 目录与文件生命周期、重名/循环/非空目录保护、流式上传、MIME 与实际大小校验、分页搜索、Range/HEAD、失败清理与重试     |
+| `tests/uploads.test.ts`               | 大文件上传会话、分片重试与完成、直链撤销、清空回收站                                                                |
+| `tests/quota.test.ts`                 | 存量统计、并发容量预留、50GiB 总容量、回收站与发布副本计费、立即清理 R2、保护活跃对象与失败恢复、默认 Markdown 目录 |
+| `tests/images.test.ts`                | MD5 命名、Image-hosting 目录、图片内容验证、重复图片复用、直链/Range 与撤销                                         |
+| `tests/image-gallery.test.ts`         | 全量分页去重、限流同页重试、等待取消、过期响应忽略、重复页保护与失败不返回部分图库                                  |
+| `tests/image-stats.test.ts`           | 引用/下载分别累计、HEAD/Range/失败请求排除、私有预览不计数、撤销/恢复和重复上传保留统计                             |
+| `tests/image-lifecycle.test.ts`       | 恢复原直链、永久删除关联资源、并发恢复/删除/重传保护、R2 失败重试与配额保留、D1 事务回滚                            |
+| `tests/editor-image-upload.test.ts`   | 编辑器与图床共用上传、去重清理失败保留有效链接、Markdown 文件名转义、图片与普通文字粘贴分流                         |
+| `tests/upload-api.test.ts`            | Token 哈希、一次性显示、期限/撤销/限流、私有文件上传、空文件、分片、任务归属与管理权限隔离                          |
+| `tests/image-upload-api.test.ts`      | ShareX 表单请求与响应、图床保存复用、重复源文件清理、Token 作用域、错误表单/非图片、流式分片与容量检查              |
+| `tests/shares.test.ts`                | 分享令牌哈希、过期/撤销/下载权限、密码会话与限流、统计口径、删除后恢复不重新公开                                    |
+| `tests/share-links.test.ts`           | 分享链接重复获取、旧地址兼容、签名防篡改、共享统计与权限、管理员列表保护、密钥轮换与配置失败                        |
+| `tests/html-shares.test.ts`           | HTML/HTM 与旧文件兼容、隔离 CSP、HEAD/Range、原始下载、密码/改密/过期/撤销与回收站权限                              |
+| `tests/markdown.test.ts`              | 草稿与公开快照隔离、保存/发布冲突、Slug、源文权限、GFM 与安全过滤、附件归属与撤销、统一域名的路由隔离               |
+| `tests/auth.test.ts`                  | Access JWT 签名、issuer/AUD、有效期、管理员邮箱、JWKS、本地模拟限制与管理写请求校验                                 |
+| `tests/site-auth.test.ts`             | 密码与 TOTP、首次绑定、加密验证器密钥、恢复码、会话注销、重放和暴力尝试防护、受信反代来源                           |
+| `tests/auth-atomicity.test.ts`        | 首次绑定与登录写入失败的事务回滚、恢复码保留、同一码并发登录只创建一次会话                                          |
+| `tests/upload-cancel.test.ts`         | 分片取消临时失败时保留会话和配额、NoSuchUpload 幂等清理                                                             |
+| `tests/upload-cancel-race.test.ts`    | 完成与取消并发时保留失败清理任务，保护已成功完成的文件                                                              |
+| `tests/storage-audit.test.ts`         | 一次清空多层回收站、保护尚有上传会话的目录和祖先                                                                    |
+| `tests/image-upload-race.test.ts`     | 相同图片并发上传复用同一记录、不遗留无引用 R2 对象                                                                  |
+| `tests/editor-draft.test.ts`          | 较早保存请求完成后保留后续输入、空白草稿与其他窗口的新内容                                                          |
+| `tests/markdown-concurrency.test.ts`  | 并发首次发布返回真实文章 ID、旧快照清理和附件关联                                                                   |
+| `tests/folder-pagination.test.ts`     | 超过 100 个目录的文件/回收站列表及移动目标分页、搜索不产生目录空页                                                  |
+| `tests/management-pagination.test.ts` | 大量草稿不隐藏已发布文章、超过 100 条分享仍可复制、稳定排序与分页参数边界                                           |
+| `tests/webdav-path-limits.test.ts`    | MOVE/COPY 子树深度和编码路径长度、Depth: 0、越界拒绝不覆盖目标                                                      |
 
 JWT 测试生成真实 RSA 签名，仅将 JWKS 网络响应替换为对应测试公钥。存储测试操作真实本地 D1/R2；故障恢复测试临时令 R2 删除失败，检查持久清理任务、容量保留与后续恢复。ShareX 测试验证自定义上传器协议和真实上传结果，不代替不同 ShareX 客户端版本的手工导入验收。
 
@@ -136,6 +136,18 @@ CodeMirror 编辑器与 Markdown 渲染代码不在首屏加载；编辑器延�
 - 私有预览经过管理员认证后不消耗普通后台操作预算。耗尽预算后的 GET/HEAD 预览仍正常，普通管理请求保持 429、未登录预览保持 401；响应为 private/no-store，预览不计公开访问。
 - 已部署到 Cloudflare；全球 CDN 和香港反代各 5 项只读生产检查通过，涵盖登录页、后台登录跳转、设置/图片列表/私有预览的未登录保护。未修改生产文件或统计。
 - 浏览器工具的访问限制仍在，本轮通过源码审查及自动化测试验证，未完成真实浏览器交互或屏幕尺寸验收。
+
+## Google Drive 独立页面与 HTML 网站分享（2026-10-19）
+
+- `pnpm check` 通过：44 个测试文件、365 项测试，包含类型检查、Lint、生产构建和 Worker dry-run。最后仅修正了失效分享的状态文案，随后再次通过类型检查、定向 Lint、构建并部署。
+- Google Drive 后端 65 项测试使用模拟 Google 响应，覆盖 OAuth 一次性回调、香港反代 Host 差异、连接切换保护、令牌刷新、文件管理、分片与中断恢复、取消竞争、Range 和导出。没有配置真实 OAuth 客户端，尚未完成真实 Google 账号授权与读写验收。
+- 网站分享 27 项测试覆盖直接 HTML、相对资源、密码、有效期、撤销、目录删除、路径边界、CSP/CORS 以及反代域名。另有管理权限隔离和前端上传恢复测试。
+- 发布前已备份生产 D1；应用 `0011_google_drive.sql` 与 `0012_site_shares.sql`。最终 Worker 版本为 `f4273563-8b52-4812-b586-8437501679a8`，仍只绑定 `233334.xyz`，原有香港反代保留。
+- 两个生产域名的登录页均返回 200，未登录的原文件接口、Google Drive 接口及网站分享管理接口均返回 401；无效网站令牌返回 404，不完整 OAuth 回调返回 400。
+- 在用户登录后的真实浏览器中验证 R2 目录与五个小文件上传、Google 未配置页面、HTML 网站发布、线路切换、分享列表及撤销。测试网站在全球 CDN 和香港反代下均直接展示，CSS、ES 模块、JSON 请求及相对子页面成功加载，没有 iframe。见[网站验收截图](screenshots/html-site-verification.jpg)。
+- 分享列表能够重新显示正确链接。内置浏览器拒绝剪贴板访问时，手动复制弹窗及完整地址正常出现；未宣称自动写入系统剪贴板成功。
+- 撤销后，两条线路的入口、脚本和 JSON 资源均返回 410。随后精确清理本次测试目录、五个文件、R2 对象、分享、容量与清理队列，查询确认测试文件、目录、分享和清理任务均为零；未改动原有用户文件。
+- 实际浏览器视口为 883px，页面及弹窗无横向溢出。工具的 390px 视口覆盖未生效，已重置；本轮不计作手机或宽屏实机验收。响应式样式仅完成代码检查。
 
 ## 生产发布检查
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Copy, ExternalLink, FileText, Link2, ShieldCheck } from 'lucide-react';
+import { Copy, ExternalLink, FileText, Link2, ShieldCheck, Globe2 } from 'lucide-react';
 import { apiPage, copy, send, dateLabel } from '../lib/api';
 import { StorageMeter } from '../components/workspace/WorkspaceShell';
 import { Button } from '../components/ui/button';
@@ -9,6 +9,9 @@ import { WebDavSettings } from '../components/WebDavSettings';
 import { EmptyState } from '../components/EmptyState';
 import { LinkOriginSelect, usePublicLinks } from '../components/PublicLinks';
 import type { Settings, ShareListItem } from '../../shared/types';
+import type { SiteShareListItem } from '../../shared/site-shares';
+import { Select } from '../components/ui/select';
+import { GoogleDriveSettings } from '../components/GoogleDriveConnection';
 interface DocumentRow {
   id: string;
   name: string;
@@ -26,15 +29,21 @@ export function Management({
   settings,
   onEdit,
   notify,
+  googleUploading = false,
+  stopGoogleUploads,
 }: {
   view: 'published' | 'shares' | 'settings';
   refresh: number;
   settings: Settings | null;
   onEdit: (id: string) => void;
   notify: (s: string) => void;
+  googleUploading?: boolean;
+  stopGoogleUploads?: () => void;
 }) {
   const publicLinks = usePublicLinks();
   const [shares, setShares] = useState<ShareListItem[]>([]),
+    [sites, setSites] = useState<SiteShareListItem[]>([]),
+    [shareKind, setShareKind] = useState('files'),
     [docs, setDocs] = useState<DocumentRow[]>([]),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(true),
@@ -51,13 +60,19 @@ export function Management({
       setLoading(false);
       return;
     }
+    setShares([]);
+    setSites([]);
+    setDocs([]);
+    setTotal(0);
     const controller = new AbortController();
     async function load() {
       const options = { signal: controller.signal };
       const params = `page=${page}&limit=${pageSize}`;
       const result =
         view === 'shares'
-          ? await apiPage<ShareListItem>('/shares?' + params, options)
+          ? shareKind === 'sites'
+            ? await apiPage<SiteShareListItem>('/site-shares?' + params, options)
+            : await apiPage<ShareListItem>('/shares?' + params, options)
           : await apiPage<DocumentRow>('/markdown?published=1&' + params, options);
       if (controller.signal.aborted) return;
       const lastPage = Math.max(1, Math.ceil(result.total / pageSize));
@@ -66,7 +81,8 @@ export function Management({
         return;
       }
       setTotal(result.total);
-      if (view === 'shares') setShares(result.data as ShareListItem[]);
+      if (view === 'shares' && shareKind === 'sites') setSites(result.data as SiteShareListItem[]);
+      else if (view === 'shares') setShares(result.data as ShareListItem[]);
       else setDocs(result.data as DocumentRow[]);
     }
     void load()
@@ -77,7 +93,7 @@ export function Management({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [view, refresh, revision, page]);
+  }, [view, refresh, revision, page, shareKind]);
   function copyShareLink(url: string, name: string) {
     void copy(publicLinks.link(url))
       .then(() => notify('链接已复制'))
@@ -86,7 +102,11 @@ export function Management({
   async function revoke(id: string, article: boolean) {
     try {
       await send(
-        article ? `/markdown/${id}/unpublish` : `/shares/${id}`,
+        article
+          ? `/markdown/${id}/unpublish`
+          : shareKind === 'sites'
+            ? `/site-shares/${id}`
+            : `/shares/${id}`,
         article ? 'POST' : 'DELETE',
       );
       setRevision((r) => r + 1);
@@ -130,10 +150,32 @@ export function Management({
         </section>
         <ApiTokens notify={notify} uploadOrigin={settings?.filesOrigin || location.origin} />
         <WebDavSettings notify={notify} />
+        <GoogleDriveSettings
+          notify={notify}
+          uploading={googleUploading}
+          onBeforeConnectionChange={stopGoogleUploads}
+        />
       </div>
     );
   return (
     <>
+      {view === 'shares' && (
+        <div className="share-kind-toolbar">
+          <Select
+            aria-label="分享类型"
+            value={shareKind}
+            onValueChange={(value) => {
+              setShareKind(value);
+              setPagination({ view, page: 1 });
+            }}
+            options={[
+              { value: 'files', label: '文件分享' },
+              { value: 'sites', label: 'HTML 网站' },
+            ]}
+          />
+          <LinkOriginSelect compact />
+        </div>
+      )}
       {error && (
         <div className="error-banner" role="alert">
           {error}
@@ -145,13 +187,66 @@ export function Management({
             <div className="skeleton" key={n} />
           ))}
         </div>
+      ) : view === 'shares' && shareKind === 'sites' ? (
+        <div className="management-list">
+          {sites.map((site) => {
+            const expired = !!site.expires_at && site.expires_at <= Date.now();
+            const available = site.enabled && !expired;
+            return (
+              <article key={site.id} className="management-row">
+                <div className="type-icon">
+                  <Globe2 />
+                </div>
+                <div className="management-info">
+                  <strong>{site.name}</strong>
+                  <p>
+                    {!site.enabled
+                      ? '已撤销'
+                      : expired
+                        ? '已过期'
+                        : site.expires_at
+                          ? `有效至 ${dateLabel(site.expires_at)}`
+                          : '永久有效'}{' '}
+                    {available && (
+                      <>{site.password_protected ? '· 密码保护 ' : '· 持链接可访问 '}</>
+                    )}
+                    · 访问 {site.views}
+                  </p>
+                </div>
+                <div className="management-actions">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!available}
+                    onClick={() => copyShareLink(site.url, site.name)}
+                  >
+                    <Copy size={15} />
+                    复制链接
+                  </Button>
+                  {available && (
+                    <Button variant="ghost" size="sm" asChild>
+                      <a href={publicLinks.link(site.url)} target="_blank" rel="noreferrer">
+                        <ExternalLink size={15} />
+                        打开网站
+                      </a>
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={!site.enabled}
+                    onClick={() => void revoke(site.id, false)}
+                  >
+                    撤销分享
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
+          {!sites.length && <EmptyState label="暂无 HTML 网站分享" />}
+        </div>
       ) : view === 'shares' ? (
         <div className="management-list">
-          {!!shares.length && (
-            <div className="file-toolbar">
-              <LinkOriginSelect compact />
-            </div>
-          )}
           {shares.map((s) => {
             const expired = !!s.expires_at && s.expires_at <= Date.now();
             const available = !!s.enabled && !expired;
@@ -170,8 +265,8 @@ export function Management({
                         : s.expires_at
                           ? `有效至 ${dateLabel(s.expires_at)}`
                           : '永久有效'}{' '}
-                    · {s.password_protected ? '密码保护' : '持链接可访问'} · 访问 {s.views} / 下载{' '}
-                    {s.downloads}
+                    {available && <>{s.password_protected ? '· 密码保护 ' : '· 持链接可访问 '}</>}·
+                    访问 {s.views} / 下载 {s.downloads}
                   </p>
                 </div>
                 <div className="management-actions">

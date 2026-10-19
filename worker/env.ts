@@ -5,6 +5,8 @@ export interface Env {
   AUTH_ENCRYPTION_KEY?: string;
   AUTH_SETUP_SECRET?: string;
   AUTH_SETUP_EXPIRES?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
   DB: D1Database;
   BUCKET: R2Bucket;
   ASSETS: Fetcher;

@@ -336,7 +336,13 @@ Slug 1–100 字符，仅小写字母、数字和连字符，不能是系统保�
 
 站内模式在 /login 使用密码＋验证器验证码登录；POST /api/auth/login 请求 {password,code}，设置 24 小时 HttpOnly 会话，code 也可使用一次性恢复码。POST /api/auth/logout 撤销会话。首次绑定使用 /api/auth/setup/start 与 /api/auth/setup/finish，详见 [部署文档](deployment.md)。脚本请使用 Token，避免保存账号密码和 TOTP 密钥。
 
-## 错误与限制
+## Google Drive 与 HTML 网站
+
+Google Drive 使用独立的管理员 API 和远端存储，与现有 `/api/v1` 上传 Token 权限分开。Google 的 OAuth 访问凭据不向浏览器返回；配置及接口见 [Google Drive](google-drive.md)。
+
+HTML 文件夹网站使用 `/api/admin/site-shares` 管理、`/site/{token}/` 公开访问，支持相对资源和密码访问；完整请求格式与兼容边界见 [HTML 文件夹分享](html-sites.md)。
+
+## 通用错误与限制
 
 | 状态码  | 含义与处理                                               |
 | ------- | -------------------------------------------------------- |
