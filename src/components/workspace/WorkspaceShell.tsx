@@ -8,6 +8,11 @@ import type { Settings } from '../../../shared/types';
 import { sizeLabel } from '../../lib/api';
 import { Button } from '../ui/button';
 import { LanguageSelect } from '../LanguageSelect';
+const hasFiles = (transfer: DataTransfer) =>
+  transfer.types.includes('Files') || transfer.files.length > 0;
+const fromDialog = (target: EventTarget) =>
+  target instanceof Element &&
+  !!target.closest('[role="dialog"], [role="alertdialog"], .dialog-overlay');
 export function StorageMeter({ settings }: { settings: Settings | null }) {
   const used = settings?.storageUsedBytes ?? 0,
     total = settings?.storageLimitBytes ?? 50 * 1024 ** 3;
@@ -106,7 +111,15 @@ export function WorkspaceShell({
     </div>
   );
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      onDragOver={(event) => {
+        if (hasFiles(event.dataTransfer)) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (hasFiles(event.dataTransfer)) event.preventDefault();
+      }}
+    >
       <a
         className="skip-link"
         href="#main-content"
@@ -132,25 +145,27 @@ export function WorkspaceShell({
         className="main"
         id="main-content"
         onDragEnter={(e) => {
-          if (allowDrop && e.dataTransfer.types.includes('Files')) {
+          if (allowDrop && !fromDialog(e.target) && e.dataTransfer.types.includes('Files')) {
             e.preventDefault();
             dragDepth.current++;
             setDragging(true);
           }
         }}
         onDragOver={(e) => {
-          if (allowDrop && e.dataTransfer.types.includes('Files')) e.preventDefault();
+          if (hasFiles(e.dataTransfer)) e.preventDefault();
         }}
         onDragLeave={() => {
           dragDepth.current = Math.max(0, dragDepth.current - 1);
           if (!dragDepth.current) setDragging(false);
         }}
         onDrop={(e) => {
+          const handled = e.defaultPrevented;
           dragDepth.current = 0;
           setDragging(false);
-          if (allowDrop && e.dataTransfer.files.length) {
+          if (hasFiles(e.dataTransfer)) {
             e.preventDefault();
-            onFiles(Array.from(e.dataTransfer.files));
+            if (allowDrop && !handled && !fromDialog(e.target) && e.dataTransfer.files.length)
+              onFiles(Array.from(e.dataTransfer.files));
           }
         }}
       >
@@ -212,7 +227,7 @@ export function WorkspaceShell({
                   ? tr('文档', 'Docs')
                   : id === 'files'
                     ? tr('文件', 'File')
-                    : tr('图床', 'Images')}
+                    : tr('Image 托管', 'Image hosting')}
               </span>
             </button>
           );

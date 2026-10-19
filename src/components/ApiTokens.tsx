@@ -111,7 +111,7 @@ export function ApiTokens({
                         : tr('{0} · 有效至 {1}', '{0} · Expires {1}', {
                             '0':
                               t.scope === 'images:upload'
-                                ? tr('图床上传', 'Image uploads')
+                                ? tr('图片上传', 'Image uploads')
                                 : tr('文件上传', 'File uploads'),
                             '1': dateLabel(t.expires_at),
                           })}
@@ -242,7 +242,7 @@ export function ApiTokens({
                     },
                     {
                       value: 'images:upload',
-                      label: tr('图床上传（公开直链 / ShareX）', 'Image uploads (public / ShareX)'),
+                      label: tr('图片上传（公开直链 / ShareX）', 'Image uploads (public / ShareX)'),
                     },
                   ]}
                   disabled={busy}

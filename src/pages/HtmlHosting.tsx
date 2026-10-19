@@ -1,6 +1,6 @@
 import { tr } from '../lib/i18n';
 import { useEffect, useRef, useState } from 'react';
-import { Upload, FileCode2, Copy, ExternalLink, RotateCcw, Eye, Link2, X } from 'lucide-react';
+import { UploadCloud, FileCode2, Copy, ExternalLink, RotateCcw, Eye, Link2, X } from 'lucide-react';
 import type { HtmlHostingItem } from '../../shared/html-hosting';
 import type { useHtmlUploads } from '../hooks/useHtmlUploads';
 import { apiPage, copy, send, dateLabel, sizeLabel } from '../lib/api';
@@ -9,6 +9,8 @@ import { Modal } from '../components/ui/dialog';
 import { EmptyState } from '../components/EmptyState';
 import { ManualCopy } from '../components/ManualCopy';
 import { LinkOriginSelect, usePublicLinks } from '../components/PublicLinks';
+import { HostingDropZone } from '../components/HostingDropZone';
+import { useHostingDrop } from '../hooks/useHostingDrop';
 export function HtmlHosting({
   uploads,
   revision,
@@ -24,13 +26,17 @@ export function HtmlHosting({
     [total, setTotal] = useState(0),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(''),
-    [refresh, setRefresh] = useState(0),
-    [drag, setDrag] = useState(false);
+    [refresh, setRefresh] = useState(0);
   const [manual, setManual] = useState(''),
     [action, setAction] = useState<HtmlHostingItem | null>(null),
     [busy, setBusy] = useState(false);
-  const input = useRef<HTMLInputElement>(null),
-    dragDepth = useRef(0);
+  const input = useRef<HTMLInputElement>(null);
+  const dropDisabled = busy || uploads.busy || !!action || !!manual;
+  const drop = useHostingDrop({
+    disabled: dropDisabled,
+    onFiles: uploads.add,
+    onBlocked: () => notify(tr('请等待当前操作完成', 'Wait for the current action to finish')),
+  });
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -89,58 +95,34 @@ export function HtmlHosting({
     }
   }
   return (
-    <div className="hosting-page">
-      <section
-        className={`hosting-drop ${drag ? 'is-dragging' : ''}`}
-        onDragEnter={(event) => {
-          if (event.dataTransfer.types.includes('Files')) {
-            event.preventDefault();
-            dragDepth.current++;
-            setDrag(true);
-          }
-        }}
-        onDragOver={(event) => {
-          if (event.dataTransfer.types.includes('Files')) event.preventDefault();
-        }}
-        onDragLeave={() => {
-          dragDepth.current = Math.max(0, dragDepth.current - 1);
-          if (!dragDepth.current) setDrag(false);
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          dragDepth.current = 0;
-          setDrag(false);
-          uploads.add(Array.from(event.dataTransfer.files));
-        }}
-      >
-        <span className="hosting-emblem">
-          <FileCode2 size={30} />
-        </span>
-        <div>
-          <h2>{tr('上传 HTML', 'Upload HTML')}</h2>
-          <p>
-            {tr(
-              '拖入 HTML 文件，或选择多个文件上传。',
-              'Drop HTML files here or choose files to upload.',
-            )}
-          </p>
+    <div
+      className={`hosting-page html-hosting-page${drop.active ? ' is-dragging' : ''}`}
+      {...drop.handlers}
+    >
+      <HostingDropZone
+        kind="html"
+        active={drop.active}
+        busy={uploads.busy}
+        disabled={dropDisabled}
+        onChoose={() => input.current?.click()}
+      />
+      {drop.active && (
+        <div className="hosting-drop-feedback" role="status">
+          <UploadCloud size={18} />
+          {tr('松开上传 HTML', 'Drop to upload HTML')}
         </div>
-        <Button onClick={() => input.current?.click()}>
-          <Upload size={17} />
-          {tr('选择 HTML', 'Choose HTML files')}
-        </Button>
-        <input
-          type="file"
-          accept=".html,.htm,text/html"
-          multiple
-          hidden
-          ref={input}
-          onChange={(event) => {
-            uploads.add(Array.from(event.target.files || []));
-            event.target.value = '';
-          }}
-        />
-      </section>
+      )}
+      <input
+        type="file"
+        accept=".html,.htm,text/html"
+        multiple
+        hidden
+        ref={input}
+        onChange={(event) => {
+          if (!dropDisabled) uploads.add(Array.from(event.target.files || []));
+          event.target.value = '';
+        }}
+      />
       {!!uploads.items.length && (
         <section className="hosting-tasks">
           <header>
@@ -194,11 +176,11 @@ export function HtmlHosting({
           ))}
         </section>
       )}
-      <section className="management-list">
-        <div className="file-toolbar">
+      <section className="hosting-library">
+        <div className="hosting-toolbar">
           <div className="hosting-list-title">
             <Link2 size={17} />
-            <strong>{tr('HTML 文件', 'HTML files')}</strong>
+            <strong>{tr('已托管', 'Hosted')}</strong>
             <span>{total}</span>
           </div>
           <LinkOriginSelect compact />
@@ -218,60 +200,70 @@ export function HtmlHosting({
             ))}
           </div>
         ) : (
-          rows.map((row) => {
-            const expired = row.expires_at !== null && row.expires_at <= Date.now();
-            const available = row.enabled && !expired;
-            return (
-              <article className="management-row" key={row.file_id}>
-                <div className="type-icon">
-                  <FileCode2 />
-                </div>
-                <div className="management-info">
-                  <strong>{row.name}</strong>
-                  <p>
-                    {sizeLabel(row.size)} · {dateLabel(row.created_at)} ·{' '}
-                    {!row.enabled
-                      ? tr('已撤销', 'Revoked')
-                      : expired
-                        ? tr('已过期', 'Expired')
-                        : row.password_protected
-                          ? tr('密码保护', 'Password protected')
-                          : tr('已分享', 'Shared')}{' '}
-                    · <Eye size={12} /> {row.views}
-                  </p>
-                </div>
-                <div className="management-actions">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={!available}
-                    onClick={() => void copyLink(row.url)}
-                  >
-                    <Copy size={14} />
-                    {tr('复制链接', 'Copy link')}
-                  </Button>
-                  {available && (
-                    <Button asChild size="sm" variant="ghost">
-                      <a href={link(row.url)} target="_blank" rel="noreferrer">
-                        <ExternalLink size={14} />
-                        {tr('打开', 'Open')}
-                      </a>
+          <div className="hosting-cards">
+            {rows.map((row) => {
+              const expired = row.expires_at !== null && row.expires_at <= Date.now();
+              const available = row.enabled && !expired;
+              return (
+                <article className="hosting-card hosting-html-card" key={row.file_id}>
+                  <div className="hosting-card-icon" aria-hidden="true">
+                    <FileCode2 size={22} strokeWidth={1.7} />
+                  </div>
+                  <div className="hosting-card-info">
+                    <strong className="hosting-card-name">{row.name}</strong>
+                    <div className="hosting-card-details">
+                      <span className={`hosting-state${available ? '' : ' is-inactive'}`}>
+                        {!row.enabled
+                          ? tr('已撤销', 'Revoked')
+                          : expired
+                            ? tr('已过期', 'Expired')
+                            : row.password_protected
+                              ? tr('密码保护', 'Password protected')
+                              : tr('已分享', 'Shared')}
+                      </span>
+                      <span>{sizeLabel(row.size)}</span>
+                      <time dateTime={new Date(row.created_at).toISOString()}>
+                        {dateLabel(row.created_at)}
+                      </time>
+                      <span className="hosting-card-stat">
+                        <Eye size={13} />
+                        {tr('访问', 'Views')} {row.views}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="hosting-card-actions">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!available}
+                      onClick={() => void copyLink(row.url)}
+                    >
+                      <Copy size={14} />
+                      {tr('复制链接', 'Copy link')}
                     </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setError('');
-                      setAction(row);
-                    }}
-                  >
-                    {row.enabled ? tr('撤销', 'Revoke') : tr('重新分享', 'Share again')}
-                  </Button>
-                </div>
-              </article>
-            );
-          })
+                    {available && (
+                      <Button asChild size="sm" variant="ghost">
+                        <a href={link(row.url)} target="_blank" rel="noreferrer">
+                          <ExternalLink size={14} />
+                          {tr('打开', 'Open')}
+                        </a>
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setError('');
+                        setAction(row);
+                      }}
+                    >
+                      {row.enabled ? tr('撤销', 'Revoke') : tr('重新分享', 'Share again')}
+                    </Button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         )}
         {!loading && !error && !rows.length && (
           <EmptyState label={tr('还没有 HTML 文件', 'No HTML files yet')} />

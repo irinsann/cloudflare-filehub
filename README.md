@@ -2,18 +2,18 @@
 
 **中文** · [English](#english)
 
-基于 Cloudflare Workers、私有 R2 和 D1 的个人云盘、图床与 Markdown 发布平台。支持 HTML 上传分享和文件夹静态网站，采用 MIT 协议。
+基于 Cloudflare Workers、私有 R2 和 D1 的个人云盘、图片托管与 Markdown 发布平台。支持 HTML 上传分享和文件夹静态网站，采用 MIT 协议。
 
 ## 功能
 
 - 文件管理：多级目录、搜索、排序、列表/网格、分片上传、预览、回收站、恢复和永久删除。
-- 图床：保存到 `/Image-hosting`，按内容 MD5 命名；直链、Markdown 链接、引用/下载统计，默认列表与全量画廊切换。
+- Image 托管：支持拖拽或选择多张图片，保存到 `/Image-hosting`，按内容 MD5 命名；直链、Markdown 链接、引用/下载统计，默认列表与全量画廊切换。
 - HTML 上传：拖入或选择 HTML/HTM，保存到 `/Html-hosting` 后自动生成稳定分享地址；可再次复制、撤销、恢复，上传和发布分别重试。
 - HTML 网站：发布含 `index.html` 的文件夹，直接加载相对 CSS、JavaScript 模块、JSON、字体、图片和子页面，没有 iframe。
-- Markdown：保存在 `/Markdown`；CodeMirror 编辑、预览、草稿恢复和版本冲突检测；编辑器图片自动上传图床；发布快照与私人草稿独立。
+- Markdown：保存在 `/Markdown`；CodeMirror 编辑、预览、草稿恢复和版本冲突检测；编辑器图片自动上传到 Image 托管；发布快照与私人草稿独立。
 - 公开链接：密码、有效期、撤销、下载权限和统计；可选择源站或已配置的反代域名。
 - 自动化：独立上传 API、ShareX 图床配置和 WebDAV 凭据。
-- 界面：中文/英文、明暗主题、桌面侧栏与手机导航、马卡龙配色与轻量卡片。
+- 界面：中文/英文、明暗主题、桌面侧栏与手机导航、统一的蓝绿马卡龙配色与独立卡片。
 - 认证：站内密码＋TOTP 验证器，或 Cloudflare Access 管理员白名单。
 
 R2 是唯一文件存储后端；当前版本不包含 Google Drive 挂载。
@@ -82,12 +82,12 @@ RCloud is a self-hosted personal drive, image host, and Markdown publishing plat
 ### Features
 
 - File browsing, folders, search, multipart uploads, previews, trash and recovery.
-- MD5-named image hosting in `/Image-hosting`, direct and Markdown links, view/download counters, a default list and a full gallery.
+- Drag-and-drop or multi-file image hosting in `/Image-hosting`, MD5 names, direct and Markdown links, view/download counters, a default list and a full gallery.
 - Drag-and-drop HTML/HTM hosting in `/Html-hosting`, automatic stable share links, revocation and explicit restoration. Publication retries reuse the uploaded file and share.
 - Folder websites with an `index.html` entry point and relative CSS, JavaScript modules, JSON, fonts, images and subpages, displayed directly without an iframe.
 - Markdown files in `/Markdown`, editing and preview, automatic image uploads, conflict detection, and separate published snapshots.
 - Password-protected and expiring shares, selectable configured public origins, upload API, ShareX and WebDAV.
-- Chinese/English UI, light/dark themes, responsive layouts and a soft macaron palette.
+- Chinese/English UI, light/dark themes, responsive layouts, and consistent blue/mint macaron cards.
 - Password plus TOTP authentication, or Cloudflare Access with an administrator allowlist.
 
 R2 is the only file storage backend. Google Drive mounting is not included in this version.

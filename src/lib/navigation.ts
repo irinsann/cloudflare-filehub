@@ -49,7 +49,7 @@ export const sections = [
   {
     id: 'images',
     get label() {
-      return tr('图床', 'Images');
+      return tr('Image 托管', 'Image hosting');
     },
     icon: Image,
   },

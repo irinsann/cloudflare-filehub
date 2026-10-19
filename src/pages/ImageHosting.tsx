@@ -1,10 +1,8 @@
 import { tr } from '../lib/i18n';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Upload,
   Copy,
   Link2,
-  ImagePlus,
   RotateCcw,
   Trash2,
   Eye,
@@ -12,6 +10,8 @@ import {
   List,
   LayoutGrid,
   RefreshCw,
+  Image,
+  UploadCloud,
 } from 'lucide-react';
 import { api, send, copy, fileUrl, sizeLabel, dateLabel } from '../lib/api';
 import { imageMarkdown, uploadHostedImage } from '../lib/image-upload';
@@ -21,6 +21,8 @@ import { Button } from '../components/ui/button';
 import { Modal } from '../components/ui/dialog';
 import { ManualCopy } from '../components/ManualCopy';
 import { LinkOriginSelect, usePublicLinks } from '../components/PublicLinks';
+import { HostingDropZone } from '../components/HostingDropZone';
+import { useHostingDrop } from '../hooks/useHostingDrop';
 import type { Settings } from '../../shared/types';
 interface Row {
   name: string;
@@ -120,6 +122,14 @@ export function ImageHosting({
   const locked = useRef(false);
   const mounted = useRef(true);
   const working = busy || operation !== null;
+  const dropDisabled = working || !settings || !!deleting || !!preview || manualCopy !== null;
+  const drop = useHostingDrop({
+    disabled: dropDisabled,
+    onFiles: (files) => {
+      void upload(files);
+    },
+    onBlocked: () => notify(tr('请等待当前操作完成', 'Wait for the current action to finish')),
+  });
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -337,37 +347,35 @@ export function ImageHosting({
     );
   }
   return (
-    <section>
-      <div
-        className="image-host-drop"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          void upload(Array.from(e.dataTransfer.files));
+    <section
+      className={`hosting-page image-hosting-page${drop.active ? ' is-dragging' : ''}`}
+      {...drop.handlers}
+    >
+      <HostingDropZone
+        kind="image"
+        active={drop.active}
+        busy={busy}
+        disabled={dropDisabled}
+        onChoose={() => input.current?.click()}
+        detail={`${tr('剩余', 'Available')} ${settings ? sizeLabel(settings.storageAvailableBytes) : '—'}`}
+      />
+      {drop.active && (
+        <div className="hosting-drop-feedback" role="status">
+          <UploadCloud size={18} />
+          {tr('松开上传图片', 'Drop to upload images')}
+        </div>
+      )}
+      <input
+        ref={input}
+        type="file"
+        multiple
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        hidden
+        onChange={(e) => {
+          if (!dropDisabled) void upload(Array.from(e.target.files || []));
+          e.target.value = '';
         }}
-      >
-        <ImagePlus size={28} />
-        <strong>{tr('上传图片', 'Upload images')}</strong>
-        <Button disabled={working || !settings} onClick={() => input.current?.click()}>
-          <Upload size={16} />
-          {busy ? tr('上传中…', 'Uploading…') : tr('选择图片', 'Choose images')}
-        </Button>
-        <small>
-          {tr('PNG / JPEG / GIF / WebP · 剩余', 'PNG / JPEG / GIF / WebP · Available ')}{' '}
-          {settings ? sizeLabel(settings.storageAvailableBytes) : '—'}
-        </small>
-        <input
-          ref={input}
-          type="file"
-          multiple
-          accept="image/png,image/jpeg,image/gif,image/webp"
-          hidden
-          onChange={(e) => {
-            void upload(Array.from(e.target.files || []));
-            e.target.value = '';
-          }}
-        />
-      </div>
+      />
       {status && (
         <p role="status" className="muted">
           {status}
@@ -378,7 +386,7 @@ export function ImageHosting({
           {error}
         </p>
       )}
-      <div className="public-links-toolbar image-host-toolbar">
+      <div className="hosting-toolbar">
         <LinkOriginSelect />
         <div className="image-host-view-tools">
           <div
@@ -442,7 +450,7 @@ export function ImageHosting({
           </Button>
         </div>
       ) : rows.length > 0 && view === 'gallery' ? (
-        <div className="image-gallery" aria-label={tr('图床画廊', 'Image gallery')}>
+        <div className="image-gallery" aria-label={tr('图片画廊', 'Image gallery')}>
           {rows.map((row) => (
             <article
               className="image-gallery-card"
@@ -492,51 +500,53 @@ export function ImageHosting({
           ))}
         </div>
       ) : rows.length > 0 ? (
-        <div className="image-host-list">
-          <table aria-label={tr('图床图片', 'Hosted images')}>
-            <thead>
-              <tr>
-                <th scope="col">{tr('名称', 'Name')}</th>
-                <th scope="col">{tr('大小', 'Size')}</th>
-                <th scope="col">{tr('状态', 'Status')}</th>
-                <th scope="col">{tr('上传时间', 'Uploaded')}</th>
-                <th scope="col">{tr('引用', 'Views')}</th>
-                <th scope="col">{tr('下载', 'Download')}</th>
-                <th scope="col">{tr('操作', 'Actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.name} aria-busy={operation?.name === r.name}>
-                  <th scope="row" className="image-host-name">
-                    <span title={r.name}>{r.name}</span>
-                  </th>
-                  <td className="image-host-meta">{sizeLabel(r.size)}</td>
-                  <td className="image-host-meta">
+        <div className="hosting-cards" aria-label={tr('托管图片', 'Hosted images')}>
+          {rows.map((r) => (
+            <article
+              className="hosting-card hosting-image-card"
+              key={r.name}
+              aria-busy={operation?.name === r.name}
+            >
+              <button
+                className="hosting-card-icon"
+                type="button"
+                onClick={() => openPreview(r)}
+                disabled={working}
+                aria-label={tr('预览 ', 'Preview ') + r.name}
+              >
+                <Image size={22} strokeWidth={1.7} />
+              </button>
+              <div className="hosting-card-info">
+                <button
+                  className="hosting-card-name"
+                  type="button"
+                  title={r.name}
+                  disabled={working}
+                  onClick={() => openPreview(r)}
+                >
+                  {r.name}
+                </button>
+                <div className="hosting-card-details">
+                  <span className={`hosting-state${r.enabled ? '' : ' is-inactive'}`}>
                     {r.enabled ? tr('公开', 'Public') : tr('已撤销', 'Revoked')}
-                  </td>
-                  <td className="image-host-meta">
-                    <time dateTime={new Date(r.created_at).toISOString()}>
-                      {dateLabel(r.created_at)}
-                    </time>
-                  </td>
-                  <td className="image-host-meta">
-                    <span className="image-host-mobile-label" aria-hidden="true">
-                      {tr('引用', 'Views')}{' '}
-                    </span>
-                    {r.views ?? 0}
-                  </td>
-                  <td className="image-host-meta">
-                    <span className="image-host-mobile-label" aria-hidden="true">
-                      {tr('下载', 'Download')}{' '}
-                    </span>
-                    {r.downloads ?? 0}
-                  </td>
-                  <td className="image-host-action-cell">{imageActions(r)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </span>
+                  <span>{sizeLabel(r.size)}</span>
+                  <time dateTime={new Date(r.created_at).toISOString()}>
+                    {dateLabel(r.created_at)}
+                  </time>
+                  <span className="hosting-card-stat">
+                    <Eye size={13} />
+                    {tr('引用', 'Views')} {r.views ?? 0}
+                  </span>
+                  <span className="hosting-card-stat">
+                    <Download size={13} />
+                    {tr('下载', 'Downloads')} {r.downloads ?? 0}
+                  </span>
+                </div>
+              </div>
+              {imageActions(r)}
+            </article>
+          ))}
         </div>
       ) : null}
       {!loading && !rows.length && !error && !loadError && (

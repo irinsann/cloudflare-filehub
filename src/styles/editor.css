@@ -15,10 +15,8 @@
   margin-bottom: 10px;
   border: 1px solid var(--panel-line);
   border-radius: var(--radius);
-  background: var(--panel);
-  box-shadow:
-    inset 0 1px 0 var(--panel-highlight),
-    var(--raised-shadow);
+  background: var(--panel-strong);
+  box-shadow: inset 0 1px 0 var(--panel-highlight);
   flex-shrink: 0;
 }
 .editor-heading {
@@ -47,11 +45,9 @@
   padding: 6px 12px;
   margin-bottom: 10px;
   border: 1px solid var(--panel-line);
-  border-radius: 18px;
-  background: var(--panel);
-  box-shadow:
-    inset 0 1px 0 var(--panel-highlight),
-    var(--panel-shadow);
+  border-radius: var(--radius);
+  background: var(--panel-strong);
+  box-shadow: inset 0 1px 0 var(--panel-highlight);
   flex-shrink: 0;
 }
 .editor-tools-label {
@@ -66,15 +62,9 @@
 .editor-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 12px;
   flex: 1;
   min-height: 0;
-  border: 1px solid var(--panel-line);
-  border-radius: 22px;
-  overflow: hidden;
-  background: var(--surface);
-  box-shadow:
-    inset 0 1px 0 var(--panel-highlight),
-    var(--panel-shadow);
 }
 .editor-source,
 .editor-preview {
@@ -82,9 +72,11 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-.editor-source {
-  border-right: 1px solid var(--line);
+  border: 1px solid var(--panel-line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--panel-strong);
+  box-shadow: inset 0 1px 0 var(--panel-highlight);
 }
 .panel-label {
   padding: 10px 24px;
@@ -93,7 +85,8 @@
   justify-content: space-between;
   gap: 8px;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--sky-ink);
+  background: color-mix(in srgb, var(--sky) 45%, var(--panel-strong));
   border-bottom: 1px solid var(--line);
 }
 .panel-label span {
@@ -204,7 +197,7 @@
     height: 100%;
   }
   .editor-source {
-    border: 0;
+    border: 1px solid var(--panel-line);
   }
   .editor-preview {
     display: none;

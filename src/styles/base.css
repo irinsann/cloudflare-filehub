@@ -271,10 +271,21 @@ html[data-theme='dark'] .button-danger {
   flex: none;
 }
 .public-link-option-copy {
+  display: grid;
+  align-items: center;
   min-width: 0;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
+}
+.public-link-option-copy > span {
+  grid-area: 1 / 1;
+}
+.public-link-option[data-feedback='true'] .public-link-label {
+  visibility: hidden;
+}
+.public-link-feedback {
+  color: var(--origin-color);
 }
 .public-link-check {
   display: flex;
@@ -288,38 +299,6 @@ html[data-theme='dark'] .button-danger {
 .public-link-option[aria-checked='true'] .public-link-check {
   opacity: 1;
   transform: scale(1);
-}
-.public-link-detail {
-  display: grid;
-  align-items: center;
-  min-width: 0;
-  max-width: 100%;
-  font-size: 11px;
-  line-height: 1.5;
-}
-.public-link-host,
-.public-link-confirmation {
-  grid-area: 1 / 1;
-  transition: opacity 140ms;
-}
-.public-link-host {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.public-link-confirmation {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--accent);
-  font-weight: 600;
-  opacity: 0;
-}
-.public-link-detail-confirmed .public-link-host {
-  opacity: 0;
-}
-.public-link-detail-confirmed .public-link-confirmation {
-  opacity: 1;
 }
 @media (max-width: 440px) {
   .public-link-option-icon {

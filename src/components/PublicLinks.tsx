@@ -124,7 +124,6 @@ export function LinkOriginSelect({
     setFeedback({ origin: option.origin, label, message: `${label}：${option.label}` });
   }
   if (!options.length) return null;
-  const activeOption = options.find((option) => option.origin === origin);
   return (
     <div
       className={['public-link-origin', compact && 'public-link-origin-compact', className]
@@ -138,6 +137,7 @@ export function LinkOriginSelect({
       >
         {options.map((option, index) => {
           const selected = option.origin === origin;
+          const confirmed = selected && feedback?.origin === option.origin;
           const Icon = option.kind === 'global' ? Globe2 : Server;
           return (
             <button
@@ -154,6 +154,7 @@ export function LinkOriginSelect({
               tabIndex={selected ? 0 : -1}
               className="public-link-option"
               data-origin-kind={option.kind}
+              data-feedback={confirmed || undefined}
               onClick={() => choose(option)}
               onKeyDown={(event) => {
                 let next: number;
@@ -173,9 +174,12 @@ export function LinkOriginSelect({
                 <Icon size={14} />
               </span>
               <span className="public-link-option-copy" aria-hidden="true">
-                {option.kind === 'global'
-                  ? tr('全球 CDN', 'Global CDN')
-                  : tr('香港反代', 'Hong Kong proxy')}
+                <span className="public-link-label">
+                  {option.kind === 'global'
+                    ? tr('全球 CDN', 'Global CDN')
+                    : tr('香港反代', 'Hong Kong proxy')}
+                </span>
+                {confirmed && <span className="public-link-feedback">{feedback.label}</span>}
               </span>
               <span className="public-link-check" aria-hidden="true">
                 <Check size={11} strokeWidth={2.5} />
@@ -184,19 +188,6 @@ export function LinkOriginSelect({
           );
         })}
       </div>
-      <span
-        className={['public-link-detail', feedback && 'public-link-detail-confirmed']
-          .filter(Boolean)
-          .join(' ')}
-        title={activeOption?.origin}
-        aria-hidden="true"
-      >
-        <span className="public-link-host">{activeOption?.host}</span>
-        <span className="public-link-confirmation">
-          <Check size={12} strokeWidth={2.5} />
-          {feedback?.label}
-        </span>
-      </span>
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {feedback?.message ?? ''}
       </span>

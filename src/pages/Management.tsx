@@ -10,6 +10,9 @@ import {
   Eye,
   Download,
   LockKeyhole,
+  CalendarDays,
+  Pencil,
+  HardDrive,
 } from 'lucide-react';
 import { apiPage, copy, send, dateLabel } from '../lib/api';
 import { StorageMeter } from '../components/workspace/WorkspaceShell';
@@ -186,32 +189,40 @@ export function Management({
     return (
       <div className="settings-grid">
         <section className="settings-card">
-          <ShieldCheck />
-          <h3>{tr('账号', 'Account')}</h3>
-          {settings?.authMode === 'password_totp' && (
-            <Button
-              variant="outline"
-              onClick={async () => {
-                try {
-                  const r = await fetch('/api/auth/logout', {
-                    method: 'POST',
-                    headers: { 'X-Drive-Request': '1', 'Accept-Language': getLocale() },
-                  });
-                  if (!r.ok) throw Error(tr('退出失败', 'Could not sign out'));
-                  location.assign('/login');
-                } catch {
-                  notify(tr('退出失败，请稍后重试', 'Could not sign out. Try again shortly.'));
-                }
-              }}
-            >
-              {tr('退出登录', 'Sign out')}
-            </Button>
-          )}
+          <div className="settings-card-header">
+            <div className="settings-card-heading">
+              <ShieldCheck aria-hidden="true" />
+              <h3>{tr('账号', 'Account')}</h3>
+            </div>
+            {settings?.authMode === 'password_totp' && (
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    const r = await fetch('/api/auth/logout', {
+                      method: 'POST',
+                      headers: { 'X-Drive-Request': '1', 'Accept-Language': getLocale() },
+                    });
+                    if (!r.ok) throw Error(tr('退出失败', 'Could not sign out'));
+                    location.assign('/login');
+                  } catch {
+                    notify(tr('退出失败，请稍后重试', 'Could not sign out. Try again shortly.'));
+                  }
+                }}
+              >
+                {tr('退出登录', 'Sign out')}
+              </Button>
+            )}
+          </div>
           <p className="account-email">{settings?.email ?? tr('正在读取', 'Loading')}</p>
         </section>
         <section className="settings-card">
-          <FileText />
-          <h3>{tr('存储', 'Storage')}</h3>
+          <div className="settings-card-header">
+            <div className="settings-card-heading">
+              <HardDrive aria-hidden="true" />
+              <h3>{tr('存储', 'Storage')}</h3>
+            </div>
+          </div>
           <StorageMeter settings={settings} />
           <p>
             {tr('文本编辑上限：', 'Text editing limit: ')}
@@ -264,6 +275,17 @@ export function Management({
               </button>
             ))}
           </div>
+          <LinkOriginSelect compact />
+        </div>
+      )}
+      {view === 'published' && (
+        <div className="published-toolbar">
+          <span className="published-count">
+            <FileText size={15} aria-hidden="true" />
+            {loading
+              ? tr('加载中…', 'Loading…')
+              : tr('{0} 篇文章', '{0} articles', { '0': total.toLocaleString(getLocale()) })}
+          </span>
           <LinkOriginSelect compact />
         </div>
       )}
@@ -394,10 +416,7 @@ export function Management({
             {!shares.length && <EmptyState label={tr('暂无分享链接', 'No shared links')} />}
           </div>
         ) : (
-          <div className="management-list">
-            <div className="file-toolbar">
-              <LinkOriginSelect compact />
-            </div>
+          <div className="management-list published-list">
             {docs
               .filter((d) => d.published)
               .map((d) => {
@@ -405,57 +424,82 @@ export function Management({
                   `${settings?.markdownOrigin || location.origin}/p/${d.slug}`,
                 );
                 return (
-                  <article key={d.id} className="management-row">
+                  <article key={d.id} className="management-row published-row">
                     <div className="type-icon">
-                      <FileText />
+                      <FileText aria-hidden="true" />
                     </div>
                     <div className="management-info">
-                      <strong>{d.title ?? d.name}</strong>
-                      <p>
-                        /{d.slug} · {d.views ?? 0}
-                        {tr('次阅读 · 已发布 v', ' views · Published v')}
-                        {d.published_version}
-                        {d.version !== d.published_version
-                          ? tr(' · 有新草稿', ' · New draft available')
-                          : ''}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={tr('复制文章链接', 'Copy article link')}
-                      title={tr('复制文章链接', 'Copy article link')}
-                      onClick={() =>
-                        void copy(url)
-                          .then(() => notify(tr('阅读链接已复制', 'Article link copied')))
-                          .catch(() =>
-                            setError(
-                              tr(
-                                '复制失败，请打开文章后复制地址',
-                                'Could not copy. Open the article and copy its address.',
-                              ),
-                            ),
-                          )
-                      }
-                    >
-                      <Copy size={16} />
-                    </Button>
-                    <Button variant="ghost" size="icon" asChild>
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label={tr('打开文章', 'Open article')}
-                      >
-                        <ExternalLink size={16} />
+                      <a className="published-title" href={url} target="_blank" rel="noreferrer">
+                        <strong>{d.title ?? d.name}</strong>
                       </a>
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => onEdit(d.id)}>
-                      {tr('编辑', 'Edit')}
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => void revoke(d.id, true)}>
-                      {tr('取消发布', 'Unpublish')}
-                    </Button>
+                      <span className="published-path">/p/{d.slug}</span>
+                      <div className="published-status">
+                        <span className="share-state">
+                          {tr('已发布 v{0}', 'Published v{0}', { '0': d.published_version ?? '—' })}
+                        </span>
+                        {d.version !== d.published_version && (
+                          <span className="published-draft">
+                            <Pencil size={12} aria-hidden="true" />
+                            {tr('有新草稿', 'New draft')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="published-meta">
+                        {d.published_at !== null && (
+                          <span>
+                            <CalendarDays size={13} aria-hidden="true" />
+                            <time dateTime={new Date(d.published_at).toISOString()}>
+                              {dateLabel(d.published_at)}
+                            </time>
+                          </span>
+                        )}
+                        <span>
+                          <Eye size={14} aria-hidden="true" />
+                          {tr('{0} 次阅读', '{0} views', {
+                            '0': (d.views ?? 0).toLocaleString(getLocale()),
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="management-actions">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        aria-label={tr('复制文章链接', 'Copy article link')}
+                        title={tr('复制文章链接', 'Copy article link')}
+                        onClick={() =>
+                          void copy(url)
+                            .then(() => notify(tr('阅读链接已复制', 'Article link copied')))
+                            .catch(() => setManualCopy({ url, name: d.title ?? d.name }))
+                        }
+                      >
+                        <Copy size={16} />
+                        {tr('复制链接', 'Copy link')}
+                      </Button>
+                      <Button variant="ghost" size="sm" asChild>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={tr('打开文章', 'Open article')}
+                        >
+                          <ExternalLink size={16} />
+                          {tr('打开', 'Open')}
+                        </a>
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => onEdit(d.id)}>
+                        <Pencil size={15} />
+                        {tr('编辑', 'Edit')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="share-revoke"
+                        onClick={() => void revoke(d.id, true)}
+                      >
+                        {tr('取消发布', 'Unpublish')}
+                      </Button>
+                    </div>
                   </article>
                 );
               })}
