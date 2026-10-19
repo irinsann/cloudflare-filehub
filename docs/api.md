@@ -235,13 +235,15 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 
 `GET /api/admin/settings` 返回的 `adminOrigin` 和 `filesOrigin` 分别用于网页的全球 CDN、香港反代链接选项，`markdownOrigin` 保留为文章默认链接来源。网页复制时只切换可信链接的域名，保留路径、参数和片段；选择不改变 API 返回的默认 URL 或 ShareX 上传配置。其他部署可使用自己的域名，若两个配置相同则网页仅显示一个选项。
 
-列表响应 `{data:{files,folders,total,page,limit}}`，按文件总数分页。近期、Markdown 视图与文件名搜索是全局查询；搜索中的 %、\_ 视为普通字符。上传 Token 无列目录权限，文件夹 ID 可在已登录的目录 API 中查看。
+列表响应 `{data:{files,folders,total,folderTotal,page,limit}}`，`total` 为文件总数、`folderTotal` 为目录总数。文件与目录分别按同一 `page`、`limit` 分页，默认每类 40 条、最多每类 100 条；页数取两个总数中的较大值计算。近期、Markdown 视图与文件名搜索是全局文件查询，不返回目录；搜索中的 %、\_ 视为普通字符。上传 Token 无列目录权限，文件夹 ID 可在已登录的目录 API 中查看。
+
+`GET /api/admin/folders` 支持 `parent_id`、`page`、`limit`，默认第 1 页、每页 100 条，上限 100 条。响应保持 `data` 数组，并增加 `{page,limit,total}` 元数据；移动目标选择器按页读取，超过 100 个目录仍可访问。
 
 ### 分享与直链
 
 | Method   | 路径                               | 参数/行为                                                                                             |
 | -------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| GET      | /api/admin/shares                  | 最近 100 条，包含可重复复制的 url、directUrl；不返回密码或哈希                                         |
+| GET      | /api/admin/shares                  | page、limit 分页，默认每页 100 条；包含可重复复制的 url、directUrl，不返回密码或哈希                  |
 | POST     | /api/admin/shares                  | {file_id,password?,expires_at?,allow_download?}；到期可为 null，默认允许下载；返回 {id,url,directUrl} |
 | PATCH    | /api/admin/shares/{id}             | {enabled?,allow_download?,expires_at?,password?}；password=null 移除密码                              |
 | DELETE   | /api/admin/shares/{id}             | 撤销                                                                                                  |
@@ -254,6 +256,8 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 | GET/HEAD | /api/public/share/{token}/download | 受控下载                                                                                              |
 
 创建分享和管理列表返回同一条分享的稳定 `url`、`directUrl`，可以再次复制；读取列表不会新建分享或重置统计。默认链接来源为 s.irin.im。这些 URL 本身授予分享访问权，管理列表仅向管理员提供，并禁止缓存。密码 Cookie 每个分享独立，最长一小时。无效链接 404，撤销/到期 410，未解锁 API 返回 401，禁止下载返回 403；分享页面可返回不含文件信息的解锁界面。
+
+管理列表响应为 `{data:[…],page,limit,total}`，每页最多 100 条，按创建时间倒序、ID 次序稳定分页。网页每页显示 40 条，可翻页管理和复制更早的分享。
 
 旧版 64 位十六进制 Token 链接继续有效。旧分享再次复制时返回签名地址，与旧地址共用密码、有效期、下载许可、撤销状态和统计，不需要重建分享。客户端应直接使用返回的 URL，不解析或假定 Token 长度。`directUrl` 仍需要下载许可；密码分享须先在同域名的分享页解锁，网页列表仅为无密码且允许下载的分享提供“复制直链”。
 
@@ -305,7 +309,7 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 
 | Method   | 路径                                                | 参数/行为                                                                                  |
 | -------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| GET      | /api/admin/markdown                                 | 最近 100 个文档与发布状态                                                                  |
+| GET      | /api/admin/markdown                                 | page、limit 分页；published=1 仅查询已发布文章，默认每页 100 条                            |
 | POST     | /api/admin/markdown                                 | {name,content?}，.md/.markdown；统一保存 /Markdown，旧 folder_id 参数不改变目的地          |
 | GET      | /api/admin/markdown/{id}                            | {file,content,page}，id 为文件 ID                                                          |
 | PUT      | /api/admin/markdown/{id}                            | {content,version}，版本冲突 409                                                            |
@@ -316,6 +320,8 @@ scope 为 `files:upload`（默认）或 `images:upload`；已有 Token 保持 fi
 | GET/HEAD | /p/{slug}                                           | 公开阅读页                                                                                 |
 | GET/HEAD | /api/public/pages/{slug}/source                     | 开启源文件下载时返回发布快照                                                               |
 | GET/HEAD | /api/public/pages/{slug}/attachments/{id}           | 校验发布、引用与归属                                                                       |
+
+文档列表响应 `{data:[…],page,limit,total}`，每页最多 100 条；`published=1` 在分页前过滤，新增私人草稿不会挤走已发布文章。网页已发布管理每页显示 40 条。
 
 编辑器新图片使用 `![图片](https://s.irin.im/i/MD5.ext)`，实际 URL 取图床接口返回值；自部署使用配置的图床域名。旧私有附件格式 `![图片](attachment:UUID)` 继续兼容，仅发布快照实际引用且属于该文档的附件可以公开。HTTPS 图片（包括图床）由浏览器直接请求，取消发布或删除 Markdown 文件不会撤销这些图片；需要在图床中单独撤销直链或删除图片。
 

@@ -6,7 +6,13 @@ import { now, uuid } from './env';
 import { identifier } from '../shared/validation';
 import { fail } from './errors';
 import { getFile, activeFolder, logStatement, purgeFiles } from './files';
-import { serveObject, sniff, releaseStatement, cleanupStatement } from './storage';
+import {
+  serveObject,
+  sniff,
+  releaseStatement,
+  cleanupStatement,
+  cleanupPurgedObjects,
+} from './storage';
 import { recordImageAccess } from './image-stats';
 import { z } from 'zod';
 import type { FileRecord } from '../shared/types';
@@ -72,6 +78,23 @@ async function enableImage(c: AppContext, image: HostedImage, file: FileRecord) 
     .run();
   if (!result.meta.changes) fail(409, '图片状态已改变，请刷新后重试');
 }
+async function reuseImage(c: AppContext, image: HostedImage, sourceId: string) {
+  const file = await c.env.DB.prepare(
+    "SELECT * FROM files WHERE id=? AND deleted_at IS NULL AND status='ready'",
+  )
+    .bind(image.file_id)
+    .first<FileRecord>();
+  if (!file || file.object_key !== image.object_key || !(await c.env.BUCKET.head(image.object_key)))
+    return null;
+  await activeFolder(c.env, file.folder_id);
+  await enableImage(c, image, file);
+  return {
+    name: image.name,
+    file_id: file.id,
+    url: imageUrl(c, image.name),
+    duplicate: file.id !== sourceId,
+  };
+}
 export const imageRoutes = new Hono<AppEnv>();
 imageRoutes.post('/images/folder', async (c) => c.json({ data: { id: await imageFolder(c.env) } }));
 imageRoutes.get('/images', async (c) => {
@@ -136,25 +159,8 @@ export async function publishImage(c: AppContext, fileId: string) {
     .first<HostedImage>();
   if (existing && existing.sha256 !== sha256) fail(409, 'MD5 命名冲突，图片未覆盖');
   if (existing) {
-    const old = await c.env.DB.prepare(
-      "SELECT * FROM files WHERE id=? AND deleted_at IS NULL AND status='ready'",
-    )
-      .bind(existing.file_id)
-      .first<FileRecord>();
-    if (
-      old &&
-      old.object_key === existing.object_key &&
-      (await c.env.BUCKET.head(existing.object_key))
-    ) {
-      await activeFolder(c.env, old.folder_id);
-      await enableImage(c, existing, old);
-      return {
-        name,
-        file_id: old.id,
-        url: imageUrl(c, name),
-        duplicate: old.id !== file.id,
-      };
-    }
+    const reused = await reuseImage(c, existing, file.id);
+    if (reused) return reused;
   }
   const folderId = await imageFolder(c.env),
     key = 'Image-hosting/' + uuid() + '/' + name;
@@ -165,17 +171,32 @@ export async function publishImage(c: AppContext, fileId: string) {
   const copy = await c.env.BUCKET.put(key, source.body);
   if (!copy) fail(500, '图片保存失败');
   await checkWriteLease(c);
+  // Another concurrent upload may have published the same content while this copy streamed.
+  // Only replace the image record observed above; otherwise reuse the committed winner.
+  const imageState = existing
+    ? 'EXISTS(SELECT 1 FROM image_hosts WHERE name=? AND file_id=? AND object_key=?)'
+    : 'NOT EXISTS(SELECT 1 FROM image_hosts WHERE name=?)';
+  const imageStateArgs = existing ? [name, existing.file_id, existing.object_key] : [name];
   const results = await c.env.DB.batch([
     c.env.DB.prepare(
-      "UPDATE files SET name=?,folder_id=?,object_key=?,mime=?,updated_at=? WHERE id=? AND object_key=? AND deleted_at IS NULL AND status='ready'",
-    ).bind(name, folderId, key, mime, now(), file.id, file.object_key),
+      `UPDATE files SET name=?,folder_id=?,object_key=?,mime=?,updated_at=?
+      WHERE id=? AND object_key=? AND deleted_at IS NULL AND status='ready' AND ${imageState}`,
+    ).bind(name, folderId, key, mime, now(), file.id, file.object_key, ...imageStateArgs),
     c.env.DB.prepare(
       'INSERT INTO image_hosts(name,file_id,object_key,sha256,created_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM files WHERE id=? AND object_key=?) ON CONFLICT(name) DO UPDATE SET file_id=excluded.file_id,object_key=excluded.object_key,sha256=excluded.sha256,enabled=1,created_at=excluded.created_at WHERE image_hosts.sha256=excluded.sha256',
     ).bind(name, file.id, key, sha256, now(), file.id, key),
     cleanupStatement(c.env, file.object_key),
     logStatement(c.env, 'image.publish', file.id),
   ]);
-  if (!results[0].meta.changes || !results[1].meta.changes) fail(409, '图片状态已改变，请重试');
+  if (!results[0].meta.changes || !results[1].meta.changes) {
+    const winner = await c.env.DB.prepare('SELECT * FROM image_hosts WHERE name=?')
+      .bind(name)
+      .first<HostedImage>();
+    const reused = winner?.sha256 === sha256 ? await reuseImage(c, winner, file.id) : null;
+    if (!reused) fail(409, '图片状态已改变，请重试');
+    await cleanupPurgedObjects(c.env, [key]);
+    return reused;
+  }
   await releaseStatement(c.env, key).run();
   return {
     name,

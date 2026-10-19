@@ -1,3 +1,5 @@
+import type { PaginatedResult } from '../../shared/pagination';
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -6,17 +8,22 @@ export class ApiError extends Error {
     super(message);
   }
 }
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function requestJson<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set('X-Drive-Request', '1');
   if (options.body && typeof options.body === 'string')
     headers.set('Content-Type', 'application/json');
   const response = await fetch(`/api/admin${path}`, { ...options, headers });
   if (response.status === 401) location.assign('/login');
-  const result = (await response.json()) as { data: T; error?: { message: string } };
+  const result = (await response.json()) as T & { error?: { message: string } };
   if (!response.ok) throw new ApiError(response.status, result.error?.message ?? '请求失败');
-  return result.data;
+  return result;
 }
+export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  return (await requestJson<{ data: T }>(path, options)).data;
+}
+export const apiPage = <T>(path: string, options: RequestInit = {}) =>
+  requestJson<PaginatedResult<T>>(path, options);
 export const send = <T>(path: string, method: string, data?: unknown) =>
   api<T>(path, { method, body: data === undefined ? undefined : JSON.stringify(data) });
 export const fileUrl = (id: string, preview = false) =>

@@ -67,6 +67,7 @@ export interface Listing {
   files: FileRecord[];
   folders: FolderRecord[];
   total: number;
+  folderTotal: number;
   page: number;
   limit: number;
 }

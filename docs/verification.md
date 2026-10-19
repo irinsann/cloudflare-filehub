@@ -2,6 +2,13 @@
 
 开发验证环境为 Windows、Node.js 24、pnpm 11。业务测试运行在 Cloudflare workerd，使用隔离的本地 D1/R2，并应用仓库中的 SQL 迁移，不访问生产存储。测试数量和执行耗时以当前 `pnpm check` 输出为准。
 
+## 2026-10-19 稳定性检查
+
+- `pnpm check` 通过：33 个测试文件、220 项测试，以及类型检查、Lint、前端构建和 Worker dry-run；`pnpm peers check` 未发现依赖兼容问题。
+- 在原有 181 项测试之外新增 39 项回归，验证登录数据库故障、重复验证码并发、上传完成/取消竞争、图床并发去重、嵌套回收站、Markdown 草稿与发布快照、目录与管理列表分页、WebDAV 路径边界。
+- 故障注入和并发交错只在隔离的测试 D1/R2 上执行。此次修复不需要数据库迁移，不执行生产数据清理。
+- 本轮通过源码复核和 workerd 自动化验证；未完成真实手机浏览器交互、RaiDrive 或 Windows 挂载验收，不能用自动化通过替代这些客户端检查。
+
 ## 自动化范围
 
 `tests/public-links.test.ts` 额外覆盖链接域名配置、偏好校验、路径/参数/片段保留，以及双域名下分享、图片、文章的访问和撤销权限。
@@ -24,6 +31,16 @@
 | `tests/markdown.test.ts`            | 草稿与公开快照隔离、保存/发布冲突、Slug、源文权限、GFM 与安全过滤、附件归属与撤销、统一域名的路由隔离               |
 | `tests/auth.test.ts`                | Access JWT 签名、issuer/AUD、有效期、管理员邮箱、JWKS、本地模拟限制与管理写请求校验                                 |
 | `tests/site-auth.test.ts`           | 密码与 TOTP、首次绑定、加密验证器密钥、恢复码、会话注销、重放和暴力尝试防护、受信反代来源                           |
+| `tests/auth-atomicity.test.ts`      | 首次绑定与登录写入失败的事务回滚、恢复码保留、同一码并发登录只创建一次会话                                        |
+| `tests/upload-cancel.test.ts`       | 分片取消临时失败时保留会话和配额、NoSuchUpload 幂等清理                                                           |
+| `tests/upload-cancel-race.test.ts`  | 完成与取消并发时保留失败清理任务，保护已成功完成的文件                                                             |
+| `tests/storage-audit.test.ts`       | 一次清空多层回收站、保护尚有上传会话的目录和祖先                                                                  |
+| `tests/image-upload-race.test.ts`   | 相同图片并发上传复用同一记录、不遗留无引用 R2 对象                                                                 |
+| `tests/editor-draft.test.ts`        | 较早保存请求完成后保留后续输入、空白草稿与其他窗口的新内容                                                         |
+| `tests/markdown-concurrency.test.ts`| 并发首次发布返回真实文章 ID、旧快照清理和附件关联                                                                  |
+| `tests/folder-pagination.test.ts`   | 超过 100 个目录的文件/回收站列表及移动目标分页、搜索不产生目录空页                                                 |
+| `tests/management-pagination.test.ts`| 大量草稿不隐藏已发布文章、超过 100 条分享仍可复制、稳定排序与分页参数边界                                          |
+| `tests/webdav-path-limits.test.ts`  | MOVE/COPY 子树深度和编码路径长度、Depth: 0、越界拒绝不覆盖目标                                                     |
 
 JWT 测试生成真实 RSA 签名，仅将 JWKS 网络响应替换为对应测试公钥。存储测试操作真实本地 D1/R2；故障恢复测试临时令 R2 删除失败，检查持久清理任务、容量保留与后续恢复。ShareX 测试验证自定义上传器协议和真实上传结果，不代替不同 ShareX 客户端版本的手工导入验收。
 

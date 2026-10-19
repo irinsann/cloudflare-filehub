@@ -18,6 +18,7 @@ import { shareInput, sharePatch, identifier } from '../shared/validation';
 import type { FileRecord, ShareListItem, ShareRecord } from '../shared/types';
 import { htmlPage, readerScript } from './html';
 import { parseShareLinkToken, shareLinkToken, validShareLinkToken } from './share-links';
+import { paginationParams } from '../shared/pagination';
 
 // Uploaded HTML never receives the site's origin, even when the preview is opened directly.
 const htmlPreviewCsp = [
@@ -71,9 +72,17 @@ async function shareLinks(c: AppContext, share: Pick<ShareRecord, 'id' | 'token_
   return { url: `${origin}/s/${token}`, directUrl: `${origin}/d/${token}` };
 }
 shareRoutes.get('/shares', async (c) => {
-  const rows = await c.env.DB.prepare(
-    'SELECT s.id,s.file_id,s.token_hash,s.created_at,s.expires_at,s.enabled,s.allow_download,s.views,s.downloads,s.last_access_at,(s.password_hash IS NOT NULL) AS password_protected,f.name FROM file_shares s JOIN files f ON f.id=s.file_id ORDER BY s.created_at DESC LIMIT 100',
-  ).all<Omit<ShareListItem, 'url' | 'directUrl'> & { token_hash: string }>();
+  const { page, limit, offset } = paginationParams(c.req.query());
+  const [rows, total] = await Promise.all([
+    c.env.DB.prepare(
+      'SELECT s.id,s.file_id,s.token_hash,s.created_at,s.expires_at,s.enabled,s.allow_download,s.views,s.downloads,s.last_access_at,(s.password_hash IS NOT NULL) AS password_protected,f.name FROM file_shares s JOIN files f ON f.id=s.file_id ORDER BY s.created_at DESC,s.id ASC LIMIT ? OFFSET ?',
+    )
+      .bind(limit, offset)
+      .all<Omit<ShareListItem, 'url' | 'directUrl'> & { token_hash: string }>(),
+    c.env.DB.prepare(
+      'SELECT COUNT(*) AS total FROM file_shares s JOIN files f ON f.id=s.file_id',
+    ).first<number>('total'),
+  ]);
   const data = await Promise.all(
     rows.results.map(async (row): Promise<ShareListItem> => {
       const links = await shareLinks(c, row);
@@ -93,7 +102,7 @@ shareRoutes.get('/shares', async (c) => {
       };
     }),
   );
-  return c.json({ data });
+  return c.json({ data, page, limit, total: total ?? 0 });
 });
 shareRoutes.post('/shares', async (c) => {
   const input = shareInput.parse(await c.req.json());

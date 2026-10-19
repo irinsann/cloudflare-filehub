@@ -72,7 +72,14 @@ export function useFileBrowser() {
     if (folder) params.set('folder_id', folder);
     void api<Listing>(`/files?${params}`, { signal: controller.signal })
       .then((data) => {
-        if (!controller.signal.aborted && serial === request.current) setListing(data);
+        if (!controller.signal.aborted && serial === request.current) {
+          const lastPage = Math.max(
+            1,
+            Math.ceil(Math.max(data.total, data.folderTotal) / data.limit),
+          );
+          if (page > lastPage) setPage(lastPage);
+          else setListing(data);
+        }
       })
       .catch((e) => {
         if (!controller.signal.aborted && serial === request.current) setError(e.message);

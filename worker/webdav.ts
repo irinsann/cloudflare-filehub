@@ -15,11 +15,13 @@ import {
 import {
   davPath,
   href,
+  checkDavPathLength,
   childPath,
   parentPath,
   resolve,
   children,
   parent,
+  checkTreeDestinationPaths,
   tree,
   nodeId,
   etag,
@@ -222,6 +224,7 @@ webdavRoutes.all('*', async (c) => {
   const lockState = { active, submitted: await ifTokens(c, path, active) };
   if (method === 'MKCOL') {
     if (node) fail(405, '路径已存在');
+    checkDavPathLength(path, true);
     if (await textBody(c)) fail(415, 'MKCOL不接受请求体');
     const folder = await parent(c.env, path);
     await checkLocks(c, path, { membership: true }, lockState);
@@ -295,6 +298,10 @@ webdavRoutes.all('*', async (c) => {
     if (existing && c.req.header('Overwrite') === 'F') fail(412, '目标已存在');
     if (method === 'MOVE' && c.req.header('Depth') && c.req.header('Depth') !== 'infinity')
       fail(400, 'MOVE需要Depth infinity');
+    const copyDepth = c.req.header('Depth') || 'infinity';
+    if (method === 'COPY' && !['0', 'infinity'].includes(copyDepth))
+      fail(400, 'COPY Depth无效');
+    await checkTreeDestinationPaths(c.env, node, target, method === 'MOVE' || copyDepth !== '0');
     const folder = await parent(c.env, target);
     if (method === 'MOVE')
       await checkLocks(c, path, { membership: true, descendants: true }, lockState);
@@ -321,9 +328,7 @@ webdavRoutes.all('*', async (c) => {
         ),
       );
     } else {
-      const depth = c.req.header('Depth') || 'infinity';
-      if (!['0', 'infinity'].includes(depth)) fail(400, 'COPY Depth无效');
-      const nodes = depth === '0' ? [node] : await tree(c.env, node);
+      const nodes = copyDepth === '0' ? [node] : await tree(c.env, node);
       if (nodes.length > DAV_COPY_LIMIT) fail(507, `单次COPY最多${DAV_COPY_LIMIT}项，请分批复制`);
       const files = nodes.filter((n) => n.kind === 'file').length;
       const folderLevels = new Set(
@@ -331,12 +336,12 @@ webdavRoutes.all('*', async (c) => {
       ).size;
       const copyStatements = folderLevels + (files ? 2 : 0) + 1;
       // Keep headroom for authentication, path/If resolution, quota reservation and lease checks.
-      const preparation = 20 + (c.req.header('If')?.match(/>\s*\(/g)?.length || 0);
+      const preparation = 21 + (c.req.header('If')?.match(/>\s*\(/g)?.length || 0);
       if (statements.length + copyStatements + files * 2 + preparation > 50)
         fail(507, '复制目标目录过深或内容过多，请分批复制');
       statements.push(...(await prepareCopy(c, nodes, path, target, folder)));
     }
-    if (statements.length + 20 > 50) fail(507, '目标目录层级过深，请分批操作');
+    if (statements.length + 21 > 50) fail(507, '目标目录层级过深，请分批操作');
     await checkWriteLease(c);
     await c.env.DB.batch(statements);
     return new Response(null, { status: existing ? 204 : 201 });

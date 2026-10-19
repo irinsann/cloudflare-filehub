@@ -71,6 +71,8 @@ export function FilesPanel({
   } = browser;
   const heading = sections.find((s) => s.id === view)!.label;
   const folders = query ? [] : (listing?.folders ?? []);
+  const folderTotal = query ? 0 : (listing?.folderTotal ?? 0);
+  const itemTotal = Math.max(listing?.total ?? 0, folderTotal);
   return (
     <section className="files-panel">
       <div className="file-toolbar">
@@ -328,14 +330,14 @@ export function FilesPanel({
       <div className="file-footer">
         <span>
           {listing?.total ?? 0} 个文件
-          {folders.length ? ` · ${folders.length} 个文件夹` : ''}
+          {folderTotal ? ` · ${folderTotal} 个文件夹` : ''}
         </span>
-        {(page > 1 || (!!listing && listing.total > listing.limit)) && (
+        {(page > 1 || (!!listing && itemTotal > listing.limit)) && (
           <div>
             <Button
               variant="ghost"
               size="sm"
-              disabled={page <= 1}
+              disabled={loading || page <= 1}
               onClick={() => setPage(page - 1)}
             >
               上一页
@@ -344,7 +346,7 @@ export function FilesPanel({
             <Button
               variant="ghost"
               size="sm"
-              disabled={!listing || page * listing.limit >= listing.total}
+              disabled={loading || !listing || page * listing.limit >= itemTotal}
               onClick={() => setPage(page + 1)}
             >
               下一页

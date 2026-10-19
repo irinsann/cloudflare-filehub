@@ -9,6 +9,7 @@ import { uploadOwnerStatements, uploadMetadata } from './upload-access';
 import { now, uuid, limit } from './env';
 import { fail } from './errors';
 import type { FileRecord, FolderRecord } from '../shared/types';
+import { paginationParams } from '../shared/pagination';
 import { filename, filePatch, folderInput, folderPatch, identifier } from '../shared/validation';
 import {
   cleanupPurgedObjects,
@@ -78,7 +79,13 @@ export async function purgeFiles(
     ...(pruneFolders
       ? [
           env.DB.prepare(
-            'DELETE FROM folders WHERE deleted_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM files WHERE folder_id=folders.id) AND NOT EXISTS(SELECT 1 FROM folders child WHERE child.parent_id=folders.id) RETURNING id',
+            `WITH RECURSIVE retained(id) AS (
+              SELECT id FROM folders WHERE deleted_at IS NULL
+              OR EXISTS(SELECT 1 FROM files WHERE folder_id=folders.id)
+              UNION SELECT f.parent_id FROM folders f JOIN retained r ON f.id=r.id
+              WHERE f.parent_id IS NOT NULL
+            ) DELETE FROM folders WHERE deleted_at IS NOT NULL
+            AND id NOT IN (SELECT id FROM retained) RETURNING id`,
           ),
         ]
       : []),
@@ -114,9 +121,8 @@ fileRoutes.get('/settings', async (c) =>
   }),
 );
 fileRoutes.get('/files', async (c) => {
-  const query = c.req.query(),
-    page = Math.max(1, Math.min(100000, Number(query.page) || 1)),
-    pageSize = Math.max(1, Math.min(100, Number(query.limit) || 40));
+  const query = c.req.query();
+  const { page, limit: pageSize, offset } = paginationParams(query, 40);
   const folder = query.folder_id || null,
     view = query.view || 'files';
   if (folder && view !== 'trash') await activeFolder(c.env, folder);
@@ -143,27 +149,37 @@ fileRoutes.get('/files', async (c) => {
   const sort = order[query.sort] ?? 'updated_at',
     direction = query.direction === 'asc' ? 'ASC' : 'DESC';
   const where = conditions.join(' AND ');
-  const [rows, total, folders] = await Promise.all([
+  const includeFolders = !query.search && (view === 'files' || view === 'trash');
+  const folderWhere =
+    view === 'trash' ? 'deleted_at IS NOT NULL' : 'parent_id IS ? AND deleted_at IS NULL';
+  const folderArgs = view === 'trash' ? [] : [folder];
+  const [rows, total, folders, folderTotal] = await Promise.all([
     c.env.DB.prepare(
       `SELECT * FROM files WHERE ${where} ORDER BY ${sort} ${direction}, id LIMIT ? OFFSET ?`,
     )
-      .bind(...args, pageSize, (page - 1) * pageSize)
+      .bind(...args, pageSize, offset)
       .all<FileRecord>(),
     c.env.DB.prepare(`SELECT COUNT(*) AS count FROM files WHERE ${where}`)
       .bind(...args)
       .first<{ count: number }>(),
-    c.env.DB.prepare(
-      view === 'trash'
-        ? 'SELECT * FROM folders WHERE deleted_at IS NOT NULL ORDER BY name LIMIT 100'
-        : 'SELECT * FROM folders WHERE parent_id IS ? AND deleted_at IS NULL ORDER BY name LIMIT 100',
-    )
-      .bind(...(view === 'trash' ? [] : [folder]))
-      .all<FolderRecord>(),
+    includeFolders
+      ? c.env.DB.prepare(
+          `SELECT * FROM folders WHERE ${folderWhere} ORDER BY name COLLATE NOCASE,id LIMIT ? OFFSET ?`,
+        )
+          .bind(...folderArgs, pageSize, offset)
+          .all<FolderRecord>()
+      : { results: [] },
+    includeFolders
+      ? c.env.DB.prepare(`SELECT COUNT(*) AS count FROM folders WHERE ${folderWhere}`)
+          .bind(...folderArgs)
+          .first<{ count: number }>()
+      : null,
   ]);
   return c.json({
     data: {
       files: rows.results,
-      folders: view === 'files' || view === 'trash' ? folders.results : [],
+      folders: folders.results,
+      folderTotal: folderTotal?.count ?? 0,
       total: total?.count ?? 0,
       page,
       limit: pageSize,
@@ -172,13 +188,21 @@ fileRoutes.get('/files', async (c) => {
 });
 fileRoutes.get('/folders', async (c) => {
   const parent = c.req.query('parent_id') || null;
+  const { page, limit, offset } = paginationParams(c.req.query());
   await activeFolder(c.env, parent);
-  const rows = await c.env.DB.prepare(
-    'SELECT * FROM folders WHERE parent_id IS ? AND deleted_at IS NULL ORDER BY name LIMIT 100',
-  )
-    .bind(parent)
-    .all<FolderRecord>();
-  return c.json({ data: rows.results });
+  const [rows, total] = await Promise.all([
+    c.env.DB.prepare(
+      'SELECT * FROM folders WHERE parent_id IS ? AND deleted_at IS NULL ORDER BY name COLLATE NOCASE,id LIMIT ? OFFSET ?',
+    )
+      .bind(parent, limit, offset)
+      .all<FolderRecord>(),
+    c.env.DB.prepare(
+      'SELECT COUNT(*) AS count FROM folders WHERE parent_id IS ? AND deleted_at IS NULL',
+    )
+      .bind(parent)
+      .first<{ count: number }>(),
+  ]);
+  return c.json({ data: rows.results, page, limit, total: total?.count ?? 0 });
 });
 fileRoutes.get('/folders/:id', async (c) => {
   await activeFolder(c.env, c.req.param('id'));
@@ -263,10 +287,14 @@ fileRoutes.post('/folders/:id/restore', async (c) => {
 });
 fileRoutes.delete('/folders/:id/permanent', async (c) => {
   const id = identifier.parse(c.req.param('id'));
-  const result = await c.env.DB.prepare('DELETE FROM folders WHERE id=? AND deleted_at IS NOT NULL')
+  const result = await c.env.DB.prepare(
+    `DELETE FROM folders WHERE id=? AND deleted_at IS NOT NULL
+    AND NOT EXISTS(SELECT 1 FROM files WHERE folder_id=folders.id)
+    AND NOT EXISTS(SELECT 1 FROM folders child WHERE child.parent_id=folders.id)`,
+  )
     .bind(id)
     .run();
-  if (!result.meta.changes) fail(409, '必须先将文件夹移入回收站');
+  if (!result.meta.changes) fail(409, '请先将文件夹移入回收站，并清空其中的内容');
   return c.json({ data: { id } });
 });
 export async function uploadSingleFile(c: AppContext) {

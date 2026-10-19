@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { FileRecord, FolderRecord } from '../../shared/types';
 import { Modal } from './ui/dialog';
 import { Button } from './ui/button';
-import { api, copy, send } from '../lib/api';
+import { apiPage, copy, send } from '../lib/api';
 import { LinkOriginSelect, usePublicLinks } from './PublicLinks';
 export type Action = {
   type:
@@ -43,6 +43,8 @@ export function Actions({
     [link, setLink] = useState('');
   const [destination, setDestination] = useState<string | null>(null),
     [folders, setFolders] = useState<FolderRecord[]>([]),
+    [folderPage, setFolderPage] = useState(1),
+    [folderTotal, setFolderTotal] = useState(0),
     [foldersLoading, setFoldersLoading] = useState(action.type === 'move'),
     [path, setPath] = useState<FolderRecord[]>([]);
   const selectedLink = publicLink(link);
@@ -52,11 +54,20 @@ export function Actions({
     setFolders([]);
     setFoldersLoading(true);
     setError('');
-    void api<FolderRecord[]>(`/folders${destination ? `?parent_id=${destination}` : ''}`, {
+    const params = new URLSearchParams({ page: String(folderPage), limit: '40' });
+    if (destination) params.set('parent_id', destination);
+    void apiPage<FolderRecord>(`/folders?${params}`, {
       signal: controller.signal,
     })
       .then((next) => {
-        if (!controller.signal.aborted) setFolders(next);
+        if (!controller.signal.aborted) {
+          const lastPage = Math.max(1, Math.ceil(next.total / next.limit));
+          if (folderPage > lastPage) setFolderPage(lastPage);
+          else {
+            setFolders(next.data);
+            setFolderTotal(next.total);
+          }
+        }
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
@@ -67,7 +78,7 @@ export function Actions({
         if (!controller.signal.aborted) setFoldersLoading(false);
       });
     return () => controller.abort();
-  }, [action.type, destination]);
+  }, [action.type, destination, folderPage]);
   const titles = {
     folder: '新建文件夹',
     markdown: '新建 Markdown',
@@ -156,6 +167,7 @@ export function Actions({
                 type="button"
                 onClick={() => {
                   setDestination(null);
+                  setFolderPage(1);
                   setPath([]);
                 }}
               >
@@ -167,6 +179,7 @@ export function Actions({
                   type="button"
                   onClick={() => {
                     setDestination(f.id);
+                    setFolderPage(1);
                     setPath(path.slice(0, i + 1));
                   }}
                 >
@@ -181,6 +194,7 @@ export function Actions({
                   key={f.id}
                   onClick={() => {
                     setDestination(f.id);
+                    setFolderPage(1);
                     setPath([...path, f]);
                   }}
                 >
@@ -195,6 +209,29 @@ export function Actions({
                 <p className="muted">当前文件夹没有子目录</p>
               ) : null}
             </div>
+            {(folderPage > 1 || folderTotal > 40) && (
+              <div className="dialog-footer" aria-label="文件夹分页">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={foldersLoading || folderPage <= 1}
+                  onClick={() => setFolderPage(folderPage - 1)}
+                >
+                  上一页
+                </Button>
+                <span>{folderPage}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={foldersLoading || folderPage * 40 >= folderTotal}
+                  onClick={() => setFolderPage(folderPage + 1)}
+                >
+                  下一页
+                </Button>
+              </div>
+            )}
             <p className="muted">目标：{path.at(-1)?.name ?? '根目录'}</p>
           </>
         )}

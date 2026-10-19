@@ -108,11 +108,16 @@ export async function siteIdentity(c: AppContext) {
     .first();
   return s ? c.env.ADMIN_EMAILS.split(',')[0] || 'owner' : null;
 }
-async function createSession(c: AppContext) {
+async function prepareSession(c: AppContext, requireConsumedCode = false) {
   const token = randomToken();
-  await c.env.DB.prepare('INSERT INTO admin_sessions(token_hash,expires_at) VALUES(?,?)')
-    .bind(await digest(token), now() + 86400000)
-    .run();
+  // Keep credential consumption and session creation in the same database transaction.
+  const statement = c.env.DB.prepare(
+    'INSERT INTO admin_sessions(token_hash,expires_at) SELECT ?,?' +
+      (requireConsumedCode ? ' WHERE changes()=1' : ''),
+  ).bind(await digest(token), now() + 86400000);
+  return { token, statement };
+}
+function setSessionCookie(c: AppContext, token: string) {
   setCookie(c, cookieName(c.env), token, {
     httpOnly: true,
     secure: c.env.ENVIRONMENT !== 'local',
@@ -196,21 +201,20 @@ siteAuthRoutes.post('/setup/finish', async (c) => {
   const counter = await matchCode(await decryptSecret(setup.totp_cipher, c.env), input.code);
   if (counter < 0) fail(401, '验证码不正确');
   const recovery = Array.from({ length: 8 }, () => randomToken().slice(0, 16));
-  const account = await c.env.DB.prepare(
-    'INSERT OR IGNORE INTO admin_account(id,password_hash,totp_cipher,last_counter,created_at) VALUES(1,?,?,?,?)',
-  )
-    .bind(await hashPassword(input.password), setup.totp_cipher, counter, now())
-    .run();
-  if (!account.meta.changes) fail(409, '账户已经设置');
+  const session = await prepareSession(c);
   await c.env.DB.batch([
+    c.env.DB.prepare(
+      'INSERT INTO admin_account(id,password_hash,totp_cipher,last_counter,created_at) VALUES(1,?,?,?,?)',
+    ).bind(await hashPassword(input.password), setup.totp_cipher, counter, now()),
     c.env.DB.prepare('DELETE FROM admin_setup'),
     ...(await Promise.all(
       recovery.map(async (r) =>
         c.env.DB.prepare('INSERT INTO admin_recovery(code_hash) VALUES(?)').bind(await digest(r)),
       ),
     )),
+    session.statement,
   ]);
-  await createSession(c);
+  setSessionCookie(c, session.token);
   return c.json({ data: { recovery } });
 });
 siteAuthRoutes.post('/login', async (c) => {
@@ -221,27 +225,24 @@ siteAuthRoutes.post('/login', async (c) => {
   ).first<{ password_hash: string; totp_cipher: string; last_counter: number }>();
   if (!account || !(await checkPassword(input.password, account.password_hash)))
     fail(401, '密码或验证码不正确');
-  let accepted = false;
+  let consumeCode: D1PreparedStatement | undefined;
   if (input.code.length === 16) {
-    const r = await c.env.DB.prepare(
-      'DELETE FROM admin_recovery WHERE code_hash=? RETURNING code_hash',
-    )
-      .bind(await digest(input.code))
-      .first();
-    accepted = !!r;
+    consumeCode = c.env.DB.prepare('DELETE FROM admin_recovery WHERE code_hash=?').bind(
+      await digest(input.code),
+    );
   } else {
     const counter = await matchCode(await decryptSecret(account.totp_cipher, c.env), input.code);
     if (counter >= 0) {
-      const r = await c.env.DB.prepare(
-        'UPDATE admin_account SET last_counter=? WHERE id=1 AND last_counter<? RETURNING id',
-      )
-        .bind(counter, counter)
-        .first();
-      accepted = !!r;
+      consumeCode = c.env.DB.prepare(
+        'UPDATE admin_account SET last_counter=? WHERE id=1 AND last_counter<?',
+      ).bind(counter, counter);
     }
   }
-  if (!accepted) fail(401, '密码或验证码不正确，已用验证码不可重复使用');
-  await createSession(c);
+  if (!consumeCode) fail(401, '密码或验证码不正确，已用验证码不可重复使用');
+  const session = await prepareSession(c, true);
+  const [consumed] = await c.env.DB.batch([consumeCode, session.statement]);
+  if (!consumed.meta.changes) fail(401, '密码或验证码不正确，已用验证码不可重复使用');
+  setSessionCookie(c, session.token);
   return c.json({ data: { ok: true } });
 });
 siteAuthRoutes.post('/logout', async (c) => {

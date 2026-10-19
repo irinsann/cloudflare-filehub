@@ -7,8 +7,7 @@ import type { AppContext } from './env';
 import { now, uuid } from './env';
 import { fail } from './errors';
 import { imageFolder, publishImage } from './images';
-import { reserve, releaseStatement, sniff } from './storage';
-import { deleteObject } from './quota';
+import { reserve, sniff, cleanupPurgedObjects } from './storage';
 import { PART_SIZE } from './uploads';
 
 export async function uploadImage(c: AppContext) {
@@ -46,13 +45,17 @@ export async function uploadImage(c: AppContext) {
   let completed = false;
   const parts: R2UploadedPart[] = [];
   const discard = async () => {
-    await c.env.DB.prepare(
-      'DELETE FROM files WHERE id=? AND NOT EXISTS(SELECT 1 FROM image_hosts WHERE file_id=?)',
-    )
-      .bind(fileId, fileId)
-      .run();
-    await deleteObject(c.env, key);
-    await releaseStatement(c.env, key).run();
+    const removable = 'id=? AND NOT EXISTS(SELECT 1 FROM image_hosts WHERE file_id=files.id)';
+    const removed = await c.env.DB.batch<{ object_key: string }>([
+      // Publication can move the source to a new object key. Queue that exact key atomically
+      // with metadata removal, so a lost response or concurrent deduplication cannot orphan it.
+      c.env.DB.prepare(
+        `INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at)
+        SELECT object_key,? FROM files WHERE ${removable}`,
+      ).bind(now(), fileId),
+      c.env.DB.prepare(`DELETE FROM files WHERE ${removable} RETURNING object_key`).bind(fileId),
+    ]);
+    await cleanupPurgedObjects(c.env, [key, ...removed[1].results.map((row) => row.object_key)]);
   };
   try {
     mpu = await c.env.BUCKET.createMultipartUpload(key);

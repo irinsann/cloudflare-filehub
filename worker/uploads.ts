@@ -143,7 +143,11 @@ uploadRoutes.post('/uploads/:id/complete', async (c) => {
       "UPDATE files SET size=?,mime=?,etag=?,status='ready',updated_at=? WHERE id=? AND status='pending'",
     ).bind(object.size, mime, object.etag, now(), s.file_id),
     c.env.DB.prepare('DELETE FROM upload_sessions WHERE id=?').bind(s.id),
-    releaseStatement(c.env, s.object_key),
+    // Cancellation may already have removed the pending row. In that case the completed
+    // R2 object still needs its cleanup task, especially when cancellation's delete failed.
+    c.env.DB.prepare(
+      "DELETE FROM cleanup_tasks WHERE object_key=? AND EXISTS(SELECT 1 FROM files WHERE id=? AND object_key=? AND status='ready')",
+    ).bind(s.object_key, s.file_id, s.object_key),
     logStatement(c.env, 'file.upload', s.file_id),
   ]);
   return c.json({ data: uploadMetadata(c, await getFile(c.env, s.file_id)) }, 201);
@@ -152,9 +156,18 @@ uploadRoutes.delete('/uploads/:id', async (c) => {
   const s = await session(c, c.req.param('id'));
   try {
     await c.env.BUCKET.resumeMultipartUpload(s.object_key, s.upload_id).abort();
-  } catch {
-    /* An already completed upload remains queued for cleanup. */
+  } catch (error) {
+    const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : null;
+    const missing =
+      code === 10024 ||
+      code === '10024' ||
+      code === 'NoSuchUpload' ||
+      (error instanceof Error && /\(10024\)$/.test(error.message));
+    // A transient failure is not proof that the multipart parts were removed.
+    // Keep the upload ID and capacity reservation so cancellation or cleanup can retry.
+    if (!missing) fail(502, '存储服务暂时无法取消上传，请重试');
   }
+  await checkWriteLease(c);
   const removed = await c.env.DB.prepare(
     "DELETE FROM files WHERE id=? AND status='pending' RETURNING id",
   )

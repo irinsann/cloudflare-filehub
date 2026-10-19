@@ -20,6 +20,7 @@ import {
 import type { FileRecord, PageRecord, Settings } from '../../shared/types';
 import { api, copy, send } from '../lib/api';
 import { clipboardImages, imageMarkdown, uploadHostedImage } from '../lib/image-upload';
+import { clearSavedDraft } from '../lib/editor-draft';
 import { Button } from '../components/ui/button';
 import { Modal } from '../components/ui/dialog';
 import { MarkdownView } from '../components/MarkdownView';
@@ -138,7 +139,7 @@ export default function Editor({
       setVersion(result.version);
       setSaved(currentContent);
       try {
-        localStorage.removeItem(`draft:${id}`);
+        clearSavedDraft(localStorage, id, currentContent);
       } catch {
         /* Nonessential browser storage. */
       }

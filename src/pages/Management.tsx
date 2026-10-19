@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Copy, ExternalLink, FileText, Link2, ShieldCheck } from 'lucide-react';
-import { api, copy, send, dateLabel } from '../lib/api';
+import { apiPage, copy, send, dateLabel } from '../lib/api';
 import { StorageMeter } from '../components/workspace/WorkspaceShell';
 import { Button } from '../components/ui/button';
 import { Modal } from '../components/ui/dialog';
@@ -38,7 +38,11 @@ export function Management({
     [docs, setDocs] = useState<DocumentRow[]>([]),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(true),
-    [revision, setRevision] = useState(0);
+    [revision, setRevision] = useState(0),
+    [pagination, setPagination] = useState({ view, page: 1 }),
+    [total, setTotal] = useState(0);
+  const page = pagination.view === view ? pagination.page : 1;
+  const pageSize = 40;
   const [manualCopy, setManualCopy] = useState<{ url: string; name: string } | null>(null);
   useEffect(() => {
     setLoading(true);
@@ -48,13 +52,24 @@ export function Management({
       return;
     }
     const controller = new AbortController();
-    void (
-      view === 'shares'
-        ? api<ShareListItem[]>('/shares', {
-            signal: controller.signal,
-          }).then(setShares)
-        : api<DocumentRow[]>('/markdown', { signal: controller.signal }).then(setDocs)
-    )
+    async function load() {
+      const options = { signal: controller.signal };
+      const params = `page=${page}&limit=${pageSize}`;
+      const result =
+        view === 'shares'
+          ? await apiPage<ShareListItem>('/shares?' + params, options)
+          : await apiPage<DocumentRow>('/markdown?published=1&' + params, options);
+      if (controller.signal.aborted) return;
+      const lastPage = Math.max(1, Math.ceil(result.total / pageSize));
+      if (page > lastPage) {
+        setPagination({ view, page: lastPage });
+        return;
+      }
+      setTotal(result.total);
+      if (view === 'shares') setShares(result.data as ShareListItem[]);
+      else setDocs(result.data as DocumentRow[]);
+    }
+    void load()
       .catch((e) => {
         if (!controller.signal.aborted) setError(e.message);
       })
@@ -62,7 +77,7 @@ export function Management({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [view, refresh, revision]);
+  }, [view, refresh, revision, page]);
   function copyShareLink(url: string, name: string) {
     void copy(publicLinks.link(url))
       .then(() => notify('链接已复制'))
@@ -244,6 +259,32 @@ export function Management({
               );
             })}
           {!docs.some((d) => d.published) && <EmptyState label="暂无已发布文章" />}
+        </div>
+      )}
+      {!loading && !error && total > pageSize && (
+        <div className="file-footer">
+          <span>共 {total} 项</span>
+          <div>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPagination({ view, page: page - 1 })}
+            >
+              上一页
+            </Button>
+            <span>
+              {page} / {Math.ceil(total / pageSize)}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={page * pageSize >= total}
+              onClick={() => setPagination({ view, page: page + 1 })}
+            >
+              下一页
+            </Button>
+          </div>
         </div>
       )}
       {manualCopy && (

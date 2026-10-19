@@ -10,6 +10,24 @@ import { checkWriteLease } from './write-lease';
 export type DavNode =
   | { kind: 'file'; row: FileRecord; path: string }
   | { kind: 'folder'; row: FolderRecord; path: string };
+const DAV_MAX_DEPTH = 32;
+const DAV_MAX_PATH_LENGTH = 4096;
+// encodeURIComponent leaves these ASCII bytes unchanged; every other UTF-8 byte
+// needs three URL characters. Split the replacement expression into small CTEs
+// so the query does not depend on SQLite's nested-expression/parser limit.
+const uriSafeCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()";
+const encodedNameCtes: string[] = [];
+for (let offset = 0; offset < uriSafeCharacters.length; offset += 12) {
+  const previous = offset === 0 ? 'names' : `stripped_${offset - 12}`;
+  const expression = [...uriSafeCharacters.slice(offset, offset + 12)].reduce(
+    (value, character) => `replace(${value},'${character.replace(/'/g, "''")}','')`,
+    'unsafe',
+  );
+  encodedNameCtes.push(
+    `stripped_${offset} AS (SELECT kind,id,parent_id,name,${expression} AS unsafe FROM ${previous})`,
+  );
+}
+const lastEncodedNameCte = `stripped_${Math.floor((uriSafeCharacters.length - 1) / 12) * 12}`;
 export const rootNode: DavNode = {
   kind: 'folder',
   path: '/dav/',
@@ -25,7 +43,7 @@ export const rootNode: DavNode = {
 export function davPath(pathname: string) {
   if (pathname !== '/dav' && !pathname.startsWith('/dav/'))
     fail(403, 'Destination必须位于WebDAV目录');
-  if (pathname.length > 4096) fail(414, '路径过长');
+  if (pathname.length > DAV_MAX_PATH_LENGTH) fail(414, '路径过长');
   const raw = pathname.slice(5).replace(/\/$/, '');
   if (!raw) return '/dav/';
   const parts = raw.split('/').map((p) => {
@@ -39,11 +57,16 @@ export function davPath(pathname: string) {
     if (!valid.success || valid.data !== name) fail(400, '文件名无效');
     return name;
   });
-  if (parts.length > 32) fail(409, '目录层级过深');
-  return '/dav/' + parts.join('/');
+  if (parts.length > DAV_MAX_DEPTH) fail(409, '目录层级过深');
+  const path = '/dav/' + parts.join('/');
+  checkDavPathLength(path);
+  return path;
 }
 export const href = (path: string, folder = false) =>
   path.split('/').map(encodeURIComponent).join('/') + (folder && !path.endsWith('/') ? '/' : '');
+export function checkDavPathLength(path: string, folder = false) {
+  if (href(path, folder).length > DAV_MAX_PATH_LENGTH) fail(414, '路径过长');
+}
 export const parentPath = (path: string) => {
   const p = path.slice(0, path.lastIndexOf('/'));
   return p === '/dav' || !p ? '/dav/' : p;
@@ -117,6 +140,56 @@ export async function parent(env: Env, path: string) {
   const node = await resolve(env, parentPath(path));
   if (!node || node.kind !== 'folder') fail(409, '父目录不存在');
   return node.row.id === 'root' ? null : node.row.id;
+}
+export async function checkTreeDestinationPaths(
+  env: Env,
+  node: DavNode,
+  target: string,
+  recursive = true,
+) {
+  if (node.kind === 'file') return;
+  if (href(target, true).length > DAV_MAX_PATH_LENGTH) fail(409, '目标路径过长');
+  if (!recursive) return;
+  const remaining = DAV_MAX_DEPTH - target.slice(5).split('/').length;
+  // Validate the complete subtree before any replacement or copy is committed. A MOVE
+  // may contain more items than the bounded COPY/DELETE tree reader supports.
+  const invalid = await env.DB.prepare(
+    `WITH RECURSIVE source_folders(id,depth) AS (
+      SELECT ?,0 UNION ALL
+      SELECT f.id,b.depth+1 FROM folders f JOIN source_folders b ON f.parent_id=b.id
+      WHERE f.deleted_at IS NULL AND b.depth<?
+    ), names AS (
+      SELECT 'folder' AS kind,f.id,f.parent_id,f.name,f.name AS unsafe
+      FROM folders f JOIN source_folders s ON s.id=f.id
+      UNION ALL
+      SELECT 'file',f.id,f.folder_id,f.name,f.name
+      FROM files f JOIN source_folders s ON s.id=f.folder_id
+      WHERE f.deleted_at IS NULL AND s.depth<=?
+    ), ${encodedNameCtes.join(',')}, encoded_names AS (
+      SELECT kind,id,parent_id,
+        length(CAST(name AS BLOB))+2*length(CAST(unsafe AS BLOB)) AS path_length
+      FROM ${lastEncodedNameCte}
+    ), branch(kind,id,depth,path_length) AS (
+      SELECT 'folder',?,0,? UNION ALL
+      SELECT n.kind,n.id,b.depth+1,b.path_length+1+n.path_length
+      FROM encoded_names n JOIN branch b ON b.kind='folder' AND n.parent_id=b.id
+      WHERE b.depth<=? AND b.path_length<=?
+    ) SELECT 1 FROM branch
+      WHERE depth>? OR path_length+CASE WHEN kind='folder' THEN 1 ELSE 0 END>? LIMIT 1`,
+  )
+    .bind(
+      node.row.id,
+      remaining + 1,
+      remaining,
+      node.row.id,
+      href(target).length,
+      remaining,
+      DAV_MAX_PATH_LENGTH,
+      remaining,
+      DAV_MAX_PATH_LENGTH,
+    )
+    .first();
+  if (invalid) fail(409, '目标目录层级过深或路径过长');
 }
 export async function tree(env: Env, node: DavNode): Promise<DavNode[]> {
   if (node.kind === 'file') return [node];

@@ -23,6 +23,7 @@ import {
 import type { PageRecord, AttachmentRecord } from '../shared/types';
 import { attachmentIds, renderMarkdown, escapeHtml } from '../shared/markdown';
 import { htmlPage } from './html';
+import { paginationParams } from '../shared/pagination';
 export const markdownRoutes = new Hono<AppEnv>();
 async function markdownFile(c: AppContext, id: string) {
   const file = await getFile(c.env, id);
@@ -30,10 +31,20 @@ async function markdownFile(c: AppContext, id: string) {
   return file;
 }
 markdownRoutes.get('/markdown', async (c) => {
-  const rows = await c.env.DB.prepare(
-    "SELECT f.id,f.name,f.version,f.updated_at,p.slug,p.title,p.published,p.published_at,p.published_version,p.views FROM files f LEFT JOIN markdown_pages p ON p.file_id=f.id WHERE f.status='ready' AND f.deleted_at IS NULL AND (lower(f.name) LIKE '%.md' OR lower(f.name) LIKE '%.markdown') ORDER BY f.updated_at DESC LIMIT 100",
-  ).all();
-  return c.json({ data: rows.results });
+  const { page, limit, offset } = paginationParams(c.req.query());
+  const where =
+    "f.status='ready' AND f.deleted_at IS NULL AND (lower(f.name) LIKE '%.md' OR lower(f.name) LIKE '%.markdown')" +
+    (c.req.query('published') === '1' ? ' AND p.published=1' : '');
+  const from = 'FROM files f LEFT JOIN markdown_pages p ON p.file_id=f.id';
+  const [rows, total] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT f.id,f.name,f.version,f.updated_at,p.slug,p.title,p.published,p.published_at,p.published_version,p.views ${from} WHERE ${where} ORDER BY f.updated_at DESC,f.id ASC LIMIT ? OFFSET ?`,
+    )
+      .bind(limit, offset)
+      .all(),
+    c.env.DB.prepare(`SELECT COUNT(*) AS total ${from} WHERE ${where}`).first<number>('total'),
+  ]);
+  return c.json({ data: rows.results, page, limit, total: total ?? 0 });
 });
 markdownRoutes.post('/markdown', async (c) => {
   const input = markdownInput.parse(await c.req.json());
@@ -143,17 +154,16 @@ markdownRoutes.post('/markdown/:id/publish', async (c) => {
       .all<{ id: string }>();
     if (owned.results.length !== ids.length) fail(403, '文章引用了不属于它的私人附件');
   }
-  const existing = await c.env.DB.prepare('SELECT * FROM markdown_pages WHERE file_id=?')
-    .bind(file.id)
-    .first<PageRecord>();
-  const id = existing?.id ?? uuid();
   const object = await writeText(c.env, source);
   await checkWriteLease(c);
   const results = await c.env.DB.batch([
     c.env.DB.prepare(
-      "INSERT INTO markdown_pages(id,file_id,title,slug,description,published,published_at,updated_at,snapshot_key,published_version,allow_source,allow_index) SELECT ?,?,?,?,?,1,?,?,?,?,?,? WHERE EXISTS(SELECT id FROM files WHERE id=? AND version=? AND deleted_at IS NULL AND status='ready') ON CONFLICT(file_id) DO UPDATE SET title=excluded.title,slug=excluded.slug,description=excluded.description,published=1,published_at=COALESCE(markdown_pages.published_at,excluded.published_at),updated_at=excluded.updated_at,snapshot_key=excluded.snapshot_key,published_version=excluded.published_version,allow_source=excluded.allow_source,allow_index=excluded.allow_index",
+      "INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at) SELECT snapshot_key,? FROM markdown_pages WHERE file_id=? AND snapshot_key IS NOT NULL AND EXISTS(SELECT id FROM files WHERE id=? AND version=? AND deleted_at IS NULL AND status='ready')",
+    ).bind(now(), file.id, file.id, input.version),
+    c.env.DB.prepare(
+      "INSERT INTO markdown_pages(id,file_id,title,slug,description,published,published_at,updated_at,snapshot_key,published_version,allow_source,allow_index) SELECT ?,?,?,?,?,1,?,?,?,?,?,? WHERE EXISTS(SELECT id FROM files WHERE id=? AND version=? AND deleted_at IS NULL AND status='ready') ON CONFLICT(file_id) DO UPDATE SET title=excluded.title,slug=excluded.slug,description=excluded.description,published=1,published_at=COALESCE(markdown_pages.published_at,excluded.published_at),updated_at=excluded.updated_at,snapshot_key=excluded.snapshot_key,published_version=excluded.published_version,allow_source=excluded.allow_source,allow_index=excluded.allow_index RETURNING id",
     ).bind(
-      id,
+      uuid(),
       file.id,
       input.title,
       input.slug,
@@ -168,27 +178,21 @@ markdownRoutes.post('/markdown/:id/publish', async (c) => {
       input.version,
     ),
     c.env.DB.prepare(
-      'DELETE FROM page_attachments WHERE page_id=? AND EXISTS(SELECT id FROM markdown_pages WHERE id=? AND snapshot_key=?)',
-    ).bind(id, id, object.key),
+      'DELETE FROM page_attachments WHERE page_id IN (SELECT id FROM markdown_pages WHERE file_id=? AND snapshot_key=?)',
+    ).bind(file.id, object.key),
     ...ids.map((a) =>
       c.env.DB.prepare(
-        'INSERT INTO page_attachments(page_id,attachment_id) SELECT ?,? WHERE EXISTS(SELECT id FROM markdown_pages WHERE id=? AND snapshot_key=?)',
-      ).bind(id, a, id, object.key),
+        'INSERT INTO page_attachments(page_id,attachment_id) SELECT id,? FROM markdown_pages WHERE file_id=? AND snapshot_key=?',
+      ).bind(a, file.id, object.key),
     ),
     c.env.DB.prepare(
       'DELETE FROM cleanup_tasks WHERE object_key=? AND EXISTS(SELECT id FROM markdown_pages WHERE snapshot_key=?)',
     ).bind(object.key, object.key),
-    ...(existing?.snapshot_key
-      ? [
-          c.env.DB.prepare(
-            'INSERT OR IGNORE INTO cleanup_tasks(object_key,created_at) SELECT ?,? WHERE EXISTS(SELECT id FROM markdown_pages WHERE id=? AND snapshot_key=?)',
-          ).bind(existing.snapshot_key, now(), id, object.key),
-        ]
-      : []),
   ]);
-  if (!results[0].meta.changes) fail(409, '文档状态已变化，请重新载入后再发布');
+  const page = results[1].results[0] as { id: string } | undefined;
+  if (!page) fail(409, '文档状态已变化，请重新载入后再发布');
   await logStatement(c.env, 'markdown.publish', file.id).run();
-  return c.json({ data: { id, slug: input.slug, url: articleUrl(c, input.slug) } });
+  return c.json({ data: { id: page.id, slug: input.slug, url: articleUrl(c, input.slug) } });
 });
 markdownRoutes.post('/markdown/:id/unpublish', async (c) => {
   const file = await markdownFile(c, c.req.param('id'));
